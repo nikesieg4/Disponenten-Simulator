@@ -50,6 +50,11 @@ create table if not exists app_sessions ( token_hash text primary key, user_id u
 create index if not exists app_sessions_user on app_sessions(user_id);
 -- Fehlversuche beim Login (je Benutzername und je IP-Adresse)
 create table if not exists app_login_attempts ( key text primary key, fails int not null default 0, locked_until timestamptz, last_fail timestamptz not null default now() );
+-- Anti-Cheat: Guthaben-Budget für Einnahmen und Zeitpunkt der letzten Prüfung
+alter table app_saves add column if not exists earn_bucket numeric;
+alter table app_saves add column if not exists checked_at timestamptz;
+-- Preise für die Prüfung (Block unten wird aus index.html erzeugt)
+create table if not exists app_prices ( kind text not null, id text not null, price bigint not null, primary key (kind, id) );
 create table if not exists app_system ( id int primary key default 1, maintenance boolean not null default false, maintenance_text text );
 insert into app_system(id) values (1) on conflict do nothing;
 alter table app_system add column if not exists maintenance boolean not null default false;
@@ -60,9 +65,10 @@ alter table app_saves    enable row level security;
 alter table app_sessions enable row level security;
 alter table app_system   enable row level security;
 alter table app_login_attempts enable row level security;
+alter table app_prices enable row level security;
 drop policy if exists app_system_read on app_system;
 create policy app_system_read on app_system for select using (true);
-revoke all on app_users, app_saves, app_sessions, app_login_attempts from anon, authenticated;
+revoke all on app_users, app_saves, app_sessions, app_login_attempts, app_prices from anon, authenticated;
 grant  select on app_system to anon, authenticated;
 
 create or replace function _token_hash(p_token uuid) returns text language sql immutable set search_path=public, extensions as $$
@@ -168,20 +174,146 @@ begin
   return json_build_object('token',v_token,'username',v_user.username,'maintenance',(m->>'maintenance')::boolean,'maintenance_text',m->>'maintenance_text');
 end; $$;
 
+-- PREISE:BEGIN (automatisch erzeugt mit: node werkzeuge/preise_sql.cjs, nicht von Hand ändern)
+delete from app_prices;
+insert into app_prices(kind, id, price) values
+  ('vehicle','hlf20',650000),
+  ('vehicle','lf20',480000),
+  ('vehicle','dlk',950000),
+  ('vehicle','rw',700000),
+  ('vehicle','elw1c',250000),
+  ('vehicle','elw1b',260000),
+  ('vehicle','lfkats',420000),
+  ('vehicle','gw_g',650000),
+  ('vehicle','gw_mess',450000),
+  ('vehicle','gw_a',400000),
+  ('vehicle','gw_dekonp',500000),
+  ('vehicle','klef',150000),
+  ('vehicle','tlf',580000),
+  ('vehicle','elw2',900000),
+  ('vehicle','fmew',300000),
+  ('vehicle','lhf10',480000),
+  ('vehicle','lf16ts',300000),
+  ('vehicle','tlf1624',420000),
+  ('vehicle','tlf2024',520000),
+  ('vehicle','tlf3000',450000),
+  ('vehicle','tlf4000',550000),
+  ('vehicle','tlf2450cafs',620000),
+  ('vehicle','sw2000',350000),
+  ('vehicle','swkats',330000),
+  ('vehicle','mtf',90000),
+  ('vehicle','gw_hoehe',420000),
+  ('vehicle','tm50',1500000),
+  ('vehicle','fwk',1200000),
+  ('vehicle','gw_taucher',380000),
+  ('vehicle','gw_wr',320000),
+  ('vehicle','mzb',120000),
+  ('vehicle','wlf',300000),
+  ('vehicle','ab_atemschutz',250000),
+  ('vehicle','ab_auffang',150000),
+  ('vehicle','ab_gefahrgut',300000),
+  ('vehicle','ab_dekon',350000),
+  ('vehicle','ab_schlauch',150000),
+  ('vehicle','ab_lueft',250000),
+  ('vehicle','ab_tank',200000),
+  ('vehicle','ab_sonderl',300000),
+  ('vehicle','ab_schaum',250000),
+  ('vehicle','rtw',280000),
+  ('vehicle','nef',150000),
+  ('vehicle','ktw',120000),
+  ('vehicle','itw',380000),
+  ('vehicle','lkw1',150000),
+  ('vehicle','lkw2',200000),
+  ('vehicle','mtf3',200000),
+  ('vehicle','fwa_notstrom',60000),
+  ('vehicle','fwa_vent',45000),
+  ('vehicle','gw_betreuung',250000),
+  ('vehicle','fwa_fkh',40000),
+  ('vehicle','stemo',1000000),
+  ('vehicle','kdow_lna',120000),
+  ('vehicle','nktw',150000),
+  ('vehicle','gw_san',250000),
+  ('vehicle','kdow',90000),
+  ('vehicle','ab_manv',200000),
+  ('station','L1',5000000),
+  ('station','L2',6350000),
+  ('station','L3',7800000),
+  ('station','L4',9200000),
+  ('station','L5',11300000),
+  ('station','L6',13750000),
+  ('academy','L1',12000000),
+  ('academy','L2',15000000),
+  ('academy','L3',18500000),
+  ('academy','L4',22500000),
+  ('academy','L5',27000000),
+  ('cfg','startCredits',8000000);
+-- PREISE:END
+
+/* ---------------------------------------------------------------------------
+   Anti-Cheat beim Speichern
+   Vermögen = Guthaben + Tageskasse + Mindestwert aller Fahrzeuge/Wachen/Akademien.
+   Kaufen, Ausbauen und die Auszahlung der Tageskasse ändern das Vermögen nicht
+   (Geld wird nur umgeschichtet). Steigen darf es nur durch Einnahmen, und die sind
+   begrenzt: Ein Budget füllt sich je Fahrzeug mit 1 Mio. €/h (gedeckelt bei 12 h).
+   Was darüber hinausgeht, wird abgezogen: zuerst von der Tageskasse, dann vom Guthaben.
+   --------------------------------------------------------------------------- */
+create or replace function _jnum(j jsonb, k text) returns numeric language sql immutable as $$
+  select case when jsonb_typeof(j->k)='number' then (j->>k)::numeric else 0 end; $$;
+create or replace function _jlevel(j jsonb, maxl int) returns int language sql immutable as $$
+  select least(maxl, greatest(1, case when jsonb_typeof(j->'level')='number' then floor((j->>'level')::numeric)::int else 1 end)); $$;
+create or replace function _jarr(j jsonb, k text) returns jsonb language sql immutable as $$
+  select case when jsonb_typeof(j->k)='array' then j->k else '[]'::jsonb end; $$;
+create or replace function _assets(d jsonb) returns numeric language sql stable security definer set search_path=public, extensions as $$
+  select
+    coalesce((select sum(p.price) from jsonb_array_elements(_jarr(d,'vehicles')) v join app_prices p on p.kind='vehicle' and p.id=v->>'type'),0)
+  + coalesce((select sum(p.price) from jsonb_array_elements(_jarr(d,'stations')) st join app_prices p on p.kind='station' and p.id='L'||_jlevel(st,6)),0)
+  + coalesce((select sum(p.price) from jsonb_array_elements(_jarr(d,'buildings')) b join app_prices p on p.kind='academy' and p.id='L'||_jlevel(b,5) where b->>'typeId'='academy'),0); $$;
+create or replace function _vehicle_count(d jsonb) returns int language sql stable security definer set search_path=public, extensions as $$
+  select count(*)::int from jsonb_array_elements(_jarr(d,'vehicles')) v join app_prices p on p.kind='vehicle' and p.id=v->>'type'; $$;
+
 create or replace function app_save(p_token uuid, p_data jsonb)
 returns json language plpgsql security definer set search_path=public, extensions as $$
-declare v_uid uuid; v_old bigint; v_oldt timestamptz; v_new bigint; v_dt numeric; v_delta bigint;
+declare
+  v_uid uuid; v_old jsonb; v_bucket numeric; v_at timestamptz;
+  v_rate numeric; v_cap numeric; v_w_old numeric; v_w_new numeric; v_excess numeric;
+  v_cr numeric; v_ea numeric; v_cut_e numeric := 0; v_cut_c numeric := 0;
+  c_per_veh_h constant numeric := 1000000;   -- max. Einnahmen je Fahrzeug und Stunde
+  c_cap_h     constant numeric := 12;        -- Budget reicht höchstens für 12 Stunden
 begin
   v_uid := _uid(p_token); if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
-  select (case when data->>'credits' ~ '^-?[0-9]+' then floor((data->>'credits')::numeric)::bigint else 0 end), updated_at into v_old, v_oldt from app_saves where user_id=v_uid;
-  v_new := case when p_data->>'credits' ~ '^-?[0-9]+' then floor((p_data->>'credits')::numeric)::bigint else 0 end;
-  insert into app_saves(user_id, data, updated_at) values (v_uid, p_data, now())
-    on conflict (user_id) do update set data=excluded.data, updated_at=now();
-  if v_old is not null then
-    v_dt := greatest(1, extract(epoch from now()-v_oldt)); v_delta := v_new - coalesce(v_old,0);
-    if v_delta > 3000000 and v_dt < 300 then
-      update app_users set flagged=true, flag_reason='+'||to_char(v_delta,'FM999999999999')||' € in '||round(v_dt)||' s' where id=v_uid;
-    end if;
+  if jsonb_typeof(p_data) is distinct from 'object' then return json_build_object('error','Ungültiger Spielstand'); end if;
+  select data, earn_bucket, checked_at into v_old, v_bucket, v_at from app_saves where user_id=v_uid for update;
+
+  -- Geldwerte normalisieren (nur Zahlen)
+  v_cr := round(_jnum(p_data,'credits')); v_ea := greatest(0, round(_jnum(p_data,'earnings')));
+
+  if v_old is null or jsonb_typeof(v_old) <> 'object' then
+    v_w_old := (select price from app_prices where kind='cfg' and id='startCredits');   -- neues Konto
+    v_bucket := 0; v_rate := 0;
+  else
+    v_w_old := _jnum(v_old,'credits') + greatest(0,_jnum(v_old,'earnings')) + _assets(v_old);
+    v_rate := least(_vehicle_count(v_old), _vehicle_count(p_data)) * c_per_veh_h / 3600.0;   -- € je Sekunde
+    v_cap := v_rate * c_cap_h * 3600;
+    if v_bucket is null then v_bucket := v_cap; v_at := now(); end if;                     -- bestehende Spielstände: volles Budget
+    v_bucket := least(v_cap, v_bucket + v_rate * greatest(0, extract(epoch from now() - coalesce(v_at, now()))));
+  end if;
+
+  v_w_new := v_cr + v_ea + _assets(p_data);
+  v_excess := ceil(v_w_new - (v_w_old + floor(v_bucket)));   -- ganze Euro
+  if v_excess > 0 then
+    -- abgleichen: erst Tageskasse, dann Guthaben kürzen
+    v_cut_e := least(v_ea, v_excess); v_cut_c := v_excess - v_cut_e;
+    v_ea := v_ea - v_cut_e; v_cr := v_cr - v_cut_c; v_bucket := 0;
+    update app_users set flagged=true, flag_reason=left(to_char(now(),'YYYY-MM-DD HH24:MI')||': '||to_char(v_excess,'FM999999999999')||' € abgezogen', 200) where id=v_uid;
+  else
+    v_bucket := v_bucket - greatest(0, v_w_new - v_w_old);
+  end if;
+  p_data := jsonb_set(jsonb_set(p_data,'{credits}',to_jsonb(v_cr)),'{earnings}',to_jsonb(v_ea));
+
+  insert into app_saves(user_id, data, updated_at, earn_bucket, checked_at) values (v_uid, p_data, now(), v_bucket, now())
+    on conflict (user_id) do update set data=excluded.data, updated_at=now(), earn_bucket=excluded.earn_bucket, checked_at=now();
+  if v_excess > 0 then
+    return json_build_object('ok',true,'corrected',true,'cut_earnings',v_cut_e,'cut_credits',v_cut_c,'credits',v_cr,'earnings',v_ea);
   end if;
   return json_build_object('ok', true);
 end; $$;
@@ -226,6 +358,7 @@ end; $$;
 
 grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
-revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]) from public, anon, authenticated;
+revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]),
+  _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
