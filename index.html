@@ -835,6 +835,7 @@ const CONFIG = {
   // Einsatz-Zeit: 1 „Einsatz-Minute“ dauert real minuteRealMs (bei 1×)
   turnoutMax:600,             // Ausrückezeit pro Fahrzeug/Wache: 0–600 s
   turnoutGap:[5,15],          // Mindestabstand zweier Fahrzeuge derselben Wache beim Ausrücken (s, zufällig)
+  catchUpMaxMs:14*86400000,  // Offline-Zeit wird höchstens 14 Tage nachgerechnet
   minuteRealMs:60000,         // 1 Ingame-Minute = 60 s Echtzeit bei 1× (bei 2× 30 s usw.)
   usefulVehicleCap:2,         // (nur für rein technische Einsätze) mehr bringt nichts
   perVehicleSpeedup:0.25,     // (nur für rein technische Einsätze) 25 % je Fahrzeug
@@ -1039,44 +1040,39 @@ function applyLoaded(data){
     if(t.isAcademy){ nb.level=b.level||1; nb.courses=Array.isArray(b.courses)?b.courses:[]; }
     return nb; });
   finishDueCourses(Date.now());
-  offlineCatchUp(data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0);
+  pendingOfflineMs = data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0;
   idCounter=Date.now()%100000;
 }
-/* Vergangene (Offline-)Zeit anwenden: Fahrten auflösen, Einsätze fortschreiben/abschließen */
-function offlineCatchUp(elapsedMs){
-  if(!(elapsedMs>1000)) return;                       // < 1 s: nichts zu tun
-  const elapsedSec=elapsedMs/1000, elapsedMin=elapsedMs/CONFIG.minuteRealMs; let doneCount=0;
-  // 1) Fahrende Fahrzeuge auflösen
-  state.vehicles.forEach(v=>{
-    if(v.status===3){
-      const m=missionById(v.targetMissionId);
-      if(!m){ const st=stationById(v.stationId); v.status=2; v.crew=0; v.crewIds=[]; v.targetMissionId=null; if(st){v.lat=st.lat;v.lng=st.lng;} return; }
-      const est=estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng},CONFIG.outboundFactor);
-      if(elapsedSec>=est){ v.status=4; v.lat=m.lat; v.lng=m.lng; }         // angekommen
-    } else if(v.status===1){
-      const st=stationById(v.stationId); if(!st){ v.status=2; v.crew=0; v.crewIds=[]; return; }
-      const est=estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:st.lat,lng:st.lng},CONFIG.returnFactor);
-      if(elapsedSec>=est){ v.status=2; v.lat=st.lat; v.lng=st.lng; v.crew=0; v.crewIds=[]; }  // zu Hause
+/* Vergangene Zeit nachrechnen (Spiel geschlossen oder Tab im Hintergrund):
+   dieselbe Spiellogik wie online, in festen Zeitschritten, ohne Funk/Toasts/Rendering. Keine neuen Einsätze. */
+let simulating=false, simDone=0, pendingOfflineMs=0;
+function simPath(v){                                   // gerade Linie als Ersatz für noch nicht geladene Routen
+  let to=null, f=CONFIG.outboundFactor;
+  if(v.status===3){ const m=missionById(v.targetMissionId); if(m) to={lat:m.lat,lng:m.lng}; }
+  else if(v.status===1){ const st=stationById(v.stationId); if(st) to={lat:st.lat,lng:st.lng}; f=CONFIG.returnFactor; }
+  else if(v.status===7){ const h=v.transport&&hospitalById(v.transport.khId); if(h) to={lat:h.lat,lng:h.lng}; }
+  if(!to) return;
+  const from={lat:v.lat,lng:v.lng}; startDrive(v,[from,to],distM(from,to)*1.3/12.5,f);
+}
+async function catchUp(ms){
+  if(simulating || !(ms>1500)) return 0;
+  ms=Math.min(ms,CONFIG.catchUpMaxMs);
+  simulating=true; simDone=0;
+  try{
+    state.vehicles.forEach(v=>{ if((v.status===1||v.status===3||v.status===7) && !v.path) simPath(v); });
+    const total=ms/1000, step=Math.max(1,total/20000);   // höchstens 20.000 Schritte
+    for(let t=0;t<total;t+=step){
+      stepWorld(Math.min(step,total-t));
+      for(let i=0;i<6;i++) await null;                 // Routen von Folgealarmen/Transporten auflösen lassen
     }
-  });
-  // Zuweisungen nach Statusänderungen neu aufbauen
-  state.missions.forEach(m=>{ m.assigned=state.vehicles.filter(v=>v.targetMissionId===m.id).map(v=>v.id); });
-  // 2) Einsätze fortschreiben / abschließen
-  state.missions.forEach(m=>{
-    if(m.status==='done') return; const t=missionType(m.type); if(!t) return;
-    const sup=missionSupply(m), rs=missionReqStatus(m);
-    if(rs.ok && sup.onScene>0){
-      const eff=effMissionMinutes(t, sup.onScene), cap=sup.coverage;
-      const np=Math.min(cap, (m.progress||0)+elapsedMin/eff);
-      if(np>=1){
-        state.earnings=(state.earnings||0)+missionReward(t); book(t.rd?'einsatz_rd':'einsatz_fw',`${t.code} ${t.name} (offline)`,missionReward(t)); doneCount++;
-        (m.assigned||[]).forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ const st=stationById(v.stationId); v.status=2; v.crew=0; v.crewIds=[]; v.targetMissionId=null; v.nextMissionId=null; if(st){v.lat=st.lat;v.lng=st.lng;} } });
-        m.status='done';
-      } else { m.progress=np; m.status='working'; }
-    }
-  });
-  state.missions=state.missions.filter(m=>m.status!=='done');
-  if(doneCount>0) setTimeout(()=>toast(`Während der Abwesenheit: ${doneCount} Einsatz${doneCount>1?'e':''} abgeschlossen`,'ok'),1200);
+  } catch(e){ console.error('catchUp',e); }
+  finally{ simulating=false; }
+  state.vehicles.forEach(v=>{ if(v.marker) v.marker.setLatLng([v.lat,v.lng]); });
+  state.missions.forEach(m=>{ if(m.marker) refreshMissionMarker(m); });
+  renderStations(); renderMissions(); renderVehicles(); renderTopbar(); renderFunk();
+  if(document.getElementById('modal-mission').classList.contains('show')) renderMissionModal();
+  if(simDone>0) toast(`Während der Abwesenheit (${fmtDur(ms)}): ${simDone} Einsatz${simDone>1?'e':''} abgeschlossen`,'ok');
+  return simDone;
 }
 
 /* ------------------------- MAP ------------------------- */
@@ -1118,6 +1114,7 @@ function randomNear(c,maxM){ const r=maxM*Math.sqrt(Math.random()),a=Math.random
   return { lat:c.lat+(r*Math.cos(a))/111320, lng:c.lng+(r*Math.sin(a))/(111320*Math.cos(c.lat*Math.PI/180)) }; }
 
 async function getRoute(from,to){
+  if(simulating) return { coords:[from,to], duration:distM(from,to)*1.3/12.5 };
   try{
     const url=CONFIG.osrmBase+`${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
     const res=await fetch(url); const data=await res.json();
@@ -1698,8 +1695,8 @@ function missionReward(t){
   return Math.round(CONFIG.vehicleHourValue*veh*((t.minutes||0)+CONFIG.travelMinutes)/60/500)*500;
 }
 function completeMission(m){
-  const t=missionType(m.type); m.status='done'; m.doneAt=Date.now();
-  const pay=missionReward(t); state.earnings=(state.earnings||0)+pay; book(t&&t.rd?'einsatz_rd':'einsatz_fw',`${t?t.code+' '+t.name:'Einsatz'}`,pay);
+  const t=missionType(m.type); m.status='done'; m.doneAt=Date.now(); if(simulating) simDone++;
+  const pay=missionReward(t); state.earnings=(state.earnings||0)+pay; book(t&&t.rd?'einsatz_rd':'einsatz_fw',`${t?t.code+' '+t.name:'Einsatz'}${simulating?' (offline)':''}`,pay);
   try{ refreshMissionMarker(m); }catch(e){ console.error(e); }
   m.assigned.slice().forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ try{ releaseVehicle(v); }catch(e){ console.error('release',e); } } });
   try{ toast(`${t?t.name:'Einsatz'} erledigt (+${fmt(pay)} € · Auszahlung um 0 Uhr)`,'ok'); renderTopbar(); renderVehicles(); }catch(e){ console.error(e); }
@@ -1726,7 +1723,7 @@ function vehAutoName(v){
   return `${abbr}-${v.seq||1}`;
 }
 function vehName(v){ return (v.customName&&v.customName.trim()) ? v.customName.trim() : vehAutoName(v); }
-function funk(v,status,note){
+function funk(v,status,note){ if(simulating) return;
   funkLog.unshift({ t:clockTimeFmt.format(new Date()), name:vehName(v), status:status||null, label:status?FMS_SHORT[status]:'', note:note||'' });
   if(funkLog.length>60) funkLog.length=60;
   renderFunk();
@@ -1758,6 +1755,7 @@ function turnoutOf(v){ const st=stationById(v.stationId); return v.turnout!=null
 function turnoutGapMs(){ const [a,b]=CONFIG.turnoutGap; return (a+Math.random()*(b-a))*1000; }
 /* Abfahrt einplanen: Fahrzeuge einer Wache verlassen das Tor nie gleichzeitig, sondern mit 5–15 s Abstand */
 function scheduleTurnout(v){
+  if(simulating) return turnoutOf(v);
   const st=stationById(v.stationId), now=Date.now(); let at=now+turnoutOf(v)*1000;
   if(st){ if(st._lastOut && at<st._lastOut+CONFIG.turnoutGap[0]*1000) at=Math.max(at,st._lastOut+turnoutGapMs()); st._lastOut=at; }
   return (at-now)/1000;
@@ -1871,8 +1869,12 @@ async function sendVehicleHome(v){
 /* ------------------------- GAME LOOP ------------------------- */
 let lastTick=Date.now();
 function tick(){
-  const now=Date.now(); const dt=Math.min(0.5,(now-lastTick)/1000); lastTick=now;   // Fahren/Einsätze in Echtzeit (Speed wirkt nur auf Spawn)
-
+  if(simulating) return;
+  const now=Date.now(), gap=(now-lastTick)/1000; lastTick=now;   // Fahren/Einsätze in Echtzeit (Speed wirkt nur auf Spawn)
+  if(gap>3){ catchUp(gap*1000); return; }              // Tab war im Hintergrund: verpasste Zeit nachholen
+  stepWorld(gap);
+}
+function stepWorld(dt){
   syncWlfs();
   // Fahrzeuge bewegen
   const gmV=(dt*1000)/CONFIG.minuteRealMs;
@@ -1882,7 +1884,7 @@ function tick(){
       if(!v.path) continue; // Route lädt noch
       if(v.status===3 && v.departIn>0){ v.departIn-=dt; continue; }   // wartet noch auf Abfahrt (Ausrückezeit)
       v.driveElapsed+=dt; const frac=Math.min(1,v.driveElapsed/v.driveSeconds);
-      const p=pointAtFrac(v.path,frac); v.lat=p.lat; v.lng=p.lng; if(v.marker) v.marker.setLatLng([v.lat,v.lng]);
+      const p=pointAtFrac(v.path,frac); v.lat=p.lat; v.lng=p.lng; if(v.marker && !simulating) v.marker.setLatLng([v.lat,v.lng]);
       if(frac>=1){
         clearRoute(v); v.path=null;
         if(v.status===3){ v.status=4; funk(v,4); refreshVehicleMarker(v); renderMissions(); renderVehicles(); }
@@ -2087,7 +2089,7 @@ function book(cat,text,amt){
 }
 /* Dispo: Ausgaben sind erlaubt, solange das Guthaben danach nicht unter −overdraftLimit fällt */
 function canAfford(cost){ return (state.credits - (cost||0)) >= -CONFIG.overdraftLimit; }
-function renderTopbar(){
+function renderTopbar(){ if(simulating) return;
   const c=document.getElementById('stat-credits'); if(c){ c.textContent=fmt(state.credits)+' €'; c.style.color=state.credits<0?'var(--danger)':'';
     c.title=`Dispo-Rahmen: ${fmt(CONFIG.overdraftLimit)} € · noch verfügbar: ${fmt(state.credits+CONFIG.overdraftLimit)} €${state.credits<0?` · Zinsen ${CONFIG.overdraftInterest*100} % pro Tag`:''}`; }
   const e=document.getElementById('stat-earnings'); if(e) e.textContent='+'+fmt(state.earnings||0)+' €';
@@ -2120,7 +2122,7 @@ function updateClock(){
 
 const FMS_LABEL={1:'Einsatzbereit über Funk',2:'Einsatzbereit auf Wache',3:'Auf Anfahrt',4:'Am Einsatzort',5:'Sprechwunsch',6:'Außer Dienst',7:'Patient aufgenommen',8:'Am Transportziel'};
 const FMS_SHORT={1:'Frei (Funk)',2:'Auf Wache',3:'Anfahrt',4:'Einsatz',5:'Sprechwunsch',6:'Außer Dienst',7:'Transport',8:'Am Zielort'};
-function renderStations(){
+function renderStations(){ if(simulating) return;
   const list=document.getElementById('stations-list'), cnt=document.getElementById('stations-count');
   cnt.textContent=state.stations.length; cnt.classList.toggle('zero',state.stations.length===0);
   if(state.stations.length===0){ list.innerHTML=`<div class="empty-hint">Noch keine Feuerwache.<br><b>„Gebäude bauen“</b> klicken und auf die Karte tippen.</div>`; return; }
@@ -2248,7 +2250,7 @@ function assignCrew(vehicleId, delta){
 /* ---------- Wachen-Detailfenster ---------- */
 let svStationId=null, svTab='vehicles';
 function openStationView(id, tab){ const st=stationById(id); if(!st) return; svStationId=id; svTab=tab||'vehicles'; buyStationId=id; renderStationView(); showModal('modal-stationview'); }
-function renderStationView(){
+function renderStationView(){ if(simulating) return;
   const st=stationById(svStationId); if(!st){ hideModal('modal-stationview'); return; }
   const bays=CONFIG.baysForLevel(st.level), vs=vehiclesOfStation(st.id);
   document.getElementById('sv-title').textContent=`${st.name}`;
@@ -2619,6 +2621,23 @@ function abHint(v){ const t=VEHICLES[v.type]; if(!t||v.status!==2) return '';
     return (tow.status===2&&!tow.abId)?` · <span class="dim">Zug: ${vehAbbr(tow)}</span>`:` · <span class="warnc">${vehAbbr(tow)} nicht frei</span>`; }
   return ''; }
 function vehTypeName(v){ const t=VEHICLES[v.type]; return t?`<span class="vcode ${t.category}">${vehAbbr(v)}</span> ${t.name}`:v.type; }
+/* Dispo-Fenster live: Zeiten/Fortschritt direkt aktualisieren, neu zeichnen nur bei Änderungen im Ablauf */
+let mmSig='';
+function arrivalText(v,m){ return v.path&&v.driveSeconds ? mmss((Math.max(0,v.driveSeconds-v.driveElapsed)+Math.max(0,v.departIn||0))/60) : etaText(v,m); }
+function mmSignature(m){
+  const statuses=mmShowBusy?[1,2,3,4,5,6,7,8]:[1,2];
+  return [m.status, missingReqs(m).length, Math.round(missionSupply(m).coverage*100),
+    state.vehicles.filter(v=>v.targetMissionId===m.id||v.nextMissionId===m.id||statuses.includes(v.status)).map(v=>v.id+':'+v.status+':'+(v.targetMissionId===m.id?1:0)+(v.nextMissionId===m.id?1:0)+(v.abId?1:0)).join(','),
+    (m.patients||[]).map(p=>p.state+(p.rtwId||'')+(p.nefId||'')).join(',')].join('|');
+}
+function liveMissionModal(){
+  if(simulating || !document.getElementById('modal-mission').classList.contains('show')) return;
+  const m=missionById(openMissionId); if(!m || m.status==='done' || mmSignature(m)!==mmSig){ renderMissionModal(); return; }
+  const box=document.getElementById('mm-content'), veh=id=>state.vehicles.find(x=>x.id===id);
+  box.querySelectorAll('[data-eta-arr]').forEach(td=>{ const v=veh(td.dataset.etaArr); if(v) td.textContent=arrivalText(v,m); });
+  box.querySelectorAll('[data-eta-av]').forEach(td=>{ const v=veh(td.dataset.etaAv); if(v) td.textContent=etaText(v,m); });
+  const pg=document.getElementById('mm-prog'); if(pg){ const h=missionProgressHTML(m); if(pg.innerHTML!==h) pg.innerHTML=h; }
+}
 function renderMissionModal(){
   const m=missionById(openMissionId); if(!m){ hideModal('modal-mission'); return; }
   const t=missionType(m.type), box=document.getElementById('mm-content');
@@ -2637,9 +2656,9 @@ function renderMissionModal(){
   const wlfOf=v=>{ const w=v.wlfId&&state.vehicles.find(x=>x.id===v.wlfId); return w?` <span class="dim">(auf ${vehName(w)})</span>`:''; };
   const sceneRows=(list,arriving)=> list.length ? `<table class="lss-tbl"><thead><tr><th>FMS</th><th>Fahrzeug</th><th class="hide-sm">Typ</th><th class="hide-sm">Besatzung</th><th class="hide-sm">Wache</th><th>${arriving?'Ankunft':''}</th><th></th></tr></thead><tbody>${
       list.map(v=>{ const st=stationById(v.stationId);
-        const eta = arriving ? (v.path&&v.driveSeconds? mmss((Math.max(0,v.driveSeconds-v.driveElapsed)+Math.max(0,v.departIn||0))/60) : etaText(v,m)) : '';
+        const eta = arriving ? arrivalText(v,m) : '';
         return `<tr><td><span class="fnum fnum-${v.status}">${v.status}</span></td><td class="call">${vehName(v)}${wlfOf(v)}</td><td class="hide-sm dim">${vehTypeName(v)}</td>
-          <td class="mono hide-sm">${crewOf(v)}</td><td class="hide-sm dim">${st?st.name:''}</td><td class="mono">${arriving?''+eta:''}</td>
+          <td class="mono hide-sm">${crewOf(v)}</td><td class="hide-sm dim">${st?st.name:''}</td><td class="mono"${arriving?` data-eta-arr="${v.id}"`:''}>${eta}</td>
           <td style="text-align:right"><button class="btn sm" data-recall="${v.id}" title="Rückalarmieren">Zurück</button></td></tr>`; }).join('')}</tbody></table>`
     : `<div class="lss-empty">Keine.</div>`;
 
@@ -2657,7 +2676,7 @@ function renderMissionModal(){
       return `<tr class="${sel?'sel':''}" data-pick="${v.id}"><td><input type="checkbox" ${sel?'checked':''}></td>
         <td><span class="fnum fnum-${v.status}">${v.status}</span></td><td class="call">${vehName(v)}</td>
         <td class="dim">${vehTypeName(v)}${abHint(v)}</td><td class="mono">${vehDistKm(v,m).toFixed(1)} km</td>
-        <td class="mono hide-sm">${etaText(v,m)}</td><td class="hide-sm dim">${st?st.name:''}</td></tr>`; }).join('')
+        <td class="mono hide-sm" data-eta-av="${v.id}">${etaText(v,m)}</td><td class="hide-sm dim">${st?st.name:''}</td></tr>`; }).join('')
     : `<tr><td colspan="7" class="lss-empty">${state.vehicles.length?'Keine verfügbaren Fahrzeuge in dieser Kategorie.':'Noch keine Fahrzeuge. Beschaffe an einer Wache ein Fahrzeug.'}</td></tr>`;
 
   box.innerHTML=`
@@ -2666,7 +2685,7 @@ function renderMissionModal(){
       ${t.need.water>0?`<span>Wasser ${t.need.water} L</span>`:''}${t.need.foam>0?`<span>Schaum ${t.need.foam} L</span>`:''}
       <span>Löschmittel-Deckung <b style="color:${sup.coverage>=1?'var(--ok)':'var(--warn)'}">${Math.round(sup.coverage*100)} %</b></span></div>
     ${alert}
-    ${missionProgressHTML(m)}
+    <div id="mm-prog">${missionProgressHTML(m)}</div>
     ${patientPanel(m)}
     <div class="lss-panel"><div class="lss-ph">Fahrzeuge auf Anfahrt <span class="cnt">${enRoute.length}</span></div>${sceneRows(enRoute,true)}</div>
     <div class="lss-panel"><div class="lss-ph">Fahrzeuge vor Ort <span class="cnt">${onScene.length}</span></div>${sceneRows(onScene,false)}</div>
@@ -2681,6 +2700,7 @@ function renderMissionModal(){
       <label class="lss-opt"><input type="checkbox" id="mm-busy" ${mmShowBusy?'checked':''}> Auch belegte Fahrzeuge anzeigen (werden umgeleitet bzw. als Folgeeinsatz eingeplant)</label>
     </div>`;
   box.scrollTop=keepScroll; const nl=box.querySelector('.lss-scroll'); if(nl) nl.scrollTop=keepList;
+  mmSig=mmSignature(m);
 
   box.querySelectorAll('[data-khpick]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openHospitalPick(m.id,b.dataset.khpick); });
   box.querySelectorAll('[data-pick]').forEach(r=>r.onclick=()=>{ const id=r.dataset.pick; mmSel.has(id)?mmSel.delete(id):mmSel.add(id); renderMissionModal(); });
@@ -2792,7 +2812,7 @@ function missionProgressHTML(m){
 }
 
 /* Einsatz-Liste */
-function renderMissions(){
+function renderMissions(){ if(simulating) return;
   const list=document.getElementById('missions-list'), cnt=document.getElementById('missions-count');
   const active=state.missions.filter(m=>m.status!=='done');
   cnt.textContent=active.length; cnt.classList.toggle('zero',active.length===0);
@@ -2848,7 +2868,7 @@ function vehicleRow(v){
     <button class="btn sm v-redispatch" data-redispatch="${v.id}" title="Einsatz zuweisen">Alarm</button>
   </div>`;
 }
-function renderVehicles(){
+function renderVehicles(){ if(simulating) return;
   const list=document.getElementById('vehicles-list'), cnt=document.getElementById('vehicles-count');
   if(!list) return;
   cnt.textContent=state.vehicles.length; cnt.classList.toggle('zero',state.vehicles.length===0);
@@ -2927,7 +2947,7 @@ function openRedispatch(vehicleId){
 }
 
 /* ------------------------- FUNK-FENSTER ------------------------- */
-function renderFunk(){
+function renderFunk(){ if(simulating) return;
   const list=document.getElementById('funk-list'), cnt=document.getElementById('funk-count');
   if(!list) return;
   cnt.textContent=funkLog.length; cnt.classList.toggle('zero',funkLog.length===0);
@@ -3006,7 +3026,7 @@ async function resumeDriving(){
 }
 
 /* Toasts / Modals */
-function toast(msg,kind='ok'){ const t=document.createElement('div'); t.className='toast '+kind; t.textContent=msg;
+function toast(msg,kind='ok'){ if(simulating) return; const t=document.createElement('div'); t.className='toast '+kind; t.textContent=msg;
   document.getElementById('toasts').appendChild(t); setTimeout(()=>{ t.style.opacity='0'; t.style.transition='.3s'; setTimeout(()=>t.remove(),300); },2600); }
 function showModal(id){ document.getElementById(id).classList.add('show'); }
 function hideModal(id){ document.getElementById(id).classList.remove('show'); }
@@ -3147,8 +3167,12 @@ async function startGame(){
     setInterval(settlePayday,30000);
     setInterval(()=>{ checkStationsReady(); renderStations(); },60000);
     window.addEventListener('beforeunload',()=>saveGame(true));
+    document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });   // zurück im Tab: sofort nachholen
+    setInterval(liveMissionModal,500);
     gameStarted=true;
   } else { rebuildEverything(); }
+  const off=pendingOfflineMs; pendingOfflineMs=0; lastTick=Date.now();
+  await catchUp(off);
   setTimeout(resumeDriving, 300);
   state.stations.filter(s=>!s.ort).forEach((s,i)=> setTimeout(()=>detectOrt(s), 800+i*1300));
   if(state.stations.length===0) setTimeout(()=>toast(`Willkommen, ${AUTH.username}! Baue deine erste Feuerwache`,'ok'),500);
