@@ -317,6 +317,8 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
 
 /* Marker */
 .mk-station{ width:34px; height:34px; border-radius:9px; background:var(--fire); border:2px solid #fff2; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-weight:800; font-size:12px; color:#fff; box-shadow:0 3px 10px rgba(0,0,0,.5); position:relative; }
+.mk-building{ width:34px; height:34px; border-radius:9px; background:var(--fms-4); border:2px solid #fff2; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-weight:800; font-size:12px; color:#04121f; box-shadow:0 3px 10px rgba(0,0,0,.5); }
+.mk-building.building{ background:#4b5563; color:#fff; border-style:dashed; font-size:10px; }
 .mk-station.building{ background:#4b5563; border-style:dashed; font-size:10px; }
 .s-build{ font-size:12px; color:#fbbf24; padding:6px 10px 0; }
 .mk-station .lvlbadge{ position:absolute; bottom:-6px; right:-6px; background:#0d1017; color:#fff; font-family:var(--font-mono); font-size:9px; font-weight:700; border:1px solid var(--border-2); border-radius:6px; padding:0 4px; }
@@ -352,6 +354,8 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
 .build-type .bt-ico{ font-family:var(--font-mono); font-weight:800; font-size:13px; background:var(--fire); color:#fff; border-radius:7px; padding:4px 7px; }
 .build-type .bt-name{ font-weight:700; font-size:14px; }
 .build-type .bt-cost{ font-family:var(--font-mono); font-size:11px; color:var(--warn); }
+#build-bays{ background:var(--panel-2); border:1px solid var(--border-2); border-radius:9px; color:var(--text); font-family:var(--font-ui); font-size:14px; padding:10px 12px; width:100%; }
+#build-bays:focus{ outline:none; border-color:var(--fire); }
 .build-cost{ font-size:13px; color:var(--text-mut); } .build-cost b{ color:var(--warn); font-family:var(--font-mono); }
 .se-preview-wrap{ font-size:12px; color:var(--text-mut); background:var(--panel-2); border:1px solid var(--border);
   border-radius:8px; padding:9px 11px; }
@@ -568,6 +572,7 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
     <div class="fld"><span>Gebäudetyp</span><div class="build-types" id="build-types"></div></div>
     <label class="fld"><span>Name</span><input id="build-name" type="text" maxlength="40" placeholder="Name des Gebäudes" /></label>
     <label class="fld" id="build-number-wrap"><span>Wachnummer</span><input id="build-number" type="number" min="1" /></label>
+    <label class="fld" id="build-bays-wrap"><span>Stellplätze direkt bauen</span><select id="build-bays"></select></label>
     <div class="build-cost" id="build-cost"></div>
   </div>
   <div class="m-actions">
@@ -709,6 +714,9 @@ const CONFIG = {
   baysForLevel:l=>2*l, upgradeCost:l=>1000000+500000*l,   // Ausbau: zusätzliche Fahrzeughalle
   stationBuildMs:3*24*60*60*1000,      // Bauzeit einer Wache (Echtzeit); die erste Wache ist sofort fertig
   stationRefundMs:24*60*60*1000,       // in diesem Zeitraum nach dem Platzieren: volle Erstattung
+  stationExtraLevelMs:60*60*1000,      // +1 h Bauzeit je direkt mitgebauter Ausbaustufe
+  bulkDiscountPerLevel:0.10, bulkDiscountMax:0.30,   // Rabatt auf direkt mitgebaute Ausbaustufen
+  academyBuildMs:5*24*60*60*1000,      // Bauzeit der Akademie
 
   startStaff:10,                       // Personal je Wache zu Beginn
   personnelDayMs:24*60*60*1000,        // „ein Tag“ = +1 Person (Echtzeit; hier anpassbar)
@@ -802,10 +810,10 @@ function freshState(){ return {
 function serializeObj(){ return {
   version:CONFIG.saveVersion, credits:state.credits, createdAt:state.createdAt, gameSpeed:state.gameSpeed, earnings:state.earnings, payDayKey:state.payDayKey, savedAt:Date.now(),
   view:(map?{lat:map.getCenter().lat,lng:map.getCenter().lng,zoom:map.getZoom()}:state.view),
-  stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null})),
+  stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null})),
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null})),
-  buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses})),
+  buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,placedAt:b.placedAt||null,readyAt:b.readyAt||null})),
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[]})),
 };}
 let saveInFlight=false;
@@ -933,7 +941,7 @@ function initMap(){
 }
 function addBuildingMarker(b){
   const t=buildingById(b.typeId); if(!t) return;
-  const icon=L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-building">${t.icon}</div>`});
+  const icon=L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-building${stationReady(b)?'':' building'}">${stationReady(b)?t.icon:'BAU'}</div>`});
   b.marker=L.marker([b.lat,b.lng],{icon}).addTo(buildingLayer);
   b.marker.bindTooltip(`${b.name}`,{direction:'top'});
   b.marker.on('click',()=>{ if(t.isAcademy) openAcademyView(b.id); else toast(`${b.name}${t.desc?' — '+t.desc:''}`,'ok'); });
@@ -983,7 +991,14 @@ let buildMode=false, buildTypeId=BUILDINGS[0].id, pendingBuild=null;
 function setBuildMode(on){ buildMode=on; document.getElementById('buildBanner').classList.toggle('show',on); document.getElementById('map').style.cursor=on?'crosshair':''; }
 function nextStationNumber(){ const nums=state.stations.map(s=>parseInt(s.number)||0); return (nums.length?Math.max(...nums):0)+1; }
 
-/* Bau-Menü: Typ, Name, (bei Wache) Wachnummer */
+/* Preis/Bauzeit einer neuen Wache mit direkt mitgebauten Ausbaustufen (Level 1 … max) */
+function stationBuildQuote(level){
+  const extra=Math.max(0,level-1); let up=0; for(let l=1;l<level;l++) up+=CONFIG.upgradeCost(l);
+  const disc=Math.min(CONFIG.bulkDiscountMax, CONFIG.bulkDiscountPerLevel*extra);
+  const upPaid=Math.round(up*(1-disc));
+  return { level, extra, up, disc, upPaid, total:CONFIG.stationBuildCost+upPaid, buildMs:CONFIG.stationBuildMs+extra*CONFIG.stationExtraLevelMs };
+}
+/* Bau-Menü: Typ, Name, (bei Wache) Wachnummer und Stellplätze */
 function openBuildMenu(){
   buildTypeId=BUILDINGS[0].id;
   const typesEl=document.getElementById('build-types');
@@ -1000,36 +1015,63 @@ function syncBuildMenu(){
   document.getElementById('build-name').value = b.isStation ? `Feuerwache ${num}` : b.name;
   document.getElementById('build-number-wrap').classList.toggle('hidden', !b.isStation);
   document.getElementById('build-number').value = num;
-  document.getElementById('build-cost').innerHTML = `Kosten: <b>${fmt(b.cost)} €</b>`;
+  document.getElementById('build-bays-wrap').classList.toggle('hidden', !b.isStation);
+  const sel=document.getElementById('build-bays');
+  if(b.isStation){
+    const cur=parseInt(sel.value)||1;
+    sel.innerHTML=Array.from({length:CONFIG.maxStationLevel},(_,i)=>i+1).map(l=>{ const q=stationBuildQuote(l);
+      return `<option value="${l}"${l===cur?' selected':''}>${CONFIG.baysForLevel(l)} Stellplätze · ${fmt(q.total)} €${q.disc?` (−${Math.round(q.disc*100)} % auf Ausbau)`:''}</option>`; }).join('');
+    sel.onchange=syncBuildCost;
+  }
+  syncBuildCost();
+}
+function syncBuildCost(){
+  const b=buildingById(buildTypeId), first=state.stations.length===0;
+  let html;
+  if(b.isStation){
+    const q=stationBuildQuote(parseInt(document.getElementById('build-bays').value)||1);
+    html=`Kosten: <b>${fmt(q.total)} €</b>`;
+    if(q.extra) html+=`<br>Wache ${fmt(CONFIG.stationBuildCost)} € + ${q.extra} Ausbaustufe${q.extra>1?'n':''} ${fmt(q.up)} € − ${Math.round(q.disc*100)} % Rabatt (${fmt(q.up-q.upPaid)} € gespart)`;
+    html+=`<br>Bauzeit: <b>${first?'sofort einsatzbereit (erste Wache)':fmtDur(q.buildMs)}</b>`;
+  } else {
+    html=`Kosten: <b>${fmt(b.cost)} €</b>${b.isAcademy?`<br>Bauzeit: <b>${fmtDur(CONFIG.academyBuildMs)}</b>`:''}`;
+  }
+  document.getElementById('build-cost').innerHTML=html;
 }
 function startBuildPlacement(){
   const b=buildingById(buildTypeId); if(!b) return;
   if(state.credits < b.cost){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
   const name=document.getElementById('build-name').value.trim() || b.name;
   const number=b.isStation ? (parseInt(document.getElementById('build-number').value)||nextStationNumber()) : null;
-  pendingBuild={ typeId:b.id, name, number };
+  const q=b.isStation ? stationBuildQuote(parseInt(document.getElementById('build-bays').value)||1) : null;
+  const cost=q?q.total:b.cost;
+  if(state.credits < cost){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); return; }
+  pendingBuild={ typeId:b.id, name, number, cost, quote:q };
   hideModal('modal-build'); setBuildMode(true);
 }
 
 function onMapClick(e){
   if(!buildMode || !pendingBuild) return;
   const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
-  if(state.credits < b.cost){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); setBuildMode(false); return; }
-  state.credits-=b.cost;
+  const cost=pendingBuild.cost??b.cost;
+  if(state.credits < cost){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); setBuildMode(false); return; }
+  state.credits-=cost;
+  const now=Date.now();
   if(b.isStation){
-    const now=Date.now(), first=state.stations.length===0;
-    const st={ id:nid(), name:pendingBuild.name, number:pendingBuild.number, ort:'', lat:e.latlng.lat, lng:e.latlng.lng, level:1,
+    const first=state.stations.length===0, q=pendingBuild.quote||stationBuildQuote(1);
+    const st={ id:nid(), name:pendingBuild.name, number:pendingBuild.number, ort:'', lat:e.latlng.lat, lng:e.latlng.lng, level:q.level,
       roster:makeRoster(CONFIG.startStaff), hireTarget:0, lastHireAt:0,
-      placedAt:now, readyAt: first ? now : now+CONFIG.stationBuildMs };   // erste Wache sofort einsatzbereit
+      buildPaid:cost, builtLevel:q.level,
+      placedAt:now, readyAt: first ? now : now+q.buildMs };   // erste Wache sofort einsatzbereit
     state.stations.push(st); addStationMarker(st);
     renderStations(); renderTopbar(); switchTab('stations'); detectOrt(st);
     toast(stationReady(st)?`${st.name} gebaut — einsatzbereit`:`${st.name} im Bau — einsatzbereit in ${fmtDur(st.readyAt-Date.now())}`,'ok');
   } else {
     const bld={ id:nid(), typeId:b.id, name:pendingBuild.name, lat:e.latlng.lat, lng:e.latlng.lng };
-    if(b.isAcademy){ bld.level=1; bld.courses=[]; }
+    if(b.isAcademy){ bld.level=1; bld.courses=[]; bld.placedAt=now; bld.readyAt=now+CONFIG.academyBuildMs; }
     if(!state.buildings) state.buildings=[];
     state.buildings.push(bld); addBuildingMarker(bld);
-    renderTopbar(); toast(`${b.name} gebaut`,'ok');
+    renderTopbar(); renderStations(); toast(stationReady(bld)?`${b.name} gebaut`:`${b.name} im Bau — fertig in ${fmtDur(bld.readyAt-now)}`,'ok');
     if(b.isAcademy) openAcademyView(bld.id);
   }
   setBuildMode(false); pendingBuild=null; saveGame(true);
@@ -1060,6 +1102,9 @@ function checkStationsReady(){
   (state.stations||[]).forEach(st=>{ const r=stationReady(st);
     if(st._wasReady===false && r){ toast(`${st.name} ist fertig gebaut und einsatzbereit`,'ok'); refreshStationMarker(st); renderStations(); if(svStationId===st.id) renderStationView(); }
     st._wasReady=r; });
+  academies().forEach(a=>{ const r=stationReady(a);
+    if(a._wasReady===false && r){ toast(`${a.name} ist fertig gebaut`,'ok'); if(a.marker){ buildingLayer.removeLayer(a.marker); addBuildingMarker(a); } renderStations(); }
+    a._wasReady=r; });
 }
 function refreshStationMarker(st){ if(st.marker) stationLayer.removeLayer(st.marker); addStationMarker(st); }
 function missionCls(m){ return m.status==='done'?'done':(m.status==='working'?'working':''); }
@@ -1447,7 +1492,7 @@ function renderStations(){
       const used=(a.courses||[]).length, rooms=academyRooms(a);
       el.innerHTML=`<div class="s-top s-open" data-openac="${a.id}"><div class="s-ico" style="background:var(--fms-4)">AK</div>
         <div class="s-name">${a.name}<span class="s-sub">Akademie · Level ${a.level} · Klassenräume ${used}/${rooms}</span></div>
-        <span class="s-chev">›</span></div>`;
+        <span class="s-chev">›</span></div>${stationReady(a)?'':`<div class="s-build">Im Bau — fertig in ${fmtDur(a.readyAt-Date.now())}</div>`}`;
       list.appendChild(el); });
   }
   list.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openStationView(b.dataset.open,'vehicles'));
@@ -1572,8 +1617,8 @@ function renderSvVehicles(st,vs,bays){
   const del=document.getElementById('sv-delstation'); if(del) del.onclick=()=>deleteStation(st.id);
 }
 function stationInvest(st){
-  let inv=CONFIG.stationBuildCost;
-  for(let l=1;l<(st.level||1);l++) inv+=CONFIG.upgradeCost(l);
+  let inv=st.buildPaid??CONFIG.stationBuildCost;                 // tatsächlich bezahlter Baupreis (inkl. Rabatt)
+  for(let l=st.builtLevel||1;l<(st.level||1);l++) inv+=CONFIG.upgradeCost(l);
   vehiclesOfStation(st.id).forEach(v=>{ const t=VEHICLES[v.type]; inv+=(t&&t.cost)||0; });
   return inv;
 }
@@ -1676,7 +1721,7 @@ function renderAcademyView(){
   finishDueCourses(Date.now());
   const rooms=academyRooms(a), used=(a.courses||[]).length, free=rooms-used;
   document.getElementById('av-title').textContent=`${a.name}`;
-  document.getElementById('av-sub').innerHTML=`Level ${a.level} · Klassenräume ${used}/${rooms} belegt · je Raum max. ${CONFIG.classroomCapacity} Personen (gleicher Lehrgang)`;
+  document.getElementById('av-sub').innerHTML=(stationReady(a)?'':`<span style="color:#fbbf24">Im Bau — fertig in ${fmtDur(a.readyAt-Date.now())}. Lehrgänge sind erst danach möglich.</span><br>`)+`Level ${a.level} · Klassenräume ${used}/${rooms} belegt · je Raum max. ${CONFIG.classroomCapacity} Personen (gleicher Lehrgang)`;
 
   // Laufende Lehrgänge
   let running='';
@@ -1698,7 +1743,7 @@ function renderAcademyView(){
   let people = avail.length? avail.map(p=>`<label class="ac-pick"><input type="checkbox" data-pp="${p.id}" ${avSelected.has(p.id)?'checked':''}/> ${p.name} ${qb(p)}</label>`).join('')
     : `<div class="pers-hint">Kein berechtigtes Personal an dieser Wache${co&&co.requiresCourse?` (Voraussetzung: ${qualLabel(co.requiresCourse)})`:''}.</div>`;
   const prereqNote = co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: abgeschlossener Lehrgang „${qualLabel(co.requiresCourse)}“.</div>`:'';
-  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost;
+  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost && stationReady(a);
   const upCost=CONFIG.academyUpgradeCost(a.level), canUp=a.level<CONFIG.maxAcademyLevel;
 
   document.getElementById('av-content').innerHTML=`
@@ -1729,10 +1774,11 @@ function updateAcademyStart(){
   const st=avStationId?stationById(avStationId):null;
   const free=academyRooms(a)-(a.courses||[]).length;
   const cnt=document.getElementById('av-count'); if(cnt) cnt.textContent=avSelected.size;
-  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost;
+  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost && stationReady(a);
   const b=document.getElementById('av-start'); if(b) b.disabled=!canStart;
 }
 function startCourse(){
+  { const a=academyById(avId); if(a&&!stationReady(a)){ toast(`${a.name} ist noch im Bau (fertig in ${fmtDur(a.readyAt-Date.now())})`,'warn'); return; } }
   const a=academyById(avId); if(!a) return;
   const rooms=academyRooms(a); if((a.courses||[]).length>=rooms){ toast('Alle Klassenräume belegt','warn'); return; }
   const co=courseById(avCourseId); if(!co){ toast('Kein Lehrgang gewählt','warn'); return; }
