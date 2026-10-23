@@ -802,7 +802,8 @@ a.dd-item{ text-decoration:none; color:var(--text); }
   <div class="m-content">
     <label class="fld"><span>Benutzername ändern</span><input id="set-user" type="text" maxlength="30" /></label>
     <button class="btn" id="set-user-save">Benutzername speichern</button>
-    <label class="fld"><span>Neues Passwort</span><input id="set-pass" type="password" maxlength="60" placeholder="mind. 4 Zeichen" /></label>
+    <label class="fld"><span>Aktuelles Passwort</span><input id="set-pass-old" type="password" maxlength="60" autocomplete="current-password" placeholder="bei Google-Konto ohne Passwort leer lassen" /></label>
+    <label class="fld"><span>Neues Passwort</span><input id="set-pass" type="password" maxlength="60" autocomplete="new-password" placeholder="mind. 8 Zeichen" /></label>
     <button class="btn" id="set-pass-save">Passwort ändern</button>
     <div class="set-danger">
       <div class="pers-hint">Konto endgültig löschen — dein Spielstand geht dabei verloren.</div>
@@ -3185,7 +3186,7 @@ document.getElementById('auth-google').onclick=googleLogin;
 document.getElementById('auth-pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doAuth('login'); });
 
 /* ---------- Einstellungen (Spieler) ---------- */
-function openSettings(){ document.getElementById('set-user').value=AUTH.username||''; document.getElementById('set-pass').value=''; showModal('modal-settings'); }
+function openSettings(){ document.getElementById('set-user').value=AUTH.username||''; document.getElementById('set-pass').value=''; document.getElementById('set-pass-old').value=''; showModal('modal-settings'); }
 async function settingsSaveUser(){
   const nu=document.getElementById('set-user').value.trim();
   if(!nu||nu===AUTH.username){ toast('Neuen Benutzernamen eingeben','warn'); return; }
@@ -3194,10 +3195,10 @@ async function settingsSaveUser(){
   }catch(e){ toast('Fehlgeschlagen: '+errMsg(e),'err'); }
 }
 async function settingsSavePass(){
-  const np=document.getElementById('set-pass').value;
-  if(!np||np.length<4){ toast('Passwort zu kurz (min. 4)','warn'); return; }
-  try{ const r=await rpc('app_change_password',{p_token:AUTH.token, p_new:np});
-    if(r.error){ toast(r.error,'err'); return; } document.getElementById('set-pass').value=''; toast('Passwort geändert','ok');
+  const op=document.getElementById('set-pass-old').value, np=document.getElementById('set-pass').value;
+  if(!np||np.length<8){ toast('Passwort zu kurz (min. 8 Zeichen)','warn'); return; }
+  try{ const r=await rpc('app_change_password',{p_token:AUTH.token, p_old:op, p_new:np});
+    if(r.error){ toast(r.error,'err'); return; } document.getElementById('set-pass').value=''; document.getElementById('set-pass-old').value=''; toast('Passwort geändert','ok');
   }catch(e){ toast('Fehlgeschlagen: '+errMsg(e),'err'); }
 }
 async function settingsDelete(){
