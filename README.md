@@ -38,3 +38,9 @@ Domain — ein Wechsel des Hosters erfordert keine Code-Änderung.
 - Sonderfahrzeuge: STEMO (Schlaganfall, ersetzt dort den Notarzt), KdoW LNA (ab 3 Patienten), GW-San/AB-MANV (ab 4 Patienten), NKTW (Patienten ohne Notarzt)
 - Ablauf: RTW versorgt vor Ort (bei Notarzt-Indikation zusätzlich NEF) → Status 5 → Krankenhaus wählen → Status 7/8 → frei
 - Einstellungen dazu stehen in `CONFIG` (rdShare, treatMinutes, handoverMinutes, transportBase, transportPerKm, naBonus)
+
+## Einsatzkatalog
+
+- 326 Feuerwehr-Einsätze aus 164 Szenarien, erzeugt mit `werkzeuge/einsatzkatalog.py` (Szenarien dort anpassen und das Skript ausführen)
+- Stichwörter nach dem öffentlichen Aufbau der Berliner AAO: Kategorie **BRAND** bzw. **TH** mit Alarmstufe (TH 0 = kleine Hilfeleistung). Die tatsächlichen Berliner Stichwortlisten sind als VS-NfD eingestuft und werden nicht verwendet.
+- Polizei und THW werden (noch) nicht benötigt.
