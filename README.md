@@ -30,3 +30,10 @@ Domain — ein Wechsel des Hosters erfordert keine Code-Änderung.
 - Verlinkt auf dem Login-Bildschirm, im Wartungsbildschirm und im Menü (☰) im Spiel.
 - Social-Links trägt man oben im Script von `seiten/socials.html` in die Liste `SOCIALS` ein (leere `url` = „folgt bald“).
 - Kommt der Shop mit Zahlungen dazu, müssen Impressum und Datenschutzerklärung angepasst werden.
+
+## Rettungsdienst und Patienten
+
+- `daten/rd_codes.js`: AMPDS-Stichwörter der Berliner Feuerwehr (BF-Open-Data, CC BY 4.0) für reine RD-Einsätze
+- `daten/kliniken.js`: Berliner Notaufnahmen mit Koordinaten und (vereinfachten) Fachabteilungen
+- Ablauf: RTW versorgt vor Ort (bei Notarzt-Indikation zusätzlich NEF) → Status 5 → Krankenhaus wählen → Status 7/8 → frei
+- Einstellungen dazu stehen in `CONFIG` (rdShare, treatMinutes, handoverMinutes, transportBase, transportPerKm, naBonus)
