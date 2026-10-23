@@ -680,15 +680,19 @@ a.dd-item{ text-decoration:none; color:var(--text); }
     <label class="fld"><span>Ort (Landkreis / Stadt) <button class="btn sm ghost" id="se-detect" type="button" style="margin-left:6px">erkennen</button></span>
       <input id="se-ort" type="text" placeholder="z. B. Berlin, Hamburg, Rosenheim …" /></label>
     <div class="se-preview-wrap">Funkrufname der Fahrzeuge:<br><span id="se-preview" class="se-preview">Florian-Ort-LHF-1-1</span></div>
+    <label class="fld"><span>Standard-Ausrückezeit (Sekunden, 0–600)</span><input id="se-turnout" type="number" min="0" max="600" step="5" placeholder="0" /></label>
+    <div class="se-preview-wrap">Gilt für alle Fahrzeuge der Wache ohne eigene Ausrückezeit. Mehrere Fahrzeuge rücken immer 5–15 s versetzt aus.</div>
   </div>
   <div class="m-actions"><button class="btn ghost" data-close>Abbrechen</button><button class="btn primary" id="se-save">Speichern</button></div>
 </div></div>
 
 <div class="modal-bg" id="modal-vehicle"><div class="modal">
-  <h3>Fahrzeugname ändern</h3>
+  <h3>Fahrzeug bearbeiten</h3>
   <div class="m-content">
     <label class="fld"><span>Eigener Name</span><input id="ve-name" type="text" maxlength="40" placeholder="" /></label>
     <div class="se-preview-wrap">Leer lassen = automatischer Rufname:<br><span id="ve-auto" class="se-preview">—</span></div>
+    <label class="fld"><span>Ausrückezeit (Sekunden, 0–600)</span><input id="ve-turnout" type="number" min="0" max="600" step="5" placeholder="" /></label>
+    <div class="se-preview-wrap" id="ve-turnout-hint">Leer lassen = Standard der Wache</div>
   </div>
   <div class="m-actions">
     <button class="btn ghost" id="ve-reset" type="button">Auto-Name</button>
@@ -790,6 +794,8 @@ const CONFIG = {
   speedSteps:[0.5,1,2,3,4],   // wählbare Geschwindigkeiten
 
   // Einsatz-Zeit: 1 „Einsatz-Minute“ dauert real minuteRealMs (bei 1×)
+  turnoutMax:600,             // Ausrückezeit pro Fahrzeug/Wache: 0–600 s
+  turnoutGap:[5,15],          // Mindestabstand zweier Fahrzeuge derselben Wache beim Ausrücken (s, zufällig)
   minuteRealMs:60000,         // 1 Ingame-Minute = 60 s Echtzeit bei 1× (bei 2× 30 s usw.)
   usefulVehicleCap:2,         // (nur für rein technische Einsätze) mehr bringt nichts
   perVehicleSpeedup:0.25,     // (nur für rein technische Einsätze) 25 % je Fahrzeug
@@ -916,9 +922,9 @@ function freshState(){ return {
 function serializeObj(){ return {
   version:CONFIG.saveVersion, autoHospital:!!state.autoHospital, ledger:state.ledger||[], daily:state.daily||{}, credits:state.credits, createdAt:state.createdAt, gameSpeed:state.gameSpeed, earnings:state.earnings, payDayKey:state.payDayKey, savedAt:Date.now(),
   view:(map?{lat:map.getCenter().lat,lng:map.getCenter().lng,zoom:map.getZoom()}:state.view),
-  stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null})),
+  stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null,turnout:s.turnout||0})),
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
-    targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
+    targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
   buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,placedAt:b.placedAt||null,readyAt:b.readyAt||null})),
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[],patients:m.patients||[]})),
 };}
@@ -1471,7 +1477,8 @@ function startDrive(v,coords,osrmDuration,factor){
   drawRoute(v,coords); refreshVehicleMarker(v);
 }
 /* Fahrt von AKTUELLER Position zum Einsatz (Erstalarm, Umleitung, Folgeeinsatz) */
-async function routeVehicleTo(v,m,factor){
+async function routeVehicleTo(v,m,factor,departIn){
+  v.departIn=departIn||0;
   state.missions.forEach(mm=>{ mm.assigned=mm.assigned.filter(id=>id!==v.id); }); // exklusiv zuordnen
   v.status=3; v.targetMissionId=m.id; v.nextMissionId=null; v.path=null;
   m.assigned.push(v.id);
@@ -1482,6 +1489,22 @@ async function routeVehicleTo(v,m,factor){
   if(v.status!==3||v.targetMissionId!==m.id) return;  // zwischenzeitlich umdisponiert
   route.coords.push({lat:m.lat,lng:m.lng});           // Teleport auf exakten Einsatzpunkt
   startDrive(v,route.coords,route.duration,factor||CONFIG.outboundFactor);
+}
+/* Ausrückezeit: eigener Wert des Fahrzeugs, sonst Standard der Wache (Sekunden) */
+function turnoutOf(v){ const st=stationById(v.stationId); return v.turnout!=null ? v.turnout : (st?.turnout||0); }
+function turnoutGapMs(){ const [a,b]=CONFIG.turnoutGap; return (a+Math.random()*(b-a))*1000; }
+/* Abfahrt einplanen: Fahrzeuge einer Wache verlassen das Tor nie gleichzeitig, sondern mit 5–15 s Abstand */
+function scheduleTurnout(v){
+  const st=stationById(v.stationId), now=Date.now(); let at=now+turnoutOf(v)*1000;
+  if(st){ if(st._lastOut && at<st._lastOut+CONFIG.turnoutGap[0]*1000) at=Math.max(at,st._lastOut+turnoutGapMs()); st._lastOut=at; }
+  return (at-now)/1000;
+}
+/* Erwartete Wartezeit bis zur Abfahrt (für ETA/Sortierung im Alarmierungsfenster) */
+function expectedTurnout(v){
+  if(v.status!==2) return 0;
+  const st=stationById(v.stationId), now=Date.now(), at=now+turnoutOf(v)*1000;
+  const gapEnd=st?._lastOut ? st._lastOut+CONFIG.turnoutGap[0]*1000 : 0;
+  return (Math.max(at,gapEnd)-now)/1000;
 }
 /* Besatzung für ein Fahrzeug wählen (feste zuerst, dann Springer); null + Warnung, wenn Personal fehlt */
 function pickCrew(st, v, courses, label){
@@ -1546,7 +1569,7 @@ async function dispatch(vehicleId,missionId){
       v.crewIds=crew; v.crew=crew.length;
     }
     if(st){ v.lat=st.lat; v.lng=st.lng; }
-    const drive=routeVehicleTo(v,m,CONFIG.outboundFactor);
+    const drive=routeVehicleTo(v,m,CONFIG.outboundFactor,scheduleTurnout(v));
     syncWlfs();                                        // Träger sofort als belegt anzeigen
     renderStations(); renderVehicles(); if(svStationId===st.id) renderStationView();
     await drive;
@@ -1573,7 +1596,7 @@ function releaseVehicle(v){
 async function sendVehicleHome(v){
   if(v.status===1) return;
   const st=stationById(v.stationId); if(!st){ v.status=2; return; }
-  v.status=1; v.targetMissionId=null; v.path=null;
+  v.status=1; v.targetMissionId=null; v.path=null; v.departIn=0;
   state.missions.forEach(m=>{ m.assigned=m.assigned.filter(id=>id!==v.id); });
   funk(v,1); refreshVehicleMarker(v); renderVehicles();
   const route=await getRoute({lat:v.lat,lng:v.lng},{lat:st.lat,lng:st.lng});
@@ -1594,6 +1617,7 @@ function tick(){
     if(v.status===8){ v.handoverLeft=(v.handoverLeft||0)-gmV; if(v.handoverLeft<=0 && v.transport) finishHandover(v); else if(!v.transport) releaseVehicle(v); continue; }
     if(v.status===3||v.status===1||v.status===7){
       if(!v.path) continue; // Route lädt noch
+      if(v.status===3 && v.departIn>0){ v.departIn-=dt; continue; }   // wartet noch auf Abfahrt (Ausrückezeit)
       v.driveElapsed+=dt; const frac=Math.min(1,v.driveElapsed/v.driveSeconds);
       const p=pointAtFrac(v.path,frac); v.lat=p.lat; v.lng=p.lng; if(v.marker) v.marker.setLatLng([v.lat,v.lng]);
       if(frac>=1){
@@ -1699,10 +1723,10 @@ function estimateDriveSeconds(from, to, factor){
   const osrm = road / 12.5;                    // reale Sekunden (≈45 km/h)
   return Math.max(2, osrm * CONFIG.driveTimeScale * (factor||CONFIG.outboundFactor));
 }
-function etaText(v, m){
-  const secs = estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng}, CONFIG.outboundFactor);
-  return mmss(secs/60);
+function etaSeconds(v, m){
+  return expectedTurnout(v) + estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng}, CONFIG.outboundFactor);
 }
+function etaText(v, m){ return mmss(etaSeconds(v,m)/60); }
 /* ---------- Bank-Fenster ---------- */
 let bankRange='today', bankFilter='all';
 function bankDays(range){
@@ -2217,6 +2241,7 @@ function fillStationForm(st){
   document.getElementById('se-name').value=st.name||'';
   document.getElementById('se-number').value=st.number||'';
   document.getElementById('se-ort').value=st.ort||'';
+  document.getElementById('se-turnout').value=st.turnout||'';
   updateCallsignPreview();
 }
 function updateCallsignPreview(){
@@ -2224,11 +2249,14 @@ function updateCallsignPreview(){
   const num=document.getElementById('se-number').value.trim()||'1';
   document.getElementById('se-preview').textContent=`Florian-${ort}-LHF-${num}-1`;
 }
+/* Eingabe der Ausrückezeit: leer → null, sonst auf 0–600 s begrenzt */
+function parseTurnout(val){ const n=parseInt(val); return isNaN(n)?null:Math.max(0,Math.min(CONFIG.turnoutMax,n)); }
 function saveStationEdit(){
   const st=stationById(editStationId); if(!st) return;
   st.name=document.getElementById('se-name').value.trim()||st.name;
   const num=parseInt(document.getElementById('se-number').value); if(!isNaN(num)) st.number=num;
   st.ort=document.getElementById('se-ort').value.trim();
+  st.turnout=parseTurnout(document.getElementById('se-turnout').value)||0;
   hideModal('modal-station'); refreshStationMarker(st);
   renderStations(); renderVehicles(); renderMissions(); if(svStationId===st.id) renderStationView(); saveGame(true);
   toast(`${st.name} aktualisiert`,'ok');
@@ -2343,7 +2371,7 @@ function renderMissionModal(){
   const wlfOf=v=>{ const w=v.wlfId&&state.vehicles.find(x=>x.id===v.wlfId); return w?` <span class="dim">(auf ${vehName(w)})</span>`:''; };
   const sceneRows=(list,arriving)=> list.length ? `<table class="lss-tbl"><thead><tr><th>FMS</th><th>Fahrzeug</th><th class="hide-sm">Typ</th><th class="hide-sm">Besatzung</th><th class="hide-sm">Wache</th><th>${arriving?'Ankunft':''}</th><th></th></tr></thead><tbody>${
       list.map(v=>{ const st=stationById(v.stationId);
-        const eta = arriving ? (v.path&&v.driveSeconds? mmss(Math.max(0,v.driveSeconds-v.driveElapsed)/60) : etaText(v,m)) : '';
+        const eta = arriving ? (v.path&&v.driveSeconds? mmss((Math.max(0,v.driveSeconds-v.driveElapsed)+Math.max(0,v.departIn||0))/60) : etaText(v,m)) : '';
         return `<tr><td><span class="fnum fnum-${v.status}">${v.status}</span></td><td class="call">${vehName(v)}${wlfOf(v)}</td><td class="hide-sm dim">${vehTypeName(v)}</td>
           <td class="mono hide-sm">${crewOf(v)}</td><td class="hide-sm dim">${st?st.name:''}</td><td class="mono">${arriving?''+eta:''}</td>
           <td style="text-align:right"><button class="btn sm" data-recall="${v.id}" title="Rückalarmieren">Zurück</button></td></tr>`; }).join('')}</tbody></table>`
@@ -2352,7 +2380,8 @@ function renderMissionModal(){
   // Verfügbare Fahrzeuge
   const statuses = mmShowBusy ? [1,2,3,4,5,6,7,8] : [1,2];
   const pool=state.vehicles.filter(v=>statuses.includes(v.status) && v.targetMissionId!==m.id && v.nextMissionId!==m.id && !v.abId);
-  pool.sort((a,b)=>vehDistKm(a,m)-vehDistKm(b,m));
+  const etaOf=new Map(pool.map(v=>[v.id,etaSeconds(v,m)]));
+  pool.sort((a,b)=>etaOf.get(a.id)-etaOf.get(b.id));
   [...mmSel].forEach(id=>{ if(!pool.some(v=>v.id===id)) mmSel.delete(id); });
   const catCount=c=>pool.filter(v=>(VEHICLES[v.type]||{}).category===c).length;
   const tabs=[{id:'all',name:'Alle',n:pool.length}].concat(VEHICLE_CATEGORIES.map(c=>({id:c.id,name:c.name,n:catCount(c.id)})).filter(c=>c.n>0));
@@ -2523,7 +2552,8 @@ function renderMissions(){
 
 /* ------------------------- FAHRZEUG-STATUS (Tab) ------------------------- */
 function vehicleActivity(v){
-  if(v.status===3){ const m=missionById(v.targetMissionId); return m?`Anfahrt → ${missionType(m.type).name}`:'Auf Anfahrt'; }
+  if(v.status===3){ const m=missionById(v.targetMissionId); if(m&&v.departIn>0) return `Rückt aus in ${mmss(v.departIn/60)} → ${missionType(m.type).name}`;
+    return m?`Anfahrt → ${missionType(m.type).name}`:'Auf Anfahrt'; }
   if(v.status===4){ const m=missionById(v.targetMissionId); return m?`Am Einsatz · ${missionType(m.type).name}`:'Am Einsatzort'; }
   if(v.status===5){ const m=missionById(v.targetMissionId); return `Sprechwunsch · Patient transportbereit${m?' · '+missionType(m.type).name:''}`; }
   if(v.status===7){ const h=v.transport&&hospitalById(v.transport.khId); return `Transport → ${h?h.name:'Krankenhaus'}`; }
@@ -2576,12 +2606,17 @@ function openVehicleEdit(id){
   const inp=document.getElementById('ve-name');
   inp.value=v.customName||''; inp.placeholder=vehAutoName(v);
   document.getElementById('ve-auto').textContent=vehAutoName(v);
+  const st=stationById(v.stationId), def=st?.turnout||0;
+  document.getElementById('ve-turnout').value=v.turnout!=null?v.turnout:'';
+  document.getElementById('ve-turnout').placeholder=`${def} (Wache)`;
+  document.getElementById('ve-turnout-hint').textContent=`Leer lassen = Standard der Wache (${mmss(def/60)} min)`;
   showModal('modal-vehicle'); setTimeout(()=>inp.focus(),50);
 }
 function saveVehicleEdit(){
   const v=state.vehicles.find(x=>x.id===editVehicleId); if(!v) return;
   const val=document.getElementById('ve-name').value.trim();
   v.customName = val || null;
+  v.turnout = parseTurnout(document.getElementById('ve-turnout').value);
   hideModal('modal-vehicle'); renderVehicles(); renderStations(); renderMissions();
   toast(val?`Umbenannt in „${val}“`:'Automatischer Rufname wiederhergestellt','ok'); saveGame(true);
 }
