@@ -1,0 +1,2560 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Leitstelle — Feuerwehr-Disposition</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* =========================================================================
+   DESIGN TOKENS  —  hier später dein eigenes Design-System einhängen
+   ========================================================================= */
+:root{
+  --bg:#0d1017; --bg-map:#0a0d12;
+  --panel:#151a23; --panel-2:#1a212c; --panel-3:#212a38;
+  --border:#253040; --border-2:#2f3c4f;
+  --text:#e6ebf2; --text-mut:#8a97a8; --text-dim:#5c6879;
+  --fire:#e5352b; --fire-2:#ff5247;
+  /* FMS-Funkstatus-Farben */
+  --fms-1:#38bdf8; --fms-2:#16a34a; --fms-3:#f59e0b; --fms-4:#3b82f6; --fms-5:#a855f7; --fms-6:#ef4444; --fms-7:#06b6d4;
+  --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444; --water:#3b82f6; --foam:#eab308;
+  --font-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-mono:ui-monospace,'JetBrains Mono','SF Mono','Menlo',monospace;
+  --radius:14px; --radius-sm:9px; --shadow:0 8px 30px rgba(0,0,0,.45);
+  --map-filter:invert(1) hue-rotate(180deg) brightness(1.06) contrast(0.85) saturate(0.8); /* helle OSM-Kacheln → Dark Mode */
+}
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+button, .btn, .icon-btn, .dd-item, .tab, .buy-tab, .pa-btn, .mission, .alz-row, .vrow, .bay, .adm-row, .ac-pick, .veh-pick{ touch-action:manipulation; }
+html,body{ height:100%; margin:0; }
+body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overflow:hidden; font-size:14px; }
+
+#app{ position:fixed; inset:0; display:flex; flex-direction:column; }
+
+/* Topbar */
+#topbar{ height:56px; flex:0 0 56px; display:flex; align-items:center; gap:12px; padding:0 16px;
+  background:linear-gradient(180deg,var(--panel-2),var(--panel)); border-bottom:1px solid var(--border); z-index:1200; }
+.brand{ display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.3px; }
+.brand .dot{ width:11px; height:11px; border-radius:50%; background:var(--fire); animation:pulse 2s infinite; }
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(229,53,43,.55)}70%{box-shadow:0 0 0 9px rgba(229,53,43,0)}100%{box-shadow:0 0 0 0 rgba(229,53,43,0)}}
+.brand small{ color:var(--text-mut); font-weight:500; }
+.clock{ display:flex; flex-direction:column; align-items:flex-start; line-height:1;
+  padding:0 14px; margin-left:4px; border-left:1px solid var(--border); }
+.clock .c-time{ font-family:var(--font-mono); font-size:19px; font-weight:700; letter-spacing:1px;
+  font-variant-numeric:tabular-nums; color:var(--text); }
+.clock .c-sub{ font-family:var(--font-mono); font-size:9px; letter-spacing:1.2px; color:var(--text-dim);
+  text-transform:uppercase; margin-top:3px; }
+.top-spacer{ flex:1; }
+.stat{ display:flex; flex-direction:column; align-items:flex-end; line-height:1.1; padding:0 12px; border-left:1px solid var(--border); }
+.stat .k{ font-size:10px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-dim); }
+.stat .v{ font-family:var(--font-mono); font-size:16px; font-weight:600; }
+.btn{ font-family:var(--font-ui); font-size:13px; font-weight:600; color:var(--text); background:var(--panel-3);
+  border:1px solid var(--border-2); border-radius:var(--radius-sm); padding:8px 13px; cursor:pointer;
+  display:inline-flex; align-items:center; gap:7px; transition:.12s; }
+.btn:hover{ background:#28374b; border-color:#3a4b63; } .btn:active{ transform:translateY(1px); }
+.btn.primary{ background:var(--fire); border-color:var(--fire); } .btn.primary:hover{ background:var(--fire-2); }
+.btn.danger{ background:#7f1d1d; border-color:#991b1b; color:#fecaca; } .btn.danger:hover{ background:#991b1b; }
+/* Topbar-Dropdown-Menü */
+.menu-wrap{ position:relative; display:inline-flex; }
+.dropdown-menu{ position:absolute; top:calc(100% + 8px); left:0; min-width:200px; z-index:1400;
+  background:var(--panel); border:1px solid var(--border-2); border-radius:12px; box-shadow:var(--shadow);
+  padding:6px; display:flex; flex-direction:column; gap:2px; }
+.dropdown-menu.hidden{ display:none; }
+.dd-item{ display:flex; align-items:center; gap:9px; text-align:left; font-family:var(--font-ui); font-size:14px;
+  color:var(--text); background:transparent; border:none; border-radius:8px; padding:10px 12px; cursor:pointer; }
+.dd-item:hover{ background:var(--panel-3); }
+.dd-item.danger{ color:#fca5a5; } .dd-item.danger:hover{ background:rgba(239,68,68,.12); }
+.dd-sep{ height:1px; background:var(--border); margin:4px 6px; }
+.shop-item{ display:flex; align-items:center; gap:12px; background:var(--panel-2); border:1px solid var(--border);
+  border-radius:10px; padding:12px 14px; margin-bottom:8px; }
+.si-info{ flex:1; display:flex; flex-direction:column; gap:3px; }
+.si-name{ font-weight:700; font-size:15px; }
+.si-credits{ font-family:var(--font-mono); font-size:13px; color:var(--ok); }
+.shop-item .btn{ flex:0 0 auto; min-width:96px; justify-content:center; }
+.btn.ghost{ background:transparent; } .btn.sm{ padding:5px 9px; font-size:12px; }
+.btn:disabled{ opacity:.45; cursor:not-allowed; }
+.icon-btn{ width:38px; height:38px; padding:0; justify-content:center; font-size:16px; background:var(--panel-3);
+  border:1px solid var(--border-2); border-radius:var(--radius-sm); color:var(--text); cursor:pointer; display:inline-flex; align-items:center; }
+.icon-btn:hover{ background:#28374b; }
+
+/* Geschwindigkeits-Dropdown */
+.speed-select{ font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--text);
+  background-color:var(--panel-3); border:1px solid var(--border-2); border-radius:var(--radius-sm);
+  padding:0 24px 0 9px; height:32px; cursor:pointer; line-height:32px;
+  -webkit-appearance:none; appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M1 3l4 4 4-4' stroke='%238a97a8' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat; background-position:right 8px center; }
+.speed-select:hover{ background-color:#28374b; }
+.speed-select:focus{ outline:none; border-color:var(--fire); }
+.speed-select option{ background:var(--panel); color:var(--text); }
+
+#main{ flex:1; position:relative; display:flex; min-height:0; }
+#map{ position:absolute; inset:0; background:var(--bg-map); z-index:0; }
+.leaflet-container{ background:var(--bg-map); font-family:var(--font-ui); }
+.leaflet-tile-pane{ filter:var(--map-filter); }   /* <- Karte heller */
+
+#sidebar{ position:absolute; top:12px; right:12px; bottom:12px; width:360px; max-width:calc(100vw - 24px);
+  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
+  z-index:1100; display:flex; flex-direction:column; overflow:hidden; }
+.panel-head{ display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--border); flex:0 0 auto; }
+.panel-head h2{ margin:0; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; }
+.panel-head .count{ font-family:var(--font-mono); font-size:12px; background:var(--fire); color:#fff; padding:1px 8px; border-radius:20px; font-weight:700; }
+.panel-head .count.zero{ background:var(--panel-3); color:var(--text-mut); }
+
+/* Tabs im Sidebar */
+.tabs{ display:flex; align-items:center; gap:3px; padding:8px 8px; border-bottom:1px solid var(--border); flex:0 0 auto; flex-wrap:wrap; }
+.tab{ font-family:var(--font-ui); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px;
+  color:var(--text-mut); background:transparent; border:1px solid transparent; border-radius:8px; padding:6px 8px;
+  cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+.tab:hover{ color:var(--text); background:var(--panel-2); }
+.tab.active{ color:#fff; background:var(--panel-3); border-color:var(--border-2); }
+.tcount{ font-family:var(--font-mono); font-size:10px; background:var(--fire); color:#fff; padding:0 5px; border-radius:20px; }
+.tcount.zero{ background:var(--panel); color:var(--text-dim); }
+.tab-body{ flex:1 1 auto; min-height:0; display:flex; overflow:hidden; }
+.tab-body .panel-body{ flex:1; }
+
+/* Fahrzeug-Statusliste */
+.vgroup-head{ font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-dim);
+  padding:8px 4px 4px; font-weight:700; display:flex; gap:6px; align-items:center; }
+.vgroup-head .vg-cnt{ font-family:var(--font-mono); color:var(--text-mut); }
+.vrow{ display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--panel-2);
+  border:1px solid var(--border); border-radius:8px; margin-bottom:5px; }
+.vrow .v-ico{ font-size:15px; flex:0 0 auto; }
+.vrow .v-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.vrow .v-call{ font-family:var(--font-mono); font-weight:700; font-size:13px; }
+.vrow .v-act{ font-size:11px; color:var(--text-mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vrow .v-next{ color:var(--warn); font-family:var(--font-mono); }
+.vrow .v-redispatch{ flex:0 0 auto; }
+.vrow .v-custom{ color:var(--warn); font-size:11px; }
+.vrow .v-edit{ flex:0 0 auto; padding:5px 8px; }
+
+/* Funk-Fenster */
+.funk{ flex:0 0 auto; height:210px; display:flex; flex-direction:column; border-top:1px solid var(--border); background:var(--bg-map); }
+.funk-head{ display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:12px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.6px; color:var(--text-mut); border-bottom:1px solid var(--border); }
+.funk-body{ flex:1; overflow-y:auto; padding:6px 8px; display:flex; flex-direction:column; gap:4px; }
+.funk-body::-webkit-scrollbar{ width:8px; } .funk-body::-webkit-scrollbar-thumb{ background:var(--border-2); border-radius:8px; }
+.funk-empty{ color:var(--text-dim); text-align:center; padding:18px 8px; font-size:12px; }
+.funk-row{ display:flex; align-items:center; gap:8px; padding:5px 8px; background:var(--panel-2);
+  border:1px solid var(--border); border-radius:7px; font-size:12px; animation:toastin .2s ease; }
+.funk-row .f-time{ font-family:var(--font-mono); font-size:10px; color:var(--text-dim); flex:0 0 auto; }
+.funk-row .f-txt{ flex:1; color:var(--text); line-height:1.3; }
+.funk-row .f-txt b{ font-family:var(--font-mono); }
+.panel-body{ overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:9px; flex:1; }
+.panel-body::-webkit-scrollbar{ width:8px; } .panel-body::-webkit-scrollbar-thumb{ background:var(--border-2); border-radius:8px; }
+.empty-hint{ color:var(--text-dim); text-align:center; padding:32px 16px; font-size:13px; line-height:1.5; }
+.empty-hint b{ color:var(--text-mut); }
+
+/* Mission card */
+.mission{ background:var(--panel-2); border:1px solid var(--border); border-left:3px solid var(--fire);
+  border-radius:var(--radius-sm); padding:11px 12px; cursor:pointer; transition:.12s; }
+.mission:hover{ border-color:var(--border-2); background:var(--panel-3); }
+.mission.working{ border-left-color:var(--fms-4); }
+.mission.done{ border-left-color:var(--ok); opacity:.7; }
+.mission .m-top{ display:flex; align-items:center; gap:8px; }
+.mission .m-ico{ font-size:18px; } .mission .m-name{ font-weight:700; flex:1; }
+/* Einsatzstichwort-Badge */
+.mcode{ font-family:var(--font-mono); font-weight:800; font-size:12px; letter-spacing:.5px; padding:3px 7px;
+  border-radius:6px; flex:0 0 auto; line-height:1; }
+.mcode.b{ background:rgba(229,53,43,.16); color:#ff6a5f; border:1px solid rgba(229,53,43,.45); }
+.mcode.th{ background:rgba(59,130,246,.16); color:#6aa8ff; border:1px solid rgba(59,130,246,.45); }
+.m-badge{ font-family:var(--font-mono); font-size:10px; padding:2px 7px; border-radius:20px; background:var(--fire); color:#fff; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+.m-badge.working{ background:var(--fms-4); } .m-badge.done{ background:var(--ok); } .m-badge.wait{ background:var(--warn); color:#221701; }
+.mission .m-addr{ color:var(--text-mut); font-size:12px; margin-top:3px; }
+.tags{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+.tag{ font-family:var(--font-mono); font-size:10px; padding:2px 7px; border-radius:6px; background:#0e131b; border:1px solid var(--border); color:var(--text-mut); }
+.tag.water{ color:#93c5fd; } .tag.foam{ color:#fde68a; } .tag.veh{ color:#e6ebf2; } .tag.time{ color:#c4b5fd; }
+.progress{ margin-top:9px; display:flex; align-items:center; gap:8px; }
+.progress .track{ flex:1; height:8px; background:#0e131b; border-radius:6px; overflow:hidden; position:relative; }
+.progress .fill{ height:100%; background:linear-gradient(90deg,#22c55e,#4ade80); border-radius:6px; transition:width .25s; }
+.progress .rest{ font-family:var(--font-mono); font-size:11px; color:#86efac; min-width:80px; text-align:right; }
+.progress .capline{ position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--warn); box-shadow:0 0 4px var(--warn); }
+.waitnote{ margin-top:8px; font-size:11px; color:var(--warn); font-family:var(--font-mono); }
+.stall{ margin-top:7px; font-size:11px; color:#fca5a5; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35);
+  border-radius:7px; padding:6px 9px; }
+.reqveh{ display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+.reqv{ font-family:var(--font-mono); font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px;
+  color:#fca5a5; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); }
+.reqv.ok{ color:var(--ok); background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.4); }
+/* Löschmittel-Balken (geliefert / benötigt) */
+.sbar{ margin-top:7px; display:flex; align-items:center; gap:8px; }
+.sbar .sl{ width:16px; text-align:center; flex:0 0 auto; }
+.sbar .st{ flex:1; height:8px; background:#0e131b; border-radius:6px; overflow:hidden; }
+.sbar .sf{ height:100%; border-radius:6px; transition:width .25s; }
+.sbar .sf.water{ background:linear-gradient(90deg,#3b82f6,#60a5fa); }
+.sbar .sf.foam{ background:linear-gradient(90deg,#eab308,#facc15); }
+.sbar .sv{ font-family:var(--font-mono); font-size:11px; color:var(--text-mut); min-width:82px; text-align:right; }
+
+/* Stations */
+.station{ background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:11px 12px; }
+.station .s-top{ display:flex; align-items:center; gap:9px; }
+.station .s-ico{ width:30px; height:30px; border-radius:8px; background:var(--fire); color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; flex:0 0 auto; }
+.station .s-name{ font-weight:700; flex:1; display:flex; flex-direction:column; gap:2px; } .station .s-lvl{ font-family:var(--font-mono); font-size:11px; color:var(--text-mut); }
+.station .s-sub{ font-family:var(--font-mono); font-size:10px; font-weight:500; color:var(--text-dim); }
+.station .s-edit{ flex:0 0 auto; padding:4px 8px; }
+.station .s-open{ cursor:pointer; border-radius:8px; padding:2px; margin:-2px; transition:.1s; }
+.station .s-open:hover{ background:var(--panel-3); }
+.station .s-chev{ color:var(--text-dim); font-size:20px; font-weight:700; flex:0 0 auto; padding:0 4px; }
+/* Wachen-Detailfenster */
+.sv-tabs{ margin-top:0; }
+.svpane{ display:flex; flex-direction:column; gap:8px; }
+.sv-actions{ display:flex; gap:7px; flex-wrap:wrap; margin-top:6px; }
+.pers-big{ font-family:var(--font-mono); font-size:34px; font-weight:800; color:var(--text); display:flex; align-items:baseline; gap:10px; }
+.pers-big span{ font-size:14px; font-weight:600; color:var(--text-mut); font-family:var(--font-ui); text-transform:uppercase; letter-spacing:1px; }
+.pers-split{ display:flex; gap:8px; }
+.pers-split span{ font-family:var(--font-mono); font-size:12px; padding:4px 10px; border-radius:20px; border:1px solid var(--border-2); }
+.pers-split .ps-free{ color:var(--ok); background:rgba(34,197,94,.1); border-color:rgba(34,197,94,.35); }
+.pers-split .ps-busy{ color:var(--warn); background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.35); }
+.pers-split .ps-train{ color:#93c5fd; background:rgba(59,130,246,.1); border-color:rgba(59,130,246,.35); }
+.pers-note{ font-size:11px; color:var(--text-dim); line-height:1.5; }
+.pers-assign{ display:flex; flex-direction:column; gap:6px; }
+.pa-row{ display:flex; align-items:center; gap:10px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:8px 11px; }
+.pa-info{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.pa-name{ font-family:var(--font-mono); font-weight:700; font-size:13px; }
+.pa-cap{ font-size:10px; color:var(--text-dim); font-family:var(--font-mono); }
+.pa-ctrl{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+.pa-btn{ width:30px; height:30px; border-radius:8px; border:1px solid var(--border-2); background:var(--panel-3); color:var(--text);
+  font-size:18px; font-weight:700; cursor:pointer; line-height:1; }
+.pa-btn:hover:not(:disabled){ background:#28374b; border-color:var(--fire); }
+.pa-btn:disabled{ opacity:.35; cursor:not-allowed; }
+.pa-val{ font-family:var(--font-mono); font-weight:800; font-size:16px; min-width:22px; text-align:center; }
+.pchips{ display:flex; flex-wrap:wrap; gap:4px; }
+.pchips.small{ margin-top:5px; }
+.pchip{ font-size:11px; font-family:var(--font-mono); background:var(--panel-3); border:1px solid var(--border-2);
+  color:var(--text); padding:2px 8px; border-radius:20px; white-space:nowrap; }
+.pchip.empty{ color:var(--text-dim); border-style:dashed; }
+.pers-poolbox{ background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:10px 12px; display:flex; flex-direction:column; gap:7px; }
+.pb-head{ font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-mut); font-weight:700; }
+/* Akademie */
+.ac-section-h{ font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-mut); font-weight:700; margin-top:4px; }
+.ac-rooms{ display:flex; flex-direction:column; gap:7px; }
+.ac-room{ background:var(--panel-2); border:1px solid var(--border); border-left:3px solid var(--fms-4); border-radius:9px; padding:9px 11px; display:flex; flex-direction:column; gap:6px; }
+.ac-room-top{ display:flex; justify-content:space-between; align-items:center; }
+.ac-cname{ font-weight:700; }
+.ac-time{ font-family:var(--font-mono); font-size:12px; color:#93c5fd; }
+.ac-people{ display:flex; flex-wrap:wrap; gap:4px; }
+.ac-form{ background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:12px; display:flex; flex-direction:column; gap:11px; }
+.ac-form select{ background:var(--panel-3); border:1px solid var(--border-2); border-radius:8px; color:var(--text); font-family:var(--font-ui); font-size:14px; padding:9px 11px; }
+.ac-form select:focus{ outline:none; border-color:var(--fire); }
+.ac-people-pick{ display:flex; flex-direction:column; gap:4px; max-height:220px; overflow-y:auto; background:var(--panel-3); border:1px solid var(--border-2); border-radius:8px; padding:8px; }
+.ac-pick{ display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:13px; cursor:pointer; }
+.ac-pick input{ width:16px; height:16px; accent-color:var(--fire); }
+.qbadge{ font-family:var(--font-mono); font-size:9px; font-weight:700; background:rgba(59,130,246,.15); color:#6aa8ff;
+  border:1px solid rgba(59,130,246,.4); border-radius:4px; padding:0 4px; margin-left:2px; }
+.admin-god{ margin-top:6px; border-top:1px solid var(--border); padding-top:10px; display:flex; flex-direction:column; gap:10px; }
+.admin-god .ac-form{ gap:9px; }
+.adm-stats{ display:flex; flex-wrap:wrap; gap:8px; }
+.fld.sm{ flex:1; min-width:110px; }
+.fld.sm input{ width:100%; }
+.pers-active{ background:var(--panel-2); border:1px solid var(--border); border-left:3px solid var(--ok); border-radius:9px;
+  padding:12px 14px; display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text-mut); }
+.pers-active b{ color:var(--text); font-family:var(--font-mono); }
+.pers-active .btn{ align-self:flex-start; margin-top:4px; }
+.pers-form{ background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:14px; display:flex; flex-direction:column; gap:11px; }
+.pers-hint{ font-size:12px; color:var(--text-mut); line-height:1.5; }
+.pers-form .fld input{ background:var(--panel-3); border:1px solid var(--border-2); border-radius:8px; color:var(--text);
+  font-family:var(--font-mono); font-size:15px; padding:9px 11px; width:140px; }
+.pers-form .btn{ align-self:flex-start; }
+.station .s-bays{ margin-top:9px; display:flex; gap:5px; flex-wrap:wrap; }
+.bay{ min-width:78px; flex:1; border:1px dashed var(--border-2); border-radius:7px; padding:6px 8px; font-size:11px; text-align:center; color:var(--text-dim); display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; }
+.bay.free:hover{ border-color:var(--fire); color:var(--fire); background:rgba(229,53,43,.06); }
+.bay.filled{ border-style:solid; border-color:var(--border-2); color:var(--text); cursor:default; background:var(--panel-3); }
+.bay .b-type{ font-family:var(--font-mono); font-weight:700; }
+.station .s-actions{ margin-top:9px; display:flex; gap:6px; }
+.fms{ display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono); font-weight:700; font-size:10px; padding:1px 6px; border-radius:5px; color:#04110a; }
+.fms .n{ font-size:11px; }
+.fms-1{ background:var(--fms-1); } .fms-2{ background:var(--fms-2); }
+.fms-3{ background:var(--fms-3); color:#231703;} .fms-4{ background:var(--fms-4); color:#04121f;}
+.fms-5{ background:var(--fms-5); color:#fff;} .fms-6{ background:var(--fms-6); color:#1c0505;} .fms-7{ background:var(--fms-7); color:#03212a;}
+/* nur das Zahlen-Quadrat (Funk) */
+.fbox{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:4px;
+  font-family:var(--font-mono); font-weight:800; font-size:12px; flex:0 0 auto; vertical-align:middle; }
+.fbox-1{ background:var(--fms-1); color:#04110a;} .fbox-2{ background:var(--fms-2); color:#04110a;}
+.fbox-3{ background:var(--fms-3); color:#231703;} .fbox-4{ background:var(--fms-4); color:#04121f;}
+.fbox-5{ background:var(--fms-5); color:#fff;} .fbox-6{ background:var(--fms-6); color:#1c0505;} .fbox-7{ background:var(--fms-7); color:#03212a;}
+
+/* Marker */
+.mk-station{ width:34px; height:34px; border-radius:9px; background:var(--fire); border:2px solid #fff2; display:flex; align-items:center; justify-content:center; font-size:17px; box-shadow:0 3px 10px rgba(0,0,0,.5); position:relative; }
+.mk-station .lvlbadge{ position:absolute; bottom:-6px; right:-6px; background:#0d1017; color:#fff; font-family:var(--font-mono); font-size:9px; font-weight:700; border:1px solid var(--border-2); border-radius:6px; padding:0 4px; }
+.mk-mission{ width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-weight:800; font-size:11px; letter-spacing:.3px; color:#fff;
+  background:radial-gradient(circle,#e5352b,#8f120b); border:2px solid #fff3; animation:mpulse 1.6s infinite; }
+.mk-mission.working{ background:radial-gradient(circle,#3b82f6,#1e40af); animation:none; }
+.mk-mission.done{ background:radial-gradient(circle,#22c55e,#15803d); animation:none; }
+@keyframes mpulse{0%{box-shadow:0 0 0 0 rgba(229,53,43,.5)}70%{box-shadow:0 0 0 12px rgba(229,53,43,0)}100%{box-shadow:0 0 0 0 rgba(229,53,43,0)}}
+.mk-veh{ width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; border:2px solid #0d1017; box-shadow:0 2px 6px rgba(0,0,0,.5); }
+
+#buildBanner{ position:absolute; top:12px; left:50%; transform:translateX(-50%); background:var(--fire); color:#fff; padding:9px 16px; border-radius:30px; z-index:1300; font-weight:600; box-shadow:var(--shadow); display:none; align-items:center; gap:10px; }
+#buildBanner.show{ display:flex; }
+.search-wrap{ position:absolute; top:12px; left:12px; z-index:1050; width:300px; max-width:45vw; }
+.search-wrap input{ width:100%; padding:10px 14px; border-radius:30px; border:1px solid var(--border); background:var(--panel); color:var(--text); font-family:var(--font-ui); font-size:13px; box-shadow:var(--shadow); }
+.search-wrap input::placeholder{ color:var(--text-dim); }
+
+.modal-bg{ position:fixed; inset:0; background:rgba(4,7,12,.7); z-index:2000; display:none; align-items:center; justify-content:center; padding:20px; }
+.modal-bg.show{ display:flex; }
+.rd-hint{ font-size:12px; color:var(--text-mut); background:var(--panel-2); border:1px solid var(--border);
+  border-left:3px solid var(--warn); border-radius:8px; padding:8px 10px; line-height:1.4; }
+.fld{ display:flex; flex-direction:column; gap:5px; }
+.fld>span{ font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-mut); font-weight:700; display:flex; align-items:center; }
+.fld input{ background:var(--panel-2); border:1px solid var(--border-2); border-radius:8px; color:var(--text);
+  font-family:var(--font-ui); font-size:14px; padding:9px 11px; }
+.fld input:focus{ outline:none; border-color:var(--fire); }
+/* Bau-Menü */
+.build-types{ display:flex; flex-wrap:wrap; gap:8px; }
+.build-type{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:130px;
+  background:var(--panel-2); border:1px solid var(--border-2); border-radius:10px; padding:10px 12px; cursor:pointer; transition:.12s; }
+.build-type:hover{ background:var(--panel-3); }
+.build-type.active{ border-color:var(--fire); background:var(--panel-3); box-shadow:0 0 0 1px var(--fire) inset; }
+.build-type .bt-ico{ font-size:20px; }
+.build-type .bt-name{ font-weight:700; font-size:14px; }
+.build-type .bt-cost{ font-family:var(--font-mono); font-size:11px; color:var(--warn); }
+.build-cost{ font-size:13px; color:var(--text-mut); } .build-cost b{ color:var(--warn); font-family:var(--font-mono); }
+.se-preview-wrap{ font-size:12px; color:var(--text-mut); background:var(--panel-2); border:1px solid var(--border);
+  border-radius:8px; padding:9px 11px; }
+.se-preview{ font-family:var(--font-mono); font-weight:700; color:var(--fire-2); font-size:14px; }
+.modal{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); width:100%; max-width:460px; box-shadow:var(--shadow); overflow:hidden; max-height:88vh; display:flex; flex-direction:column; }
+.modal.wide{ max-width:760px; }
+.modal h3{ margin:0; padding:16px 18px; border-bottom:1px solid var(--border); font-size:15px; }
+.modal .m-content{ padding:16px 18px; display:flex; flex-direction:column; gap:12px; overflow-y:auto; }
+.modal .m-actions{ padding:14px 18px; border-top:1px solid var(--border); display:flex; gap:9px; justify-content:flex-end; }
+
+/* Kaufmenü */
+.buy-sub{ padding:10px 18px; font-size:12px; color:var(--text-mut); border-bottom:1px solid var(--border); font-family:var(--font-mono); }
+.buy-tabs{ display:flex; flex-wrap:wrap; gap:6px; padding:12px 18px; border-bottom:1px solid var(--border); }
+.buy-tab{ font-family:var(--font-ui); font-size:12px; font-weight:700; color:var(--text-mut); background:var(--panel-2);
+  border:1px solid var(--border-2); border-radius:20px; padding:6px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:.12s; }
+.buy-tab:hover{ color:var(--text); background:var(--panel-3); }
+.buy-tab.active{ background:var(--fire); border-color:var(--fire); color:#fff; }
+.buy-tab .bt-n{ font-family:var(--font-mono); font-size:10px; opacity:.8; }
+.buy-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.vcard{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; background:var(--panel-2); display:flex; flex-direction:column; gap:11px; }
+.vc-head{ display:flex; align-items:flex-start; gap:11px; }
+.vc-ico{ width:40px; height:40px; border-radius:9px; background:var(--panel-3); border:1px solid var(--border-2);
+  display:flex; align-items:center; justify-content:center; font-size:21px; flex:0 0 auto; }
+.vc-title{ display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+.vc-name{ font-weight:800; font-size:17px; letter-spacing:.3px; }
+.vc-full{ font-size:11px; color:var(--text-mut); }
+.vc-owned{ font-family:var(--font-mono); font-size:10px; font-weight:700; color:var(--ok); background:rgba(34,197,94,.12);
+  border:1px solid rgba(34,197,94,.35); border-radius:20px; padding:2px 8px; white-space:nowrap; }
+.vc-specs{ display:flex; flex-direction:column; gap:4px; }
+.vc-spec{ font-size:12px; color:var(--text-mut); }
+.vc-spec b{ color:var(--text); font-family:var(--font-mono); }
+.vc-bars{ display:flex; flex-direction:column; gap:7px; }
+.cap .cap-lbl{ display:flex; justify-content:space-between; font-size:11px; color:var(--text-mut); font-family:var(--font-mono); margin-bottom:3px; }
+.cap .cap-lbl span{ color:var(--text); }
+.cap-track{ height:8px; background:#0e131b; border-radius:6px; overflow:hidden; }
+.cap-fill{ height:100%; border-radius:6px; }
+.cap-fill.water{ background:#3b82f6; } .cap-fill.foam{ background:#eab308; } .cap-fill.pump{ background:#8b5cf6; }
+.vc-buy{ width:100%; justify-content:center; margin-top:2px; }
+@media (max-width:640px){ .buy-grid{ grid-template-columns:1fr; } .modal.wide{ max-width:calc(100vw - 24px); } }
+
+/* Einsatzarten-Übersicht */
+.cat-row{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:11px 12px; background:var(--panel-2); }
+.cat-row .cr-top{ display:flex; align-items:center; gap:9px; }
+.cat-row .cr-name{ font-weight:700; flex:1; } .cat-row .cr-reward{ font-family:var(--font-mono); color:var(--warn); font-weight:700; font-size:12px; }
+.cat-row .cr-tags{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+.cat-row .cr-scale{ margin-top:7px; font-size:11px; color:var(--text-dim); font-family:var(--font-mono); }
+
+#toasts{ position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:3000; display:flex; flex-direction:column; gap:8px; align-items:center; }
+.toast{ background:var(--panel-3); border:1px solid var(--border-2); color:var(--text); padding:10px 16px; border-radius:10px; box-shadow:var(--shadow); font-size:13px; font-weight:500; animation:toastin .25s ease; max-width:80vw; }
+.toast.ok{ border-left:3px solid var(--ok); } .toast.warn{ border-left:3px solid var(--warn); } .toast.err{ border-left:3px solid var(--danger); }
+@keyframes toastin{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+
+.veh-pick{ display:flex; align-items:center; gap:9px; padding:9px 10px; border:1px solid var(--border); border-radius:8px; background:var(--panel-2); }
+.veh-pick .vp-name{ font-family:var(--font-mono); font-weight:700; } .veh-pick .vp-meta{ font-size:11px; color:var(--text-mut); font-family:var(--font-mono); flex:1; }
+
+/* Kompakte Alarmierungsliste (einzeilig) */
+.alz-list{ display:flex; flex-direction:column; gap:4px; max-height:230px; overflow-y:auto; }
+.alz-list::-webkit-scrollbar{ width:8px; } .alz-list::-webkit-scrollbar-thumb{ background:var(--border-2); border-radius:8px; }
+.alz-row{ display:flex; align-items:center; gap:9px; padding:5px 9px; border:1px solid var(--border);
+  border-radius:7px; background:var(--panel-2); cursor:pointer; font-size:12px; line-height:1.2; transition:.1s; }
+.alz-row:hover{ border-color:var(--fire); background:var(--panel-3); }
+.alz-row.assigned{ opacity:.55; cursor:default; }
+.alz-row.assigned:hover{ border-color:var(--border); background:var(--panel-2); }
+.alz-fms{ font-family:var(--font-mono); font-size:10px; color:var(--text-dim); display:inline-flex; align-items:center; gap:4px; flex:0 0 auto; }
+.fnum{ display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 3px;
+  border-radius:3px; font-family:var(--font-mono); font-weight:800; font-size:11px; }
+.fnum-1{ background:var(--fms-1); color:#04110a;} .fnum-2{ background:var(--fms-2); color:#04110a;}
+.fnum-3{ background:var(--fms-3); color:#231703;} .fnum-4{ background:var(--fms-4); color:#04121f;}
+.fnum-5{ background:var(--fms-5); color:#fff;} .fnum-6{ background:var(--fms-6); color:#1c0505;} .fnum-7{ background:var(--fms-7); color:#03212a;}
+.alz-call{ font-family:var(--font-mono); font-weight:700; flex:0 0 auto; }
+.alz-station{ color:var(--text-mut); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.alz-eta{ font-family:var(--font-mono); color:var(--text); flex:0 0 auto; }
+.alz-recall{ flex:0 0 auto; }
+.hidden{ display:none !important; }
+
+@media (max-width:720px){
+  #sidebar{ width:calc(100vw - 24px); top:auto; bottom:12px; height:58vh; }
+  .search-wrap{ width:60vw; }
+  .funk{ height:150px; }
+}
+@media (max-width:1100px){
+  #topbar{ height:auto; flex:0 0 auto; flex-wrap:wrap; padding:6px 12px; row-gap:6px; }
+  #topbar .top-spacer{ display:none; }
+}
+
+/* Vollbild-Screens (Login / Konfig) */
+.screen{ position:fixed; inset:0; z-index:5000; display:none; align-items:center; justify-content:center; padding:20px;
+  background:radial-gradient(1200px 600px at 50% -10%, #1a2331, var(--bg)); }
+.screen.show{ display:flex; }
+.auth-card{ width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:26px 24px; display:flex; flex-direction:column; gap:12px; }
+.auth-brand{ font-weight:800; letter-spacing:1px; font-size:18px; display:flex; align-items:center; gap:9px; }
+.auth-brand .dot{ width:11px; height:11px; border-radius:50%; background:var(--fire); box-shadow:0 0 12px var(--fire); }
+.auth-hint{ font-size:12px; color:var(--text-mut); line-height:1.5; }
+.auth-card input{ background:var(--panel-2); border:1px solid var(--border-2); border-radius:9px; color:var(--text);
+  font-family:var(--font-ui); font-size:14px; padding:11px 12px; }
+.auth-card input:focus{ outline:none; border-color:var(--fire); }
+.auth-err{ color:var(--danger); font-size:12px; min-height:14px; }
+.auth-actions{ display:flex; gap:8px; } .auth-actions .btn{ flex:1; justify-content:center; }
+.auth-or{ display:flex; align-items:center; gap:10px; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:1px; }
+.auth-or::before, .auth-or::after{ content:""; flex:1; height:1px; background:var(--border); }
+.google-btn{ width:100%; justify-content:center; gap:10px; background:#fff; color:#1f2937; border:1px solid #dadce0; font-weight:600; }
+.google-btn:hover{ background:#f5f6f7; border-color:#c9cdd2; }
+.google-btn svg{ flex:0 0 auto; }
+
+/* Admin */
+.admin-search{ background:var(--panel-2); border:1px solid var(--border-2); border-radius:9px; color:var(--text);
+  font-family:var(--font-ui); font-size:14px; padding:10px 12px; width:100%; }
+.admin-search:focus{ outline:none; border-color:var(--fire); }
+.admin-results{ display:flex; flex-direction:column; gap:7px; max-height:52vh; overflow-y:auto; }
+.adm-row{ border:1px solid var(--border); border-radius:9px; background:var(--panel-2); padding:9px 11px;
+  display:flex; flex-direction:column; gap:8px; }
+.adm-main{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.adm-name{ font-family:var(--font-mono); font-weight:700; }
+.adm-badge{ font-size:9px; background:var(--fire); color:#fff; padding:1px 6px; border-radius:20px; font-family:var(--font-ui); }
+.adm-flag{ font-size:9px; background:rgba(245,158,11,.2); color:#fbbf24; border:1px solid rgba(245,158,11,.5); padding:1px 6px; border-radius:20px; }
+.adm-ban{ font-size:9px; background:rgba(239,68,68,.2); color:#fca5a5; border:1px solid rgba(239,68,68,.5); padding:1px 6px; border-radius:20px; }
+.adm-row.fl{ border-color:rgba(245,158,11,.5); }
+.adm-row.clickable{ cursor:pointer; } .adm-row.clickable:hover{ border-color:var(--fire); background:var(--panel-3); }
+.adm-open{ font-size:22px; color:var(--text-dim); padding:0 6px; }
+.acct-head{ display:flex; align-items:center; gap:12px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.acct-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+.acct-box{ background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:9px; }
+/* Admin-Startseite */
+.admin-page{ width:100%; max-width:820px; display:flex; flex-direction:column; gap:14px; max-height:92vh; overflow-y:auto; padding:8px; }
+.admin-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.admin-card{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:var(--shadow); }
+.maint-row{ display:flex; align-items:center; gap:9px; font-size:13px; }
+.maint-row input{ width:18px; height:18px; accent-color:var(--fire); }
+.maint-input{ width:100%; min-height:80px; background:var(--panel-2); border:1px solid var(--border-2); border-radius:8px; color:var(--text); font-family:var(--font-ui); font-size:13px; padding:10px; resize:vertical; }
+.maint-input:focus{ outline:none; border-color:var(--fire); }
+.set-danger{ margin-top:8px; border-top:1px solid var(--border); padding-top:12px; display:flex; flex-direction:column; gap:8px; }
+.test-badge{ background:var(--warn); color:#231703; font-weight:800; font-size:11px; padding:3px 9px; border-radius:20px; font-family:var(--font-mono); }
+.adm-credits{ font-family:var(--font-mono); color:var(--warn); }
+.adm-actions{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.adm-amt{ width:110px; background:var(--panel-3); border:1px solid var(--border-2); border-radius:7px; color:var(--text);
+  font-family:var(--font-mono); font-size:13px; padding:6px 9px; }
+.adm-amt:focus{ outline:none; border-color:var(--fire); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="brand"><span class="dot"></span><span>LEITSTELLE <small>Feuerwehr</small></span></div>
+    <div class="clock" id="clock" title="Ortszeit Berlin">
+      <span class="c-time" id="clock-time">--:--:--</span>
+      <span class="c-sub" id="clock-sub">BERLIN</span>
+    </div>
+    <div class="top-spacer"></div>
+    <div class="stat"><span class="k">Guthaben</span><span class="v" id="stat-credits">—</span></div>
+    <div class="stat"><span class="k">Tageskasse</span><span class="v" id="stat-earnings" title="wird um 0 Uhr gutgeschrieben">—</span></div>
+    <div class="menu-wrap">
+      <button class="icon-btn" id="btn-menu" title="Menü">☰</button>
+      <div class="dropdown-menu hidden" id="topbar-menu">
+        <button class="dd-item" id="dd-shop">🛒 Shop</button>
+        <button class="dd-item" id="dd-save">💾 Speichern</button>
+        <button class="dd-item" id="dd-settings">⚙️ Einstellungen</button>
+        <button class="dd-item hidden" id="dd-admin">🛡️ Administration</button>
+        <div class="dd-sep"></div>
+        <button class="dd-item danger" id="dd-logout">🚪 Abmelden</button>
+      </div>
+    </div>
+    <select class="speed-select" id="speed-ctl" title="Einsatz-Häufigkeit (nur Spawn-Tempo)"></select>
+    <button class="btn primary" id="btn-build">🏗️ Gebäude bauen</button>
+    <button class="btn ghost" id="btn-catalog">📋 Einsatzarten</button>
+    <span class="test-badge hidden" id="topbar-test">🧪 TEST</span>
+  </div>
+
+  <div id="main">
+    <div id="map"></div>
+    <div class="search-wrap"><input id="search" type="text" placeholder="Ort suchen (Enter)…" autocomplete="off" /></div>
+    <div id="buildBanner">
+      <span>📍 Klicke auf die Karte, um die Feuerwache zu platzieren</span>
+      <button class="btn sm ghost" id="btn-build-cancel" style="color:#fff;border-color:#fff5">Abbrechen</button>
+    </div>
+
+    <div id="sidebar">
+      <div class="tabs">
+        <button class="tab active" data-tab="missions">Einsätze <span class="tcount zero" id="missions-count">0</span></button>
+        <button class="tab" data-tab="vehicles">Fahrzeuge <span class="tcount zero" id="vehicles-count">0</span></button>
+        <button class="tab" data-tab="stations">Wachen <span class="tcount zero" id="stations-count">0</span></button>
+        <button class="btn sm ghost hidden" id="btn-force-mission" title="Test-Einsatz erzeugen" style="margin-left:auto">+ Test</button>
+      </div>
+      <div class="tab-body" id="tab-missions"><div class="panel-body" id="missions-list"></div></div>
+      <div class="tab-body hidden" id="tab-vehicles"><div class="panel-body" id="vehicles-list"></div></div>
+      <div class="tab-body hidden" id="tab-stations"><div class="panel-body" id="stations-list"></div></div>
+      <div class="funk">
+        <div class="funk-head"><span>📻 Funkverkehr</span><span class="count zero" id="funk-count">0</span>
+          <button class="btn sm ghost" id="btn-funk-clear" style="margin-left:auto" title="Funkprotokoll leeren">Leeren</button></div>
+        <div class="funk-body" id="funk-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<div class="modal-bg" id="modal-stationview"><div class="modal wide">
+  <h3 id="sv-title">Feuerwache</h3>
+  <div class="buy-sub" id="sv-sub"></div>
+  <div class="tabs sv-tabs">
+    <button class="tab active" data-svtab="vehicles">Fahrzeuge <span class="tcount" id="sv-veh-count">0</span></button>
+    <button class="tab" data-svtab="shop">Shop</button>
+    <button class="tab" data-svtab="personal">Personal <span class="tcount" id="sv-pers-count">0</span></button>
+  </div>
+  <div class="m-content">
+    <div class="svpane" id="sv-vehicles"></div>
+    <div class="svpane hidden" id="sv-shop">
+      <div class="buy-sub" id="buy-sub"></div>
+      <div class="buy-tabs" id="buy-tabs"></div>
+      <div class="buy-grid" id="buy-grid"></div>
+    </div>
+    <div class="svpane hidden" id="sv-personal"></div>
+  </div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-mission"><div class="modal">
+  <h3 id="mm-title">Einsatz</h3>
+  <div class="m-content" id="mm-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-catalog"><div class="modal">
+  <h3>📋 Einsatzarten-Übersicht</h3>
+  <div class="m-content" id="catalog-list"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-redispatch"><div class="modal">
+  <h3 id="rd-title">Fahrzeug alarmieren</h3>
+  <div class="m-content" id="rd-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-academy"><div class="modal wide">
+  <h3 id="av-title">Feuerwehr-Akademie</h3>
+  <div class="buy-sub" id="av-sub"></div>
+  <div class="m-content" id="av-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-build"><div class="modal">
+  <h3>🏗️ Gebäude bauen</h3>
+  <div class="m-content">
+    <div class="fld"><span>Gebäudetyp</span><div class="build-types" id="build-types"></div></div>
+    <label class="fld"><span>Name</span><input id="build-name" type="text" maxlength="40" placeholder="Name des Gebäudes" /></label>
+    <label class="fld" id="build-number-wrap"><span>Wachnummer</span><input id="build-number" type="number" min="1" /></label>
+    <div class="build-cost" id="build-cost"></div>
+  </div>
+  <div class="m-actions">
+    <button class="btn ghost" data-close>Abbrechen</button>
+    <button class="btn primary" id="build-start">Auf Karte platzieren</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="modal-station"><div class="modal">
+  <h3>✏️ Wache bearbeiten</h3>
+  <div class="m-content">
+    <label class="fld"><span>Name</span><input id="se-name" type="text" placeholder="Feuerwache 1" /></label>
+    <label class="fld"><span>Wachnummer</span><input id="se-number" type="number" min="1" placeholder="1" /></label>
+    <label class="fld"><span>Ort (Landkreis / Stadt) <button class="btn sm ghost" id="se-detect" type="button" style="margin-left:6px">🔄 erkennen</button></span>
+      <input id="se-ort" type="text" placeholder="z. B. Berlin, Hamburg, Rosenheim …" /></label>
+    <div class="se-preview-wrap">Funkrufname der Fahrzeuge:<br><span id="se-preview" class="se-preview">Florian-Ort-HLF-1-1</span></div>
+  </div>
+  <div class="m-actions"><button class="btn ghost" data-close>Abbrechen</button><button class="btn primary" id="se-save">Speichern</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-vehicle"><div class="modal">
+  <h3>✏️ Fahrzeugname ändern</h3>
+  <div class="m-content">
+    <label class="fld"><span>Eigener Name</span><input id="ve-name" type="text" maxlength="40" placeholder="" /></label>
+    <div class="se-preview-wrap">Leer lassen = automatischer Rufname:<br><span id="ve-auto" class="se-preview">—</span></div>
+  </div>
+  <div class="m-actions">
+    <button class="btn ghost" id="ve-reset" type="button">Auto-Name</button>
+    <button class="btn ghost" data-close>Abbrechen</button>
+    <button class="btn primary" id="ve-save">Speichern</button>
+  </div>
+</div></div>
+
+<!-- Admin-Bereich -->
+<div class="modal-bg" id="modal-admin"><div class="modal wide">
+  <h3>🛡️ Administration</h3>
+  <div class="buy-sub">Benutzer suchen, Guthaben gutschreiben, Passwörter zurücksetzen</div>
+  <div class="m-content">
+    <input id="admin-q" type="text" class="admin-search" placeholder="Benutzername suchen …" autocomplete="off" />
+    <div id="admin-results" class="admin-results"></div>
+
+    <div class="admin-god">
+      <div class="ac-section-h">🚒 Eigenes Spiel — Personal hinzufügen</div>
+      <div class="ac-form">
+        <label class="fld"><span>Wache</span><select id="adm-staff-station"></select></label>
+        <div class="fld"><span>Qualifikationen (optional)</span><div id="adm-staff-quals" class="ac-people-pick"></div></div>
+        <label class="fld"><span>Anzahl</span><input id="adm-staff-count" type="number" min="1" max="100" value="5" /></label>
+        <button class="btn primary" id="adm-staff-add">Personal hinzufügen</button>
+      </div>
+
+      <div class="ac-section-h">🚙 Eigenes Spiel — Fahrzeug hinzufügen</div>
+      <div class="ac-form">
+        <label class="fld"><span>Wache</span><select id="adm-veh-station"></select></label>
+        <label class="fld"><span>Fahrzeugtyp</span><select id="adm-veh-type"></select></label>
+        <div class="adm-stats">
+          <label class="fld sm"><span>Wasser (L)</span><input id="adm-veh-water" type="number" min="0" /></label>
+          <label class="fld sm"><span>Schaum (L)</span><input id="adm-veh-foam" type="number" min="0" /></label>
+          <label class="fld sm"><span>Besatzung min</span><input id="adm-veh-cmin" type="number" min="0" /></label>
+          <label class="fld sm"><span>Besatzung max</span><input id="adm-veh-cmax" type="number" min="0" /></label>
+          <label class="fld sm"><span>Pumpe (l/min)</span><input id="adm-veh-pump" type="number" min="0" /></label>
+        </div>
+        <button class="btn primary" id="adm-veh-add">Fahrzeug hinzufügen</button>
+      </div>
+    </div>
+  </div>
+  <div class="m-actions">
+    <button class="btn" id="admin-reload" style="margin-right:auto">🔄 Alle Instanzen neu laden</button>
+    <button class="btn ghost" data-close>Schließen</button>
+  </div>
+</div></div>
+
+<!-- Vollbild: Konto-Anmeldung -->
+<div class="screen" id="screen-auth">
+  <div class="auth-card">
+    <div class="auth-brand"><span class="dot"></span> LEITSTELLE</div>
+    <div class="auth-hint">Melde dich an oder erstelle ein Konto. Dein Fortschritt wird online gespeichert.</div>
+    <input id="auth-user" type="text" placeholder="Benutzername" autocomplete="username" />
+    <input id="auth-pass" type="password" placeholder="Passwort" autocomplete="current-password" />
+    <div class="auth-err" id="auth-err"></div>
+    <div class="auth-actions">
+      <button class="btn primary" id="auth-login">Anmelden</button>
+      <button class="btn" id="auth-signup">Konto erstellen</button>
+    </div>
+    <div class="auth-or"><span>oder</span></div>
+    <button class="btn google-btn" id="auth-google">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5h-1.9V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22 22-9.8 22-22c0-1.5-.2-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 4.1 29.6 2 24 2 15.9 2 8.9 6.6 6.3 14.7z"/><path fill="#4CAF50" d="M24 46c5.5 0 10.5-2.1 14.3-5.6l-6.6-5.6C29.6 36.5 26.9 37.5 24 37.5c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C8.7 41.4 15.8 46 24 46z"/><path fill="#1976D2" d="M43.6 20.5H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.6C41.4 36.9 46 31 46 24c0-1.5-.2-2.6-.4-3.5z"/></svg>
+      Mit Google anmelden
+    </button>
+  </div>
+</div>
+
+<!-- Vollbild: Supabase nicht konfiguriert -->
+<div class="screen" id="screen-config">
+  <div class="auth-card">
+    <div class="auth-brand"><span class="dot"></span> LEITSTELLE</div>
+    <div class="auth-hint" style="text-align:left">
+      <b>Einrichtung nötig.</b><br>1. Supabase-Projekt anlegen.<br>
+      2. Das mitgelieferte <b>supabase_setup.sql</b> im SQL-Editor ausführen.<br>
+      3. In dieser Datei oben im Script <b>SUPABASE_URL</b> und <b>SUPABASE_ANON_KEY</b> eintragen.<br>
+      4. Seite neu laden. Admin-Login: <b>Administrator / 2521</b>.
+    </div>
+  </div>
+</div>
+
+<!-- Vollbild: Wartungsarbeiten -->
+<div class="screen" id="screen-maint">
+  <div class="auth-card" style="text-align:center">
+    <div class="auth-brand" style="justify-content:center">🛠️ Wartungsarbeiten</div>
+    <div id="maint-text" class="auth-hint" style="white-space:pre-wrap"></div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn" onclick="location.reload()">Erneut versuchen</button>
+      <button class="btn ghost" id="maint-logout">🚪 Abmelden</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vollbild: Admin-Startseite -->
+<div class="screen" id="screen-admin">
+  <div class="admin-page">
+    <div class="admin-head"><span class="auth-brand"><span class="dot"></span> ADMINISTRATION</span>
+      <div style="display:flex;gap:8px"><button class="btn primary" id="adminS-test">🧪 Testspiel starten</button><button class="btn ghost" id="adminS-logout">🚪 Abmelden</button></div></div>
+
+    <div class="admin-card">
+      <div class="ac-section-h">🛠️ Wartungsarbeiten</div>
+      <label class="maint-row"><input type="checkbox" id="maint-toggle" /> Wartungsmodus aktiv (nur Admin kann sich einloggen)</label>
+      <textarea id="maint-input" class="maint-input" placeholder="Text, der Spielern angezeigt wird …"></textarea>
+      <div style="display:flex;gap:8px"><button class="btn primary" id="adminS-maint-save">Speichern</button><button class="btn" id="adminS-reload">🔄 Alle Instanzen neu laden</button></div>
+    </div>
+
+    <div class="admin-card">
+      <div class="ac-section-h">👤 Benutzerverwaltung</div>
+      <div id="adminS-list">
+        <input id="adminS-q" type="text" class="admin-search" placeholder="Benutzername suchen … (verdächtige zuerst)" autocomplete="off" />
+        <div id="adminS-results" class="admin-results" style="max-height:46vh"></div>
+      </div>
+      <div id="adminS-detail" class="hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Einstellungen (jeder Spieler) -->
+<div class="modal-bg" id="modal-shop"><div class="modal wide">
+  <h3>🛒 Shop</h3>
+  <div class="m-content">
+    <div class="shoppane" id="shop-real"><div class="empty-hint" style="padding:40px 16px">Noch keine Angebote.<br>Hier gibt es bald Käufe.</div></div>
+  </div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-settings"><div class="modal">
+  <h3>⚙️ Einstellungen</h3>
+  <div class="m-content">
+    <label class="fld"><span>Benutzername ändern</span><input id="set-user" type="text" maxlength="30" /></label>
+    <button class="btn" id="set-user-save">Benutzername speichern</button>
+    <label class="fld"><span>Neues Passwort</span><input id="set-pass" type="password" maxlength="60" placeholder="mind. 4 Zeichen" /></label>
+    <button class="btn" id="set-pass-save">Passwort ändern</button>
+    <div class="set-danger">
+      <div class="pers-hint">Konto endgültig löschen — dein Spielstand geht dabei verloren.</div>
+      <button class="btn danger" id="set-delete">Konto löschen</button>
+    </div>
+  </div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<script>
+/* =========================================================================
+   LEITSTELLE — FRAMEWORK v2
+   Neu ggü. v1:
+   - Straßen-Routing via OSRM (Fahrzeiten hierarchie-abhängig; Off-Road → snap+teleport)
+   - Zeitbasierte Einsätze: Dauer = Basiszeit / Fahrzeuge-vor-Ort (mit Cap)
+   - Löschmittel = Voraussetzung (Schaum nötig?) statt Verbrauch
+   - Hellere Karte (CSS-Filter), Einsatzarten-Übersicht
+   - Hin schneller (Sonderrechte), Rück langsamer
+   ========================================================================= */
+
+const CONFIG = {
+  startCredits:3500000, saveKey:'leitstelle_save_v2', saveVersion:2,
+  rewardMultiplier:6,                  // 6× Geld je Einsatz
+  tickMs:100,
+  defaultSpeed:1,             // Start-Spielgeschwindigkeit
+  speedSteps:[0.5,1,2,3,4],   // wählbare Geschwindigkeiten
+
+  // Einsatz-Zeit: 1 „Einsatz-Minute“ dauert real minuteRealMs (bei 1×)
+  minuteRealMs:60000,         // 1 Ingame-Minute = 60 s Echtzeit bei 1× (bei 2× 30 s usw.)
+  usefulVehicleCap:2,         // (nur für rein technische Einsätze) mehr bringt nichts
+  perVehicleSpeedup:0.25,     // (nur für rein technische Einsätze) 25 % je Fahrzeug
+
+  // Löschmittel-Liefermodell: Wasser via Pumpenleistung (l/min), Schaum via foamRate
+  foamRate:400,               // L Schaum je Fahrzeug (foam>0) und Ingame-Minute
+
+  // Routing / Fahrzeit
+  osrmBase:'https://router.project-osrm.org/route/v1/driving/',
+  driveTimeScale:1.0,         // OSRM-Sekunden → Spielsekunden (≈ Echtzeit bei 1×)
+  outboundFactor:0.70,        // Anfahrt (Sonderrechte) schneller
+  returnFactor:1.20,          // Rückfahrt langsamer
+  fallbackSpeedMs:11,         // m/s bei Routing-Ausfall (~40 km/h)
+
+  missionIntervalMs:76000, missionRadiusM:6000, maxOpenMissions:8,
+
+  stationBuildCost:1000000, maxStationLevel:6,
+  baysForLevel:l=>2*l, upgradeCost:l=>60000*l*4,   // Ausbau-Kosten ×4
+
+  startStaff:10,                       // Personal je Wache zu Beginn
+  personnelDayMs:24*60*60*1000,        // „ein Tag“ = +1 Person (Echtzeit; hier anpassbar)
+  maxStaff:200,
+
+  academyBuildCost:2000000, maxAcademyLevel:5,
+  classroomsForLevel:l=>l,             // Klassenräume = Akademie-Level
+  academyUpgradeCost:l=>100000 + l*10000,
+  classroomCapacity:10,                // max. Personen je Klassenraum (gleicher Lehrgang)
+  courseCost:50000,                    // Kosten je gestartetem Lehrgang
+};
+
+/* -------- Lehrgangs-Katalog (vorerst leer; per gleichem Muster erweiterbar) --------
+   Format je Lehrgang:
+   { id:'…', name:'…', durationMs: 3*24*60*60*1000, desc:'…' }   */
+const DAY_MS=24*60*60*1000;
+const COURSES = [{"id": "el-c", "name": "Einsatzleiter C-Dienst", "durationMs": 432000000, "desc": "Zugführer / Einsatzleiter für einen Löschzug."}, {"id": "el-b", "name": "Einsatzleiter B-Dienst", "durationMs": 604800000, "desc": "Höherer Dienst — bei größeren Lagen.", "requiresCourse": "el-c"}, {"id": "el-a", "name": "Einsatzleiter A-Dienst", "durationMs": 604800000, "desc": "-/-", "requiresCourse": "el-b"}, {"id": "Fernmeldung", "name": "Fernmeldedienst", "durationMs": 432000000, "desc": "Zum fernmelden"}];
+const courseById=id=>COURSES.find(c=>c.id===id);
+function qualLabel(cid){ const c=courseById(cid); return c?c.name:cid; }
+function qualShort(cid){ return (cid||'').toUpperCase(); }
+function hasQual(p,cid){ return !!(p&&p.quals&&p.quals.includes(cid)); }
+function vStat(v,key){ const t=VEHICLES[v.type]||{}; return (v.mod && v.mod[key]!=null) ? v.mod[key] : t[key]; }
+
+/* -------- Fahrzeug-Katalog --------
+   water/foam : Tankinhalt (foam>0 ⇒ schaumfähig)
+   crew/pump  : Besatzung / Pumpenleistung (l/min)   role/desc/fullname : Anzeige
+   category   : Reiter im Kaufmenü (siehe VEHICLE_CATEGORIES) */
+const VEHICLE_CATEGORIES = [
+  { id:'lf',     name:'Löschfahrzeuge' },
+  { id:'sonder', name:'Sonderfahrzeuge' },
+  { id:'elw',    name:'Einsatzleitwagen' },
+];
+const VEHICLES = {"hlf20": {"id": "hlf20", "name": "HLF 20", "abbr": "HLF", "icon": "🚒", "category": "lf", "fullname": "Hilfeleistungslöschfahrzeug 20", "crewMin": 6, "crewMax": 6, "water": 1200, "foam": 200, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 300000, "role": "hlf20", "desc": "Löschen + technische Hilfe"}, "lf20": {"id": "lf20", "name": "LF 20", "abbr": "LF", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug 20", "crewMin": 6, "crewMax": 9, "water": 2000, "foam": 160, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 350000, "role": "lf20", "desc": "Löschfahrzeug, viel Wasser"}, "dlk": {"id": "dlk", "name": "DLK 23/12", "abbr": "DLK", "icon": "🪜", "category": "sonder", "fullname": "Drehleiter mit Korb 23/11", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 700000, "role": "dlk", "desc": "Höhenrettung & Menschenrettung"}, "rw": {"id": "rw", "name": "RW", "abbr": "RW", "icon": "🛠️", "category": "sonder", "fullname": "Rüstwagen", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "rw", "desc": "Technische Hilfeleistung"}, "elw1c": {"id": "elw1c", "name": "ELW 1 C", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 1 C-Dienst", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 150000, "role": "elw1c", "desc": "Führungsfahrzeug ab mittlerer Einsatzgröße", "requiresCourse": "el-c"}, "elw1b": {"id": "elw1b", "name": "ELW 1 B", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 1 B-Dienst", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 155000, "role": "elw1b", "desc": "Führungsfahrzeug für größere Lagen", "requiresCourse": "el-b"}, "lfkats": {"id": "lfkats", "name": "LF KatS", "abbr": "LF", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug Katastrophenschutz", "crewMin": 9, "crewMax": 9, "water": 1000, "foam": 200, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 400000, "role": "lfkats", "desc": "Löschfahrzeug für Katastrophen und Großschadenslagen"}, "gw_g": {"id": "gw_g", "name": "GW-G", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Gefahrgut", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 550000, "role": "gw_g", "desc": "Säubern von gefahrenstoffen"}, "gw_mess": {"id": "gw_mess", "name": "GW-Mess", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Messtechnik", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "gw_mess", "desc": "Messen und aufspüren von Gefahrenstoffen"}, "gw_a": {"id": "gw_a", "name": "GW-A", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Atemschutz", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 500000, "role": "gw_a", "desc": "Viele Atemschutzgeräte"}, "gw_dekonp": {"id": "gw_dekonp", "name": "GW Dekon-P", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Dekontamination Personal", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "gw_dekonp", "desc": "Fahrzeug für dekontamination von einsatzkräften"}, "klef": {"id": "klef", "name": "KLEF", "abbr": "KLEF", "icon": "🚐", "category": "sonder", "fullname": "Kleineinsatzfahrzeug", "crewMin": 2, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 200000, "role": "klef", "desc": "Fahrzeug für kleine einsätze"}, "tlf": {"id": "tlf", "name": "TLF 24/50", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 24/50", "crewMin": 2, "crewMax": 3, "water": 5000, "foam": 500, "pump": 2400, "applyWater": 35, "applyFoam": 12, "cost": 400000, "role": "tlf", "desc": "Großes Tanklöschfahrzeug mit viel Wasser und Schaum"}, "elw2": {"id": "elw2", "name": "ELW 2", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 2 B/A-Dienst", "crewMin": 4, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 700000, "role": "elw2", "desc": "Führungsfahrzeug für Großschadenslagen", "requiresCourse": "el-b"}, "fmew": {"id": "fmew", "name": "FMeW", "abbr": "FMeW", "icon": "🚙", "category": "elw", "fullname": "Fernmeldewagen", "crewMin": 2, "crewMax": 4, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 170000, "role": "fmew", "desc": "Meldefahrzeug fährt immer mit elw2", "requiresCourse": "Fernmeldung"}};
+
+/* -------- Einsatz-Katalog --------
+   need.water/foam : benötigtes Löschmittel (foam>0 ⇒ schaumfähiges Fzg nötig)
+   minVehicles     : Fahrzeuge nötig, damit gearbeitet wird
+   maxVehicles     : nur noch informativ — Timing nutzt CONFIG.usefulVehicleCap
+   minutes         : Basisdauer (solo). Effektiv = effMissionMinutes():
+                     jedes Fzg bis usefulVehicleCap = perVehicleSpeedup schneller,
+                     d.h. 1 Fzg = minutes, 2 Fzg = minutes·0,75, ab 3 Fzg kein Gewinn */
+const MISSION_TYPES = [{"id": "muelltonnek", "code": "BK", "cat": "b", "name": "Mülltonnenbrand", "need": {"water": 0, "foam": 0}, "minutes": 10, "reward": 1000, "weight": 6, "minVehicles": 1, "req": [{"count": 1, "types": ["hlf20"]}]}, {"id": "vegetationk", "code": "BK", "cat": "b", "name": "Vegetationsbrand", "need": {"water": 1000, "foam": 0}, "minutes": 25, "reward": 1750, "weight": 4, "minVehicles": 1, "req": [{"count": 1, "types": ["hlf20"]}]}, {"id": "unklark", "code": "BK", "cat": "b", "name": "Unklar", "need": {"water": 0, "foam": 0}, "minutes": 30, "reward": 1500, "weight": 1, "minVehicles": 1, "req": [{"count": 1, "types": ["hlf20"]}]}, {"id": "kfz1", "code": "B1", "cat": "b", "name": "KFZ Brand", "need": {"water": 1200, "foam": 150}, "minutes": 35, "reward": 1800, "weight": 5, "minVehicles": 3, "req": [{"count": 2, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}]}, {"id": "vegetation1", "code": "B1", "cat": "b", "name": "Vegetationsbrand", "need": {"water": 1200, "foam": 0}, "minutes": 35, "reward": 1800, "weight": 4, "minVehicles": 3, "req": [{"count": 2, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}]}, {"id": "baum1", "code": "B1", "cat": "b", "name": "Brennender Baum", "need": {"water": 0, "foam": 0}, "minutes": 40, "reward": 1900, "weight": 5, "minVehicles": 2, "req": [{"count": 1, "types": ["hlf20"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "vegetation2", "code": "B2", "cat": "b", "name": "Vegetationsbrand", "need": {"water": 3000, "foam": 0}, "minutes": 45, "reward": 2100, "weight": 2, "minVehicles": 4, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}]}, {"id": "eauto2", "code": "B2", "cat": "b", "name": "E-Auto-Brand", "need": {"water": 0, "foam": 300}, "minutes": 45, "reward": 2400, "weight": 4, "minVehicles": 3, "req": [{"count": 2, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}]}, {"id": "zimmer2", "code": "B2", "cat": "b", "name": "Zimmerbrand", "need": {"water": 0, "foam": 0}, "minutes": 65, "reward": 3000, "weight": 5, "minVehicles": 5, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "küche2", "code": "B2", "cat": "b", "name": "Küchenbrand", "need": {"water": 0, "foam": 0}, "minutes": 70, "reward": 3100, "weight": 3, "minVehicles": 5, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "bma12", "code": "B2", "cat": "b", "name": "BMA", "need": {"water": 0, "foam": 0}, "minutes": 70, "reward": 3050, "weight": 1, "minVehicles": 4, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}]}, {"id": "gartenhaus2", "code": "B2", "cat": "b", "name": "Brennendes Gartenhaus", "need": {"water": 0, "foam": 0}, "minutes": 50, "reward": 2750, "weight": 2, "minVehicles": 3, "req": [{"count": 2, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}]}, {"id": "bma22", "code": "B2", "cat": "b", "name": "BMA", "need": {"water": 0, "foam": 0}, "minutes": 75, "reward": 3300, "weight": 1, "minVehicles": 5, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "gefahrgutbrand3", "code": "B3", "cat": "b", "name": "Gefahrgut LKW in Brand", "need": {"water": 3600, "foam": 400}, "minutes": 70, "reward": 3250, "weight": 2, "minVehicles": 6, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["gw_mess"]}, {"count": 1, "types": ["gw_g"]}]}, {"id": "wohnungsbrand3", "code": "B3", "cat": "b", "name": "Wohnungsbrand", "need": {"water": 0, "foam": 0}, "minutes": 90, "reward": 3600, "weight": 4, "minVehicles": 7, "req": [{"count": 4, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["dlk"]}, {"count": 1, "types": ["elw1b"]}]}, {"id": "familienhaus4", "code": "B4", "cat": "b", "name": "Brand in Einfamilienhaus", "need": {"water": 0, "foam": 0}, "minutes": 120, "reward": 4100, "weight": 3, "minVehicles": 8, "req": [{"count": 5, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "vegetation4", "code": "B4", "cat": "b", "name": "Vegetationsbrand", "need": {"water": 7000, "foam": 0}, "minutes": 150, "reward": 4500, "weight": 2, "minVehicles": 9, "req": [{"count": 6, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "schule4", "code": "B4", "cat": "b", "name": "Brand in Schule", "need": {"water": 0, "foam": 0}, "minutes": 195, "reward": 4750, "weight": 3, "minVehicles": 9, "req": [{"count": 5, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 2, "types": ["dlk"]}]}, {"id": "wohnhaus5", "code": "B5", "cat": "b", "name": "Wohnhausbrand", "need": {"water": 0, "foam": 0}, "minutes": 225, "reward": 5000, "weight": 3, "minVehicles": 10, "req": [{"count": 6, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 2, "types": ["dlk"]}]}, {"id": "keller5", "code": "B5", "cat": "b", "name": "Kellerbrand", "need": {"water": 0, "foam": 0}, "minutes": 240, "reward": 5400, "weight": 3, "minVehicles": 11, "req": [{"count": 6, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 2, "types": ["dlk"]}, {"count": 1, "types": ["gw_a"]}]}, {"id": "hochhaus6", "code": "B6", "cat": "b", "name": "Hochhausbrand", "need": {"water": 0, "foam": 0}, "minutes": 275, "reward": 6500, "weight": 2, "minVehicles": 11, "req": [{"count": 6, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 2, "types": ["dlk"]}, {"count": 1, "types": ["elw1b"]}, {"count": 1, "types": ["gw_a"]}]}, {"id": "tischlerei6", "code": "B6", "cat": "b", "name": "Brand in Tischlerei", "need": {"water": 0, "foam": 0}, "minutes": 195, "reward": 5000, "weight": 2, "minVehicles": 9, "req": [{"count": 6, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "chemiekonzern7", "code": "B7", "cat": "b", "name": "Brand in Chemikalienkonzern", "need": {"water": 0, "foam": 2000}, "minutes": 385, "reward": 8000, "weight": 2, "minVehicles": 15, "req": [{"count": 7, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 2, "types": ["dlk"]}, {"count": 1, "types": ["gw_a"]}, {"count": 1, "types": ["gw_mess"]}, {"count": 1, "types": ["gw_g"]}, {"count": 1, "types": ["elw2"]}]}, {"id": "tierk", "code": "THK", "cat": "th", "name": "Tier in Not", "need": {"water": 0, "foam": 0}, "minutes": 20, "reward": 1500, "weight": 6, "minVehicles": 2, "req": [{"count": 1, "types": ["hlf20", "lf20", "lfkats", "tlf", "klef"]}, {"count": 1, "types": ["hlf20"]}]}, {"id": "handk", "code": "THK", "cat": "th", "name": "Hand in Toilette", "need": {"water": 0, "foam": 0}, "minutes": 25, "reward": 1700, "weight": 3, "minVehicles": 2, "req": [{"count": 1, "types": ["hlf20", "lf20", "lfkats", "tlf", "klef"]}, {"count": 1, "types": ["hlf20"]}]}, {"id": "verkehr1", "code": "TH1", "cat": "th", "name": "Verkehrsunfall", "need": {"water": 0, "foam": 0}, "minutes": 35, "reward": 1900, "weight": 7, "minVehicles": 1, "req": [{"count": 1, "types": ["hlf20"]}]}, {"id": "motorrad1", "code": "TH1", "cat": "th", "name": "Motorradunfall", "need": {"water": 0, "foam": 0}, "minutes": 50, "reward": 2200, "weight": 5, "minVehicles": 1, "req": [{"count": 1, "types": ["hlf20"]}]}, {"id": "aufzug1", "code": "TH1", "cat": "th", "name": "Person in Aufzug", "need": {"water": 0, "foam": 0}, "minutes": 40, "reward": 2000, "weight": 5, "minVehicles": 2, "req": [{"count": 1, "types": ["hlf20"]}, {"count": 1, "types": ["rw"]}]}, {"id": "verkehr2", "code": "TH2", "cat": "th", "name": "Verkehrsunfall", "need": {"water": 0, "foam": 0}, "minutes": 90, "reward": 3250, "weight": 6, "minVehicles": 4, "req": [{"count": 2, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["rw"]}]}, {"id": "eingeklemmt2", "code": "TH2", "cat": "th", "name": "Person eingeklemmt", "need": {"water": 0, "foam": 0}, "minutes": 75, "reward": 3000, "weight": 4, "minVehicles": 4, "req": [{"count": 2, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["rw"]}]}, {"id": "baumdach2", "code": "TH2", "cat": "th", "name": "Baum auf Dach", "need": {"water": 0, "foam": 0}, "minutes": 90, "reward": 3300, "weight": 4, "minVehicles": 5, "req": [{"count": 2, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["rw"]}, {"count": 1, "types": ["dlk"]}]}, {"id": "gefahrgutunglück3", "code": "TH3", "cat": "th", "name": "Gefahrgut LKW verunglückt", "need": {"water": 0, "foam": 400}, "minutes": 135, "reward": 4600, "weight": 3, "minVehicles": 9, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["elw1b"]}, {"count": 1, "types": ["gw_mess"]}, {"count": 1, "types": ["gw_g"]}, {"count": 1, "types": ["gw_a"]}, {"count": 1, "types": ["rw"]}]}, {"id": "fahrzeuggebäude3", "code": "TH3", "cat": "th", "name": "Fahrzeug in Gebäude", "need": {"water": 0, "foam": 0}, "minutes": 120, "reward": 4100, "weight": 2, "minVehicles": 5, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["rw"]}]}, {"id": "muellfahrzeug3", "code": "TH3", "cat": "th", "name": "Müllfahrzeug umgestürzt", "need": {"water": 0, "foam": 0}, "minutes": 140, "reward": 4250, "weight": 3, "minVehicles": 6, "req": [{"count": 3, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["rw"]}, {"count": 1, "types": ["elw1b"]}]}, {"id": "fahrzeuggraben3", "code": "TH3", "cat": "th", "name": "Fahrzeug in Graben", "need": {"water": 0, "foam": 0}, "minutes": 150, "reward": 4300, "weight": 2, "minVehicles": 7, "req": [{"count": 4, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["rw"]}, {"count": 1, "types": ["elw1b"]}]}, {"id": "chemiebetrieb4", "code": "TH4", "cat": "th", "name": "Unfall in Chemiebetrieb", "need": {"water": 0, "foam": 0}, "minutes": 250, "reward": 8000, "weight": 2, "minVehicles": 11, "req": [{"count": 4, "types": ["hlf20"]}, {"count": 1, "types": ["elw1c"]}, {"count": 1, "types": ["rw"]}, {"count": 1, "types": ["elw1b"]}, {"count": 1, "types": ["gw_g"]}, {"count": 1, "types": ["gw_a"]}, {"count": 1, "types": ["gw_mess"]}, {"count": 1, "types": ["gw_dekonp"]}]}];
+const STREETS=['Tollerstraße','Hauptstraße','Bahnhofstraße','Lindenallee','Gartenweg','Am Markt','Industriestraße','Schulstraße','Ringstraße','Feldweg','Parkstraße','Mühlenweg'];
+
+/* =========================================================================
+   SUPABASE  —  hier deine Projektdaten eintragen (Supabase → Project Settings → API)
+   ========================================================================= */
+const SUPABASE_URL      = 'https://virsphrwhskjquenyhsj.supabase.co';   // API-URL (aus Projekt-Ref)
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpcnNwaHJ3aHNranF1ZW55aHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MzYzMTIsImV4cCI6MjEwNDAxMjMxMn0.THEjf23Z_amiHsN0uZ5eRQbM0oj7yG9DgNbjmu8bca8';   // öffentlicher anon-Key
+
+let sb=null;
+const AUTH={ token:null, username:null, is_admin:false };
+
+/* Nur der Login-Token wird lokal gehalten (kein Spielstand im Browser).
+   In-Memory-Fallback, falls localStorage blockiert ist. */
+const TokenStore = {
+  ok:(()=>{ try{ localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return true; }catch(e){ return false; } })(),
+  mem:null, key:'leitstelle_token',
+  get(){ try{ return this.ok?localStorage.getItem(this.key):this.mem; }catch(e){ return this.mem; } },
+  set(v){ try{ this.ok?localStorage.setItem(this.key,v):(this.mem=v); }catch(e){ this.mem=v; } },
+  clear(){ try{ this.ok?localStorage.removeItem(this.key):(this.mem=null); }catch(e){ this.mem=null; } },
+};
+// Alte lokale Spielstände entfernen (Umstieg auf Server-Speicherung)
+try{ ['leitstelle_save_v1','leitstelle_save_v2'].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+
+function initSupabase(){
+  if(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase){
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); return true;
+  }
+  return false;
+}
+async function rpc(fn, args){ const {data,error}=await sb.rpc(fn,args); if(error) throw error; return data; }
+
+/* ------------------------- STATE ------------------------- */
+let state=null, idCounter=1;
+const nid=()=>'x'+(idCounter++).toString(36)+Date.now().toString(36).slice(-3);
+function freshState(){ return {
+  version:CONFIG.saveVersion, credits:CONFIG.startCredits,
+  stations:[], vehicles:[], missions:[], buildings:[],
+  gameSpeed:CONFIG.defaultSpeed,
+  earnings:0, payDayKey:null,                 // Tageseinnahmen, um 0 Uhr gutgeschrieben
+  view:{lat:52.5200,lng:13.4050,zoom:12}, createdAt:Date.now(),
+};}
+
+/* ------------------------- SAVE / LOAD ------------------------- */
+function serializeObj(){ return {
+  version:CONFIG.saveVersion, credits:state.credits, createdAt:state.createdAt, gameSpeed:state.gameSpeed, earnings:state.earnings, payDayKey:state.payDayKey, savedAt:Date.now(),
+  view:(map?{lat:map.getCenter().lat,lng:map.getCenter().lng,zoom:map.getZoom()}:state.view),
+  stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt})),
+  vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
+    targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[]})),
+  buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses})),
+  missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[]})),
+};}
+let saveInFlight=false;
+let saveWarned=false;
+async function saveGame(silent){
+  if(testMode) return;                               // Testspiel wird nicht gespeichert
+  if(!sb || !AUTH.token || !state) return;
+  if(saveInFlight) return; saveInFlight=true;
+  try{
+    const r=await rpc('app_save',{p_token:AUTH.token, p_data:serializeObj()});
+    if(r && r.error){
+      if(r.error.toLowerCase().includes('sitzung')){ if(!saveWarned){ saveWarned=true;
+          toast('⚠️ In einem anderen Browser angemeldet — diese Sitzung wird beendet.','err');
+          TokenStore.clear(); setTimeout(()=>location.reload(),2500); } }
+      else if(!silent) toast('Speichern: '+r.error,'err');
+    } else { saveWarned=false; if(!silent) toast('Gespeichert ✓','ok'); }
+  }catch(e){ if(!silent) toast('Speichern fehlgeschlagen: '+errMsg(e),'err'); else console.warn('save',e); }
+  finally{ saveInFlight=false; }
+}
+async function loadGame(){
+  try{ const data=await rpc('app_load',{p_token:AUTH.token}); if(data){ applyLoaded(data); return true; } }
+  catch(e){ console.error(e); }
+  state=freshState(); return false;
+}
+function applyLoaded(data){
+  state=freshState();
+  state.credits=data.credits??CONFIG.startCredits; state.createdAt=data.createdAt??Date.now();
+  state.earnings=data.earnings||0; state.payDayKey=data.payDayKey||null;
+  state.gameSpeed=CONFIG.speedSteps.includes(data.gameSpeed)?data.gameSpeed:CONFIG.defaultSpeed;
+  state.view=data.view??state.view;
+  state.stations=(data.stations||[]).map((s,i)=>{
+    const st={...s, number: s.number||(i+1), ort: s.ort||'', hireTarget: s.hireTarget||0, lastHireAt: s.lastHireAt||0 };
+    st._freshRoster = !Array.isArray(st.roster);
+    if(st._freshRoster) st.roster = makeRoster(s.staff!=null?s.staff:CONFIG.startStaff);
+    delete st.staff;
+    return st;
+  });
+  // Fahrzeuge im echten Zustand wiederherstellen (Status/Position/Ziel/Besatzung)
+  state.vehicles=(data.vehicles||[]).map(v=>{ const st=state.stations.find(s=>s.id===v.stationId);
+    const status=(v.status!=null)?v.status:2;
+    const atStation=(status===2||status===6);
+    return {...v, status,
+      lat: atStation ? (st?st.lat:v.lat) : (v.lat!=null?v.lat:(st?st.lat:0)),
+      lng: atStation ? (st?st.lng:v.lng) : (v.lng!=null?v.lng:(st?st.lng:0)),
+      crew: atStation?0:(v.crew||0), crewIds: atStation?[]:(v.crewIds||[]),
+      targetMissionId: atStation?null:(v.targetMissionId||null),
+      nextMissionId: v.nextMissionId||null,
+      path:null, marker:null, routeLine:null }; });
+  // Migration alter Spielstände: frühere Zuteilungs-Zahlen (v.assigned) in benannte Zuteilungen übertragen
+  state.stations.forEach(st=>{ if(!st._freshRoster){ delete st._freshRoster; return; }
+    state.vehicles.filter(v=>v.stationId===st.id).forEach(v=>{
+      const n=v.assigned||0; const free=poolPeople(st).filter(p=>!p.vehicleId);
+      for(let i=0;i<n && i<free.length;i++) free[i].vehicleId=v.id;
+    });
+    delete st._freshRoster;
+  });
+  state.vehicles.forEach(v=>{ delete v.assigned; });
+  state.stations.forEach(st=>(st.roster||[]).forEach(p=>{ if(!Array.isArray(p.quals)) p.quals=[]; }));
+  const now=Date.now(); state.stations.forEach(s=>accrueStaff(s,now));
+  const seqCount={};
+  state.vehicles.forEach(v=>{ const k=v.stationId+'|'+v.type; seqCount[k]=(seqCount[k]||0)+1; v.seq=seqCount[k]; });
+  // Einsätze im echten Zustand wiederherstellen (Status/Fortschritt)
+  state.missions=(data.missions||[]).filter(m=>missionType(m.type) && m.status!=='done').map(m=>({
+    id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,
+    status:m.status||'open', progress:m.progress||0, effMinutes:m.effMinutes||0, assigned:[], marker:null }));
+  // Zuweisungen aus den Fahrzeugen rekonstruieren
+  state.vehicles.forEach(v=>{ if(v.targetMissionId){ const m=missionById(v.targetMissionId); if(m){ if(!m.assigned.includes(v.id)) m.assigned.push(v.id); } else { v.targetMissionId=null; v.status=2; v.crew=0; v.crewIds=[]; } } });
+  state.buildings=(data.buildings||[]).filter(b=>buildingById(b.typeId)).map(b=>{ const t=buildingById(b.typeId);
+    const nb={...b, marker:null};
+    if(t.isAcademy){ nb.level=b.level||1; nb.courses=Array.isArray(b.courses)?b.courses:[]; }
+    return nb; });
+  finishDueCourses(Date.now());
+  offlineCatchUp(data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0);
+  idCounter=Date.now()%100000;
+}
+/* Vergangene (Offline-)Zeit anwenden: Fahrten auflösen, Einsätze fortschreiben/abschließen */
+function offlineCatchUp(elapsedMs){
+  if(!(elapsedMs>1000)) return;                       // < 1 s: nichts zu tun
+  const elapsedSec=elapsedMs/1000, elapsedMin=elapsedMs/CONFIG.minuteRealMs; let doneCount=0;
+  // 1) Fahrende Fahrzeuge auflösen
+  state.vehicles.forEach(v=>{
+    if(v.status===3){
+      const m=missionById(v.targetMissionId);
+      if(!m){ const st=stationById(v.stationId); v.status=2; v.crew=0; v.crewIds=[]; v.targetMissionId=null; if(st){v.lat=st.lat;v.lng=st.lng;} return; }
+      const est=estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng},CONFIG.outboundFactor);
+      if(elapsedSec>=est){ v.status=4; v.lat=m.lat; v.lng=m.lng; }         // angekommen
+    } else if(v.status===1){
+      const st=stationById(v.stationId); if(!st){ v.status=2; v.crew=0; v.crewIds=[]; return; }
+      const est=estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:st.lat,lng:st.lng},CONFIG.returnFactor);
+      if(elapsedSec>=est){ v.status=2; v.lat=st.lat; v.lng=st.lng; v.crew=0; v.crewIds=[]; }  // zu Hause
+    }
+  });
+  // Zuweisungen nach Statusänderungen neu aufbauen
+  state.missions.forEach(m=>{ m.assigned=state.vehicles.filter(v=>v.targetMissionId===m.id).map(v=>v.id); });
+  // 2) Einsätze fortschreiben / abschließen
+  state.missions.forEach(m=>{
+    if(m.status==='done') return; const t=missionType(m.type); if(!t) return;
+    const sup=missionSupply(m), rs=missionReqStatus(m);
+    if(rs.ok && sup.onScene>0){
+      const eff=effMissionMinutes(t, sup.onScene), cap=sup.coverage;
+      const np=Math.min(cap, (m.progress||0)+elapsedMin/eff);
+      if(np>=1){
+        state.earnings=(state.earnings||0)+missionReward(t); doneCount++;
+        (m.assigned||[]).forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ const st=stationById(v.stationId); v.status=2; v.crew=0; v.crewIds=[]; v.targetMissionId=null; v.nextMissionId=null; if(st){v.lat=st.lat;v.lng=st.lng;} } });
+        m.status='done';
+      } else { m.progress=np; m.status='working'; }
+    }
+  });
+  state.missions=state.missions.filter(m=>m.status!=='done');
+  if(doneCount>0) setTimeout(()=>toast(`Während der Abwesenheit: ${doneCount} Einsatz${doneCount>1?'e':''} abgeschlossen`,'ok'),1200);
+}
+
+/* ------------------------- MAP ------------------------- */
+let map, stationLayer, missionLayer, vehicleLayer, routeLayer, buildingLayer;
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:true}).setView([state.view.lat,state.view.lng],state.view.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    subdomains:'abc', maxZoom:19,
+    attribution:'&copy; OpenStreetMap contributors',
+    errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+  }).addTo(map);
+  routeLayer=L.layerGroup().addTo(map); stationLayer=L.layerGroup().addTo(map);
+  buildingLayer=L.layerGroup().addTo(map);
+  missionLayer=L.layerGroup().addTo(map); vehicleLayer=L.layerGroup().addTo(map);
+  map.on('click',onMapClick);
+}
+function addBuildingMarker(b){
+  const t=buildingById(b.typeId); if(!t) return;
+  const icon=L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-building">${t.icon}</div>`});
+  b.marker=L.marker([b.lat,b.lng],{icon}).addTo(buildingLayer);
+  b.marker.bindTooltip(`${t.icon} ${b.name}`,{direction:'top'});
+  b.marker.on('click',()=>{ if(t.isAcademy) openAcademyView(b.id); else toast(`${t.icon} ${b.name}${t.desc?' — '+t.desc:''}`,'ok'); });
+}
+
+/* ------------------------- GEO / ROUTING ------------------------- */
+function distM(a,b){ const R=6371000,toR=x=>x*Math.PI/180;
+  const dLat=toR(b.lat-a.lat),dLng=toR(b.lng-a.lng),la1=toR(a.lat),la2=toR(b.lat);
+  const h=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+function randomNear(c,maxM){ const r=maxM*Math.sqrt(Math.random()),a=Math.random()*2*Math.PI;
+  return { lat:c.lat+(r*Math.cos(a))/111320, lng:c.lng+(r*Math.sin(a))/(111320*Math.cos(c.lat*Math.PI/180)) }; }
+
+async function getRoute(from,to){
+  try{
+    const url=CONFIG.osrmBase+`${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+    const res=await fetch(url); const data=await res.json();
+    if(data.code==='Ok'&&data.routes&&data.routes[0]){
+      const r=data.routes[0]; const coords=r.geometry.coordinates.map(c=>({lat:c[1],lng:c[0]}));
+      return { coords, duration:r.duration };
+    }
+  }catch(e){ /* offline / gesperrt → Fallback */ }
+  const d=distM(from,to); return { coords:[from,to], duration:d/CONFIG.fallbackSpeedMs };
+}
+function buildPath(coords){ const cum=[0]; for(let i=1;i<coords.length;i++) cum.push(cum[i-1]+distM(coords[i-1],coords[i]));
+  return { coords, cum, total:cum[cum.length-1]||1 }; }
+function pointAtFrac(path,frac){
+  if(frac<=0) return path.coords[0]; if(frac>=1) return path.coords[path.coords.length-1];
+  const target=frac*path.total;
+  for(let i=1;i<path.cum.length;i++){ if(path.cum[i]>=target){
+    const s=path.cum[i-1],len=path.cum[i]-s,t=len>0?(target-s)/len:0,a=path.coords[i-1],b=path.coords[i];
+    return { lat:a.lat+(b.lat-a.lat)*t, lng:a.lng+(b.lng-a.lng)*t }; } }
+  return path.coords[path.coords.length-1];
+}
+
+/* ------------------------- BUILD MODE ------------------------- */
+/* -------- Gebäude-Katalog (erweiterbar) -------- */
+const BUILDINGS=[
+  { id:'fire',    name:'Feuerwache',         icon:'🚒', isStation:true,  cost:CONFIG.stationBuildCost },
+  { id:'academy', name:'Feuerwehr-Akademie', icon:'🎓', isStation:false, isAcademy:true, cost:CONFIG.academyBuildCost,
+    desc:'Personal in Klassenräumen zu Lehrgängen schicken.' },
+  // weitere Gebäudetypen hier ergänzen …
+];
+const buildingById=id=>BUILDINGS.find(b=>b.id===id);
+function academies(){ return (state.buildings||[]).filter(b=>b.typeId==='academy'); }
+
+let buildMode=false, buildTypeId=BUILDINGS[0].id, pendingBuild=null;
+function setBuildMode(on){ buildMode=on; document.getElementById('buildBanner').classList.toggle('show',on); document.getElementById('map').style.cursor=on?'crosshair':''; }
+function nextStationNumber(){ const nums=state.stations.map(s=>parseInt(s.number)||0); return (nums.length?Math.max(...nums):0)+1; }
+
+/* Bau-Menü: Typ, Name, (bei Wache) Wachnummer */
+function openBuildMenu(){
+  buildTypeId=BUILDINGS[0].id;
+  const typesEl=document.getElementById('build-types');
+  typesEl.innerHTML=BUILDINGS.map(b=>`<button class="build-type${b.id===buildTypeId?' active':''}" data-btype="${b.id}">
+      <span class="bt-ico">${b.icon}</span><span class="bt-name">${b.name}</span><span class="bt-cost">${fmt(b.cost)} €</span></button>`).join('');
+  typesEl.querySelectorAll('[data-btype]').forEach(btn=> btn.onclick=()=>{ buildTypeId=btn.dataset.btype; syncBuildMenu(); });
+  syncBuildMenu();
+  showModal('modal-build');
+}
+function syncBuildMenu(){
+  const b=buildingById(buildTypeId);
+  document.querySelectorAll('#build-types [data-btype]').forEach(x=>x.classList.toggle('active',x.dataset.btype===buildTypeId));
+  const num=nextStationNumber();
+  document.getElementById('build-name').value = b.isStation ? `Feuerwache ${num}` : b.name;
+  document.getElementById('build-number-wrap').classList.toggle('hidden', !b.isStation);
+  document.getElementById('build-number').value = num;
+  document.getElementById('build-cost').innerHTML = `Kosten: <b>${fmt(b.cost)} €</b>`;
+}
+function startBuildPlacement(){
+  const b=buildingById(buildTypeId); if(!b) return;
+  if(state.credits < b.cost){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
+  const name=document.getElementById('build-name').value.trim() || b.name;
+  const number=b.isStation ? (parseInt(document.getElementById('build-number').value)||nextStationNumber()) : null;
+  pendingBuild={ typeId:b.id, name, number };
+  hideModal('modal-build'); setBuildMode(true);
+}
+
+function onMapClick(e){
+  if(!buildMode || !pendingBuild) return;
+  const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
+  if(state.credits < b.cost){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); setBuildMode(false); return; }
+  state.credits-=b.cost;
+  if(b.isStation){
+    const st={ id:nid(), name:pendingBuild.name, number:pendingBuild.number, ort:'', lat:e.latlng.lat, lng:e.latlng.lng, level:1,
+      roster:makeRoster(CONFIG.startStaff), hireTarget:0, lastHireAt:0 };
+    state.stations.push(st); addStationMarker(st);
+    renderStations(); renderTopbar(); switchTab('stations'); detectOrt(st);
+    toast(`${st.name} gebaut`,'ok');
+  } else {
+    const bld={ id:nid(), typeId:b.id, name:pendingBuild.name, lat:e.latlng.lat, lng:e.latlng.lng };
+    if(b.isAcademy){ bld.level=1; bld.courses=[]; }
+    if(!state.buildings) state.buildings=[];
+    state.buildings.push(bld); addBuildingMarker(bld);
+    renderTopbar(); toast(`${b.name} gebaut`,'ok');
+    if(b.isAcademy) openAcademyView(bld.id);
+  }
+  setBuildMode(false); pendingBuild=null; saveGame(true);
+}
+/* Reverse-Geocoding: Landkreis bzw. kreisfreie Stadt aus Koordinaten (Nominatim).
+   Offline → bleibt leer, editierbar. */
+async function detectOrt(st){
+  try{
+    const url=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=de&lat=${st.lat}&lon=${st.lng}`;
+    const r=await fetch(url); const d=await r.json(); const a=d.address||{};
+    // Kreis-Ebene bevorzugen: Landkreis → kreisfreie Stadt → Bundesland → feiner
+    let ort = a.county || a.city || a.state || a.town || a.municipality || a.city_district || a.borough || a.village || a.suburb || '';
+    ort = ort.replace(/^(Landkreis|Kreis|Kreisfreie Stadt|Stadtkreis|Regionalverband|Landeshauptstadt)\s+/i,'').trim();
+    if(ort){ st.ort=ort; renderStations(); renderVehicles(); saveGame(true);
+      if(document.getElementById('modal-station').classList.contains('show') && editStationId===st.id) fillStationForm(st); }
+  }catch(err){ /* kein Netz → Ort bleibt leer */ }
+}
+
+/* ------------------------- MARKER ------------------------- */
+function addStationMarker(st){
+  const icon=L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-station">🚒<span class="lvlbadge">L${st.level}</span></div>`});
+  st.marker=L.marker([st.lat,st.lng],{icon}).addTo(stationLayer); st.marker.on('click',()=>openBuyModal(st.id));
+}
+function refreshStationMarker(st){ if(st.marker) stationLayer.removeLayer(st.marker); addStationMarker(st); }
+function missionCls(m){ return m.status==='done'?'done':(m.status==='working'?'working':''); }
+function addMissionMarker(m){ const t=missionType(m.type);
+  const icon=L.divIcon({className:'',iconSize:[32,32],iconAnchor:[16,16],html:`<div class="mk-mission ${missionCls(m)}">${t.code}</div>`});
+  m.marker=L.marker([m.lat,m.lng],{icon}).addTo(missionLayer); m.marker.on('click',()=>openMissionModal(m.id)); }
+function refreshMissionMarker(m){ if(m.marker) missionLayer.removeLayer(m.marker); addMissionMarker(m); }
+function vehStatusColor(s){ return (getComputedStyle(document.documentElement).getPropertyValue(`--fms-${s}`)||'#888').trim(); }
+function addVehicleMarker(v){ const t=VEHICLES[v.type];
+  const icon=L.divIcon({className:'',iconSize:[22,22],iconAnchor:[11,11],html:`<div class="mk-veh" style="background:${vehStatusColor(v.status)}">${t.icon}</div>`});
+  v.marker=L.marker([v.lat,v.lng],{icon,zIndexOffset:500}).addTo(vehicleLayer); }
+function refreshVehicleMarker(v){ if(v.marker){ vehicleLayer.removeLayer(v.marker); v.marker=null; }
+  if(v.status===2||v.status===6||v.status===4) return; addVehicleMarker(v); }
+function drawRoute(v,coords){ clearRoute(v); const color=v.status===1?'#8a97a8':'#e5352b';
+  v.routeLine=L.polyline(coords.map(c=>[c.lat,c.lng]),{color,weight:3,opacity:.4,dashArray:'6 6'}).addTo(routeLayer); }
+function clearRoute(v){ if(v.routeLine){ routeLayer.removeLayer(v.routeLine); v.routeLine=null; } }
+
+/* ------------------------- LOOKUPS ------------------------- */
+const missionType=id=>MISSION_TYPES.find(m=>m.id===id);
+const stationById=id=>state.stations.find(s=>s.id===id);
+const missionById=id=>state.missions.find(m=>m.id===id);
+const vehiclesOfStation=id=>state.vehicles.filter(v=>v.stationId===id);
+
+/* ------------------------- MISSIONS ------------------------- */
+/* Kann der Spieler diesen Einsatz insgesamt lösen? (Fahrzeugtypen + Löschmittel-Kapazität) */
+function canSolveMission(t){
+  if(!t) return false;
+  const owned=state.vehicles;
+  let totW=0, totF=0; owned.forEach(v=>{ totW+=vStat(v,'water')||0; totF+=vStat(v,'foam')||0; });
+  if((t.need.water||0) > totW) return false;
+  if((t.need.foam||0)  > totF) return false;
+  const reqs=(t.req&&t.req.length)?t.req.slice().sort((a,b)=>a.types.length-b.types.length):[];
+  if(reqs.length===0){ return owned.length >= (t.minVehicles||1); }
+  const used=new Set();
+  for(const r of reqs){
+    let have=0;
+    for(const v of owned){ if(used.has(v.id)) continue; if(r.types.includes(v.type)){ used.add(v.id); if(++have>=r.count) break; } }
+    if(have<r.count) return false;
+  }
+  return true;
+}
+function pickMissionType(){
+  const solvable=MISSION_TYPES.filter(canSolveMission);
+  if(!solvable.length) return null;
+  const total=solvable.reduce((a,m)=>a+m.weight,0); let r=Math.random()*total;
+  for(const m of solvable){ if((r-=m.weight)<=0) return m; } return solvable[0];
+}
+function spawnMission(forceType){
+  if(state.stations.length===0) return;
+  const t=forceType?missionType(forceType):pickMissionType();
+  if(!t) return;   // kein Einsatztyp definiert
+  const base=state.stations[Math.floor(Math.random()*state.stations.length)];
+  const pos=randomNear(base,CONFIG.missionRadiusM);
+  const m={ id:nid(), type:t.id, lat:pos.lat, lng:pos.lng,
+    address:`${STREETS[Math.floor(Math.random()*STREETS.length)]} ${1+Math.floor(Math.random()*180)}`,
+    status:'open', progress:0, assigned:[] };
+  state.missions.push(m); addMissionMarker(m); renderMissions(); renderTopbar();
+  toast(`🚨 Neuer Einsatz: ${t.name}`,'warn');
+}
+function missionReward(t){ return Math.round((t&&t.reward||0)*(CONFIG.rewardMultiplier||1)); }
+function completeMission(m){
+  const t=missionType(m.type); m.status='done'; m.doneAt=Date.now();
+  const pay=missionReward(t); state.earnings=(state.earnings||0)+pay;
+  try{ refreshMissionMarker(m); }catch(e){ console.error(e); }
+  m.assigned.slice().forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ try{ releaseVehicle(v); }catch(e){ console.error('release',e); } } });
+  try{ toast(`✅ ${t?t.name:'Einsatz'} erledigt (+${fmt(pay)} € · Auszahlung um 0 Uhr)`,'ok'); renderTopbar(); renderVehicles(); }catch(e){ console.error(e); }
+  // Entfernung erfolgt im Tick (siehe Sweep) — robust gegen Render-Fehler.
+}
+/* Tagesabschluss: um 0 Uhr (Berlin) die Einnahmen des Vortags gutschreiben */
+function berlinDayKey(){ return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin'}).format(new Date()); }
+function settlePayday(){
+  if(!state) return; const d=berlinDayKey();
+  if(!state.payDayKey){ state.payDayKey=d; return; }
+  if(state.payDayKey!==d){
+    if(state.earnings>0){ state.credits+=state.earnings; toast(`💰 Tageseinnahmen gutgeschrieben: +${fmt(state.earnings)} €`,'ok'); }
+    state.earnings=0; state.payDayKey=d; renderTopbar(); saveGame(true);
+  }
+}
+
+/* ------------------------- FUNK ------------------------- */
+let funkLog=[];
+function vehAbbr(v){ const t=VEHICLES[v.type]; return (t&&t.abbr)||(t&&t.name.split(' ')[0])||v.type; }
+function vehAutoName(v){
+  const st=stationById(v.stationId), abbr=vehAbbr(v);
+  if(st){ const ort=st.ort||'Ort', num=st.number||1; return `Florian-${ort}-${abbr}-${num}-${v.seq||1}`; }
+  return `${abbr}-${v.seq||1}`;
+}
+function vehName(v){ return (v.customName&&v.customName.trim()) ? v.customName.trim() : vehAutoName(v); }
+function funk(v,status,note){
+  funkLog.unshift({ t:clockTimeFmt.format(new Date()), name:vehName(v), status:status||null, label:status?FMS_SHORT[status]:'', note:note||'' });
+  if(funkLog.length>60) funkLog.length=60;
+  renderFunk();
+}
+
+/* ------------------------- DISPATCH / DRIVE ------------------------- */
+function startDrive(v,coords,osrmDuration,factor){
+  v.path=buildPath(coords);
+  v.driveSeconds=Math.max(2,osrmDuration*CONFIG.driveTimeScale*factor);
+  v.driveElapsed=0; v.lat=coords[0].lat; v.lng=coords[0].lng;
+  drawRoute(v,coords); refreshVehicleMarker(v);
+}
+/* Fahrt von AKTUELLER Position zum Einsatz (Erstalarm, Umleitung, Folgeeinsatz) */
+async function routeVehicleTo(v,m,factor){
+  state.missions.forEach(mm=>{ mm.assigned=mm.assigned.filter(id=>id!==v.id); }); // exklusiv zuordnen
+  v.status=3; v.targetMissionId=m.id; v.nextMissionId=null; v.path=null;
+  m.assigned.push(v.id);
+  funk(v,3);
+  refreshVehicleMarker(v); renderStations(); renderVehicles(); renderMissions();
+  const from={lat:v.lat,lng:v.lng};
+  const route=await getRoute(from,{lat:m.lat,lng:m.lng});
+  if(v.status!==3||v.targetMissionId!==m.id) return;  // zwischenzeitlich umdisponiert
+  route.coords.push({lat:m.lat,lng:m.lng});           // Teleport auf exakten Einsatzpunkt
+  startDrive(v,route.coords,route.duration,factor||CONFIG.outboundFactor);
+}
+async function dispatch(vehicleId,missionId){
+  const v=state.vehicles.find(x=>x.id===vehicleId), m=missionById(missionId);
+  if(!v||!m||m.status==='done') return;
+  if(v.targetMissionId===m.id){ toast(`${vehName(v)} ist bereits auf Anfahrt hierher`,'warn'); return; }
+  if(v.nextMissionId===m.id){ toast(`${vehName(v)} ist bereits als Folgeeinsatz eingeplant`,'warn'); return; }
+
+  if(v.status===2){                                  // von der Wache
+    const st=stationById(v.stationId); const t=VEHICLES[v.type];
+    const tr=trainingSet();
+    const fixedP=fixedPeople(st,v).filter(p=>!tr.has(p.id));
+    const freePool=poolFreePeople(st);
+    let cand=fixedP.concat(freePool);                  // Kandidaten: feste zuerst, dann Springer
+    const need=vStat(v,'crewMin')||0, cap=vStat(v,'crewMax')||need;
+    if(cand.length < need){ toast(`${vehName(v)}: nicht genug Personal (${cand.length}/${need} verfügbar)`,'err'); return; }
+    if(t.requiresCourse){                              // z. B. ELW braucht Einsatzleiter-Ausbildung
+      const qi=cand.findIndex(p=>hasQual(p,t.requiresCourse));
+      if(qi<0){ toast(`${vehName(v)}: benötigt Personal mit Ausbildung „${qualLabel(t.requiresCourse)}“`,'err'); return; }
+      if(qi>=cap){ const [q]=cand.splice(qi,1); cand.unshift(q); }   // qualifizierte Person sicher an Bord
+    }
+    v.crewIds=cand.slice(0,cap).map(p=>p.id); v.crew=v.crewIds.length;
+    if(st){ v.lat=st.lat; v.lng=st.lng; }
+    await routeVehicleTo(v,m,CONFIG.outboundFactor);
+    renderStations(); if(svStationId===st.id) renderStationView();
+  } else if(v.status===1){                            // auf Rückfahrt → sofort umleiten
+    toast(`${vehName(v)} wird auf der Rückfahrt umgeleitet`,'ok');
+    await routeVehicleTo(v,m,CONFIG.outboundFactor);
+  } else if(v.status===3||v.status===4){              // im Einsatz/auf Anfahrt → Folgeeinsatz
+    v.nextMissionId=m.id;
+    funk(v,null,`Folgeeinsatz eingeplant: ${missionType(m.type).name}`);
+    toast(`${vehName(v)} rückt nach aktuellem Einsatz aus`,'ok');
+    renderMissions(); renderStations(); renderVehicles();
+  } else if(v.status===6){                            // außer Dienst → vormerken
+    v.nextMissionId=m.id;
+    toast(`${vehName(v)} rückt aus, sobald wieder dienstbereit`,'ok');
+    renderVehicles();
+  }
+}
+/* Fahrzeug freigeben: erst Folgeeinsatz, sonst zurück zur Wache */
+function releaseVehicle(v){
+  if(v.nextMissionId){ const nm=missionById(v.nextMissionId); v.nextMissionId=null;
+    if(nm && nm.status!=='done'){ routeVehicleTo(v,nm,CONFIG.outboundFactor); return; } }
+  sendVehicleHome(v);
+}
+async function sendVehicleHome(v){
+  if(v.status===1) return;
+  const st=stationById(v.stationId); if(!st){ v.status=2; return; }
+  v.status=1; v.targetMissionId=null; v.path=null;
+  state.missions.forEach(m=>{ m.assigned=m.assigned.filter(id=>id!==v.id); });
+  funk(v,1); refreshVehicleMarker(v); renderVehicles();
+  const route=await getRoute({lat:v.lat,lng:v.lng},{lat:st.lat,lng:st.lng});
+  if(v.status!==1) return;
+  route.coords.push({lat:st.lat,lng:st.lng});
+  startDrive(v,route.coords,route.duration,CONFIG.returnFactor);
+}
+
+/* ------------------------- GAME LOOP ------------------------- */
+let lastTick=Date.now();
+function tick(){
+  const now=Date.now(); const dt=Math.min(0.5,(now-lastTick)/1000); lastTick=now;   // Fahren/Einsätze in Echtzeit (Speed wirkt nur auf Spawn)
+
+  // Fahrzeuge bewegen
+  for(const v of state.vehicles){
+    if(v.status===3||v.status===1){
+      if(!v.path) continue; // Route lädt noch
+      v.driveElapsed+=dt; const frac=Math.min(1,v.driveElapsed/v.driveSeconds);
+      const p=pointAtFrac(v.path,frac); v.lat=p.lat; v.lng=p.lng; if(v.marker) v.marker.setLatLng([v.lat,v.lng]);
+      if(frac>=1){
+        clearRoute(v); v.path=null;
+        if(v.status===3){ v.status=4; funk(v,4); refreshVehicleMarker(v); renderMissions(); renderVehicles(); }
+        else { const st=stationById(v.stationId); if(st){ v.lat=st.lat; v.lng=st.lng; } v.status=2; v.crew=0; v.crewIds=[]; funk(v,2); refreshVehicleMarker(v); renderStations(); renderVehicles(); if(svStationId===v.stationId) renderStationView(); }
+      }
+    } else if(v.status===4){
+      const m=missionById(v.targetMissionId);
+      if(!m||m.status==='done'){ releaseVehicle(v); }
+    }
+  }
+
+  // Einsätze abarbeiten (zeitbasiert)
+  const gm=(dt*1000)/CONFIG.minuteRealMs; // vergangene Einsatz-Minuten
+  let dirty=false;
+  // Erledigte Einsätze nach ~4 s entfernen (robust, unabhängig von Render-Fehlern)
+  for(let i=state.missions.length-1;i>=0;i--){ const m=state.missions[i];
+    if(m.status==='done' && (!m.doneAt || Date.now()-m.doneAt>4000)){
+      if(m.marker){ try{ missionLayer.removeLayer(m.marker); }catch(e){} }
+      state.missions.splice(i,1); dirty=true; renderTopbar();
+    }
+  }
+  for(const m of state.missions){
+    if(m.status==='done') continue;
+    const t=missionType(m.type);
+    const sup=missionSupply(m);
+    const rs=missionReqStatus(m);
+    if(rs.ok && sup.onScene>0){
+      if(m.status!=='working'){ m.status='working'; refreshMissionMarker(m); dirty=true; }
+      const eff=effMissionMinutes(t, sup.onScene); m.effMinutes=eff;
+      const cap=sup.coverage;                       // Fortschritt max. bis zum Deckungsgrad
+      if((m.progress||0) < cap){ m.progress=Math.min(cap, (m.progress||0)+gm/eff); dirty=true; }
+      if(m.progress>=1){ completeMission(m); continue; }
+    } else {
+      if(sup.onScene>0 && m.status!=='waiting'){ m.status='waiting'; dirty=true; }
+      else if(sup.onScene===0 && m.status==='waiting'){ m.status='open'; dirty=true; }
+    }
+  }
+  if(dirty) renderMissionsThrottled();
+}
+let _missRenderAt=0;
+function renderMissionsThrottled(){ const n=Date.now(); if(n-_missRenderAt>800){ _missRenderAt=n; renderMissions(); } }
+
+let spawnTimer=0;
+function spawnLoop(){ spawnTimer+=CONFIG.tickMs*(state.gameSpeed||1);
+  if(spawnTimer>=CONFIG.missionIntervalMs){ spawnTimer=0;
+    const open=state.missions.filter(m=>m.status!=='done').length;
+    if(state.stations.length>0 && open<CONFIG.maxOpenMissions) spawnMission();
+  } }
+
+/* ------------------------- RENDER ------------------------- */
+function fmt(n){ return Math.round(n).toLocaleString('de-DE'); }
+function mmss(min){ const m=Math.max(0,min),w=Math.floor(m),s=Math.floor((m-w)*60); return `${w}:${String(s).padStart(2,'0')}`; }
+/* Effektive Einsatzdauer: jedes Fzg bis Cap = perVehicleSpeedup schneller. */
+function effMissionMinutes(t, vehCount){
+  const used=Math.max(1, Math.min(vehCount||1, CONFIG.usefulVehicleCap));
+  return t.minutes * (1 - CONFIG.perVehicleSpeedup*(used-1));
+}
+/* Löschmittel-Deckung: summiert Wasser/Schaum der Fahrzeuge VOR ORT.
+   coverage = kleinster Deckungsgrad (Wasser bzw. Schaum). Fortschritt läuft nur bis dahin. */
+function missionSupply(m){
+  const t=missionType(m.type);
+  const veh=m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id);
+  let sumW=0,sumF=0; veh.forEach(v=>{ sumW+=vStat(v,'water')||0; sumF+=vStat(v,'foam')||0; });
+  const needW=(t&&t.need.water)||0, needF=(t&&t.need.foam)||0;
+  const coverW=needW>0?Math.min(1,sumW/needW):1, coverF=needF>0?Math.min(1,sumF/needF):1;
+  return { onScene:veh.length, sumW, sumF, needW, needF, coverW, coverF, coverage:Math.min(coverW,coverF) };
+}
+function onSceneVehicles(m){ return m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id); }
+function reqLabel(r){ if(r.types.length===1){ const v=VEHICLES[r.types[0]]; return v?(v.abbr||v.name):r.types[0]; } return 'Lösch-/Kleinfzg'; }
+/* Prüft, ob die benötigten Fahrzeugtypen vor Ort sind (greedy, spezifische zuerst). */
+function missionReqStatus(m){
+  const t=missionType(m.type); const veh=onSceneVehicles(m);
+  const reqs=(t&&t.req&&t.req.length)?t.req.slice().sort((a,b)=>a.types.length-b.types.length):null;
+  if(!reqs) return { ok: veh.length>=((t&&t.minVehicles)||1), items:[] };
+  const used=new Set(); const items=[]; let ok=true;
+  for(const r of reqs){
+    let have=0;
+    for(const v of veh){ if(used.has(v.id)) continue; if(r.types.includes(v.type)){ used.add(v.id); if(++have>=r.count) break; } }
+    if(have<r.count) ok=false;
+    items.push({ label:reqLabel(r), count:r.count, have:Math.min(have,r.count) });
+  }
+  return { ok, items };
+}
+/* Grobe Anfahrtszeit-Schätzung (Sekunden Spielzeit) ohne OSRM-Aufruf.
+   distM = Luftlinie; ×1,3 Umweg; ~45 km/h Mittel; dann Spiel-Skalierung. */
+function estimateDriveSeconds(from, to, factor){
+  const road = distM(from,to)*1.3;
+  const osrm = road / 12.5;                    // reale Sekunden (≈45 km/h)
+  return Math.max(2, osrm * CONFIG.driveTimeScale * (factor||CONFIG.outboundFactor));
+}
+function etaText(v, m){
+  const secs = estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng}, CONFIG.outboundFactor);
+  return mmss(secs/60);
+}
+function renderTopbar(){
+  const c=document.getElementById('stat-credits'); if(c) c.textContent=fmt(state.credits)+' €';
+  const e=document.getElementById('stat-earnings'); if(e) e.textContent='+'+fmt(state.earnings||0)+' €';
+}
+
+/* Geschwindigkeit */
+function renderSpeed(){
+  const sel=document.getElementById('speed-ctl'); if(!sel) return;
+  sel.innerHTML=CONFIG.speedSteps.map(sp=>`<option value="${sp}">${sp}× Tempo</option>`).join('');
+  sel.value=String(state.gameSpeed);
+}
+function setSpeed(sp){
+  sp=parseFloat(sp);
+  if(!CONFIG.speedSteps.includes(sp)) return;
+  state.gameSpeed=sp;
+  lastTick=Date.now();           // kein Zeitsprung beim Umschalten
+  const sel=document.getElementById('speed-ctl'); if(sel) sel.value=String(sp);
+  saveGame(true);
+}
+
+/* Echte Berlin-Ortszeit (sekundengenau, DST automatisch) */
+const clockTimeFmt=new Intl.DateTimeFormat('de-DE',{ timeZone:'Europe/Berlin', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+const clockSubFmt =new Intl.DateTimeFormat('de-DE',{ timeZone:'Europe/Berlin', day:'2-digit', month:'2-digit', timeZoneName:'short' });
+function updateClock(){
+  const now=new Date();
+  const tEl=document.getElementById('clock-time'), sEl=document.getElementById('clock-sub');
+  if(tEl) tEl.textContent=clockTimeFmt.format(now);
+  if(sEl) sEl.textContent='Berlin · '+clockSubFmt.format(now);
+}
+
+const FMS_LABEL={1:'Einsatzbereit über Funk',2:'Einsatzbereit auf Wache',3:'Auf Anfahrt',4:'Am Einsatzort',5:'Sprechwunsch',6:'Außer Dienst',7:'Patiententransport'};
+const FMS_SHORT={1:'Frei (Funk)',2:'Auf Wache',3:'Anfahrt',4:'Einsatz',5:'Sprechwunsch',6:'Außer Dienst',7:'Transport'};
+function renderStations(){
+  const list=document.getElementById('stations-list'), cnt=document.getElementById('stations-count');
+  cnt.textContent=state.stations.length; cnt.classList.toggle('zero',state.stations.length===0);
+  if(state.stations.length===0){ list.innerHTML=`<div class="empty-hint">Noch keine Feuerwache.<br><b>„🏗️ Gebäude bauen“</b> klicken und auf die Karte tippen.</div>`; return; }
+  list.innerHTML='';
+  for(const st of state.stations){
+    const bays=CONFIG.baysForLevel(st.level), vs=vehiclesOfStation(st.id);
+    let baysHtml='';
+    for(let i=0;i<bays;i++){ const v=vs[i];
+      if(v){ const t=VEHICLES[v.type];
+        baysHtml+=`<div class="bay filled" title="${FMS_LABEL[v.status]}"><span class="fbox fbox-${v.status}">${v.status}</span><span class="b-type">${t.abbr} ${v.seq||1}</span></div>`;
+      } else baysHtml+=`<div class="bay free" data-buy="${st.id}">+ Fahrzeug</div>`;
+    }
+    const canUp=st.level<CONFIG.maxStationLevel;
+    const el=document.createElement('div'); el.className='station';
+    el.innerHTML=`<div class="s-top s-open" data-open="${st.id}">
+        <div class="s-ico">🚒</div>
+        <div class="s-name">${st.name}<span class="s-sub">Wache ${st.number} · ${st.ort||'Ort …'} · Lvl ${st.level} · ${vs.length}/${bays} · 👥 ${staffCount(st)}</span></div>
+        <span class="s-chev">›</span></div>
+      <div class="s-bays">${baysHtml}</div>
+      <div class="s-actions">
+        <button class="btn sm" data-buy="${st.id}">+ Fahrzeug</button>
+        <button class="btn sm ghost" data-open="${st.id}">Wache öffnen</button>
+      </div>`;
+    list.appendChild(el);
+  }
+  // Akademien (und andere Gebäude) anhängen
+  const acs=academies();
+  if(acs.length){
+    const hdr=document.createElement('div'); hdr.className='vgroup-head'; hdr.textContent='Gebäude'; list.appendChild(hdr);
+    acs.forEach(a=>{ const el=document.createElement('div'); el.className='station';
+      const used=(a.courses||[]).length, rooms=academyRooms(a);
+      el.innerHTML=`<div class="s-top s-open" data-openac="${a.id}"><div class="s-ico" style="background:var(--fms-4)">🎓</div>
+        <div class="s-name">${a.name}<span class="s-sub">Akademie · Level ${a.level} · Klassenräume ${used}/${rooms}</span></div>
+        <span class="s-chev">›</span></div>`;
+      list.appendChild(el); });
+  }
+  list.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openStationView(b.dataset.open,'vehicles'));
+  list.querySelectorAll('[data-openac]').forEach(b=>b.onclick=()=>openAcademyView(b.dataset.openac));
+  list.querySelectorAll('[data-buy]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openStationView(b.dataset.buy,'shop'); });
+}
+function upgradeStation(id){ const st=stationById(id); if(!st||st.level>=CONFIG.maxStationLevel) return;
+  const cost=CONFIG.upgradeCost(st.level); if(state.credits<cost){ toast('Nicht genug Guthaben für den Ausbau','err'); return; }
+  state.credits-=cost; st.level++; refreshStationMarker(st); renderStations(); renderTopbar(); if(svStationId===id) renderStationView(); toast(`${st.name} auf Level ${st.level} ausgebaut`,'ok'); saveGame(true); }
+
+/* ---------- Personal / Anwerbung ---------- */
+const FIRST_NAMES=['Rebekka','Lukas','Marie','Jonas','Lena','Felix','Hannah','Paul','Laura','Tim','Sophie','Max','Julia','Ben','Emma','Niklas','Anna','David','Clara','Finn','Mia','Leon','Sarah','Elias','Nele','Jan','Lea','Tom','Katharina','Moritz','Johanna','Erik','Pia','Simon','Greta','Noah','Ida','Fabian','Marlene','Kilian'];
+const LAST_INITIALS=['A','B','D','F','G','H','K','L','M','N','P','R','S','T','V','W','Z'];
+function personName(){ return `${FIRST_NAMES[Math.floor(Math.random()*FIRST_NAMES.length)]} ${LAST_INITIALS[Math.floor(Math.random()*LAST_INITIALS.length)]}.`; }
+function makePerson(){ return { id:nid(), name:personName(), vehicleId:null, quals:[] }; }
+function makeRoster(n){ const r=[]; for(let i=0;i<n;i++) r.push(makePerson()); return r; }
+
+function staffCount(st){ return (st.roster||[]).length; }
+function poolPeople(st){ return (st.roster||[]).filter(p=>!p.vehicleId); }
+function fixedPeople(st,v){ return (st.roster||[]).filter(p=>p.vehicleId===v.id); }
+function deployedIdSet(st){ const s=new Set(); state.vehicles.filter(v=>v.stationId===st.id&&v.status!==2).forEach(v=>(v.crewIds||[]).forEach(id=>s.add(id))); return s; }
+function trainingSet(){ const s=new Set(); (state.buildings||[]).forEach(b=>{ if(b.courses) b.courses.forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); }); return s; }
+function poolFreePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return poolPeople(st).filter(p=>!dep.has(p.id)&&!tr.has(p.id)); }
+function stationAvailablePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return (st.roster||[]).filter(p=>!dep.has(p.id)&&!tr.has(p.id)); }
+function trainingCountOf(st){ const tr=trainingSet(); return (st.roster||[]).filter(p=>tr.has(p.id)).length; }
+function vAssigned(v){ const st=stationById(v.stationId); return st?fixedPeople(st,v).length:0; }
+function stationAssignedSum(st){ return (st.roster||[]).filter(p=>p.vehicleId).length; }
+function stationPool(st){ return poolPeople(st).length; }
+function stationPoolFree(st){ return poolFreePeople(st).length; }
+function stationBound(st){ return state.vehicles.filter(v=>v.stationId===st.id && v.status!==2).reduce((a,v)=>a+((v.crewIds&&v.crewIds.length)||0),0); }
+function stationFree(st){ return Math.max(0, staffCount(st)-stationBound(st)-trainingCountOf(st)); }
+function accrueStaff(st, now){
+  if(!Array.isArray(st.roster)) st.roster=makeRoster(st.staff!=null?st.staff:CONFIG.startStaff);
+  if(st.hireTarget && st.hireTarget>staffCount(st)){
+    const dayMs=CONFIG.personnelDayMs;
+    if(!st.lastHireAt) st.lastHireAt=now;
+    while(now - st.lastHireAt >= dayMs && staffCount(st) < st.hireTarget){
+      st.roster.push(makePerson()); st.lastHireAt += dayMs;
+    }
+    if(staffCount(st)>=st.hireTarget){ st.hireTarget=0; st.lastHireAt=0; }
+  }
+}
+function accrueAllStaff(){ const now=Date.now(); let changed=false;
+  state.stations.forEach(s=>{ const before=staffCount(s); accrueStaff(s,now); if(staffCount(s)!==before) changed=true; });
+  if(changed){ if(svStationId) renderStationView(); renderStations(); saveGame(true); }
+}
+function startHire(id){
+  const st=stationById(id); if(!st) return;
+  const inp=document.getElementById('sv-hire-target'); const target=parseInt(inp&&inp.value); const cur=staffCount(st);
+  if(isNaN(target)||target<=cur){ toast('Zielstärke muss größer als das aktuelle Personal sein','warn'); return; }
+  if(target>CONFIG.maxStaff){ toast(`Maximal ${CONFIG.maxStaff} Personal`,'warn'); return; }
+  st.hireTarget=target; st.lastHireAt=Date.now();
+  renderStationView(); saveGame(true); toast(`Anwerbung gestartet: Ziel ${target} (${target-cur} in ${target-cur} Tagen)`,'ok');
+}
+function cancelHire(id){ const st=stationById(id); if(!st) return; st.hireTarget=0; st.lastHireAt=0; renderStationView(); saveGame(true); toast('Anwerbung abgebrochen','ok'); }
+function assignCrew(vehicleId, delta){
+  const v=state.vehicles.find(x=>x.id===vehicleId); if(!v) return;
+  if(v.status!==2){ toast('Zuteilung nur möglich, wenn das Fahrzeug auf der Wache ist','warn'); return; }
+  const st=stationById(v.stationId); const cmax=vStat(v,'crewMax');
+  if(delta>0){
+    if(fixedPeople(st,v).length>=cmax){ toast(`Maximalbesatzung ${cmax}`,'warn'); return; }
+    const p=poolFreePeople(st)[0]; if(!p){ toast('Kein unverteiltes Personal frei','warn'); return; }
+    p.vehicleId=v.id;
+  } else {
+    const fp=fixedPeople(st,v); if(!fp.length) return; fp[fp.length-1].vehicleId=null;
+  }
+  renderStationView(); renderStations(); saveGame(true);
+}
+
+/* ---------- Wachen-Detailfenster ---------- */
+let svStationId=null, svTab='vehicles';
+function openStationView(id, tab){ const st=stationById(id); if(!st) return; svStationId=id; svTab=tab||'vehicles'; buyStationId=id; renderStationView(); showModal('modal-stationview'); }
+function renderStationView(){
+  const st=stationById(svStationId); if(!st){ hideModal('modal-stationview'); return; }
+  const bays=CONFIG.baysForLevel(st.level), vs=vehiclesOfStation(st.id);
+  document.getElementById('sv-title').textContent=`🚒 ${st.name}`;
+  document.getElementById('sv-sub').innerHTML=`Wache ${st.number} · ${st.ort||'Ort …'} · Level ${st.level} · ${vs.length}/${bays} Stellplätze · 👥 ${staffCount(st)} Personal (${stationFree(st)} frei)`;
+  document.getElementById('sv-veh-count').textContent=vs.length;
+  document.getElementById('sv-pers-count').textContent=staffCount(st);
+  // Reiter
+  document.querySelectorAll('#modal-stationview [data-svtab]').forEach(b=>b.classList.toggle('active',b.dataset.svtab===svTab));
+  ['vehicles','shop','personal'].forEach(p=>document.getElementById('sv-'+p).classList.toggle('hidden',p!==svTab));
+  if(svTab==='vehicles') renderSvVehicles(st,vs,bays);
+  else if(svTab==='shop') renderBuyMenu();
+  else if(svTab==='personal') renderSvPersonal(st);
+}
+function renderSvVehicles(st,vs,bays){
+  const box=document.getElementById('sv-vehicles');
+  let html='';
+  if(!vs.length) html=`<div class="empty-hint">Noch keine Fahrzeuge an dieser Wache.<br>Im Reiter <b>Shop</b> ein Fahrzeug beschaffen.</div>`;
+  else html=vs.map(v=>{ const t=VEHICLES[v.type];
+    const crewTxt = (v.status!==2&&v.crew) ? `👥 ${v.crew} an Bord (${vAssigned(v)} fest)` : `👥 ${vAssigned(v)} fest · max ${t.crewMax}`;
+    return `<div class="vrow">
+      <span class="v-ico">${t.icon}</span>
+      <div class="v-main"><span class="v-call">${vehName(v)}</span><span class="v-act">${vehicleActivity(v)} · ${crewTxt}</span></div>
+      <span class="fms fms-${v.status}"><span class="n">${v.status}</span></span>
+      <button class="btn sm" data-svedit="${v.id}" title="Namen ändern">✏️</button>
+      <button class="btn sm danger" data-svdel="${v.id}" title="Fahrzeug löschen">🗑️</button>
+    </div>`; }).join('');
+  const canUp=st.level<CONFIG.maxStationLevel;
+  const refund=Math.floor(stationInvest(st)*0.25);
+  html+=`<div class="sv-actions">
+      <button class="btn sm" id="sv-goshop">+ Fahrzeug (Shop)</button>
+      <button class="btn sm ghost" id="sv-upgrade" ${canUp?'':'disabled'}>${canUp?`⬆️ Ausbau (${fmt(CONFIG.upgradeCost(st.level))} €)`:'Max. Level'}</button>
+      <button class="btn sm ghost" id="sv-editstation">✏️ Wache bearbeiten</button>
+      <button class="btn sm danger" id="sv-delstation" title="25% zurück: ${fmt(refund)} €">🗑️ Wache abreißen</button>
+    </div>`;
+  box.innerHTML=html;
+  box.querySelectorAll('[data-svedit]').forEach(b=>b.onclick=()=>openVehicleEdit(b.dataset.svedit));
+  box.querySelectorAll('[data-svdel]').forEach(b=>b.onclick=()=>deleteVehicle(b.dataset.svdel));
+  const g=document.getElementById('sv-goshop'); if(g) g.onclick=()=>{ svTab='shop'; renderStationView(); };
+  const up=document.getElementById('sv-upgrade'); if(up) up.onclick=()=>upgradeStation(st.id);
+  const ed=document.getElementById('sv-editstation'); if(ed) ed.onclick=()=>openStationEdit(st.id);
+  const del=document.getElementById('sv-delstation'); if(del) del.onclick=()=>deleteStation(st.id);
+}
+function stationInvest(st){
+  let inv=CONFIG.stationBuildCost;
+  for(let l=1;l<(st.level||1);l++) inv+=CONFIG.upgradeCost(l);
+  vehiclesOfStation(st.id).forEach(v=>{ const t=VEHICLES[v.type]; inv+=(t&&t.cost)||0; });
+  return inv;
+}
+function deleteStation(id){
+  const st=stationById(id); if(!st) return;
+  const vs=vehiclesOfStation(st.id);
+  const refund=Math.floor(stationInvest(st)*0.25);
+  if(!confirm(`⚠️ ${st.name} wirklich abreißen?\n\n${vs.length} Fahrzeug(e) und ${staffCount(st)} Personal gehen unwiderruflich verloren.\nDu erhältst 25 % zurück: +${fmt(refund)} €.`)) return;
+  const vids=new Set(vs.map(v=>v.id));
+  state.missions.forEach(m=>{ m.assigned=(m.assigned||[]).filter(x=>!vids.has(x)); });
+  state.vehicles=state.vehicles.filter(v=>v.stationId!==st.id);
+  academies().forEach(a=>{ a.courses=(a.courses||[]).filter(c=>c.stationId!==st.id); });   // Lehrgänge dieser Wache beenden
+  if(st.marker) stationLayer.removeLayer(st.marker);
+  state.stations=state.stations.filter(s=>s.id!==st.id);
+  state.credits+=refund;
+  if(svStationId===id){ hideModal('modal-stationview'); svStationId=null; }
+  renderStations(); renderVehicles(); renderMissions(); renderTopbar(); saveGame(true);
+  toast(`${st.name} abgerissen (+${fmt(refund)} €)`,'ok');
+}
+function deleteVehicle(id){
+  const v=state.vehicles.find(x=>x.id===id); if(!v) return;
+  if(v.status!==2){ toast('Fahrzeug muss auf der Wache sein, um es zu löschen','warn'); return; }
+  if(!confirm(`${vehName(v)} wirklich löschen?`)) return;
+  const st=stationById(v.stationId);
+  if(st) (st.roster||[]).forEach(p=>{ if(p.vehicleId===v.id) p.vehicleId=null; });  // feste Zuteilung lösen
+  state.missions.forEach(m=>{ m.assigned=(m.assigned||[]).filter(x=>x!==id); });
+  state.vehicles=state.vehicles.filter(x=>x.id!==id);
+  renderStations(); renderVehicles(); if(svStationId) renderStationView(); saveGame(true);
+  toast('Fahrzeug gelöscht','ok');
+}
+function fmtDur(ms){ const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000); if(h>=24){ const d=Math.floor(h/24); return `${d} Tag${d>1?'e':''} ${h%24} h`; } return h>0?`${h} h ${m} min`:`${m} min`; }
+function renderSvPersonal(st){
+  const box=document.getElementById('sv-personal');
+  const poolAll=poolPeople(st), poolFree=poolFreePeople(st), vs=vehiclesOfStation(st.id), cur=staffCount(st), inTrain=trainingCountOf(st);
+  const chips=(arr)=> arr.length? arr.map(p=>`<span class="pchip">${p.name}</span>`).join('') : '<span class="pchip empty">—</span>';
+  let html=`<div class="pers-big">👥 ${cur} <span>Personal</span></div>
+    <div class="pers-split"><span class="ps-free">Unverteilt: ${poolAll.length} (${poolFree.length} frei)</span><span class="ps-busy">Fest zugeteilt: ${stationAssignedSum(st)}</span>${inTrain?`<span class="ps-train">🎓 ${inTrain} im Lehrgang</span>`:''}</div>
+    <div class="pers-note">Fest zugeteilte fahren immer auf ihrem Fahrzeug. Unverteilte springen beim Ausrücken auf jedes Fahrzeug auf (bis Maximalbesatzung).</div>
+    <div class="pers-poolbox"><div class="pb-head">Springer (unverteilt)</div><div class="pchips">${chips(poolAll)}</div></div>`;
+  if(vs.length){
+    html+=`<div class="pers-assign">`;
+    vs.forEach(v=>{ const t=VEHICLES[v.type]; const fp=fixedPeople(st,v); const atStation=v.status===2;
+      const minusDis=fp.length<=0||!atStation, plusDis=fp.length>=t.crewMax||poolFree.length<1||!atStation;
+      html+=`<div class="pa-row">
+        <div class="pa-info"><span class="pa-name">${vehName(v)}</span><span class="pa-cap">min ${t.crewMin} · max ${t.crewMax}${!atStation?' · unterwegs':''}</span>
+          <div class="pchips small">${chips(fp)}</div></div>
+        <div class="pa-ctrl">
+          <button class="pa-btn" data-assign="${v.id}" data-d="-1" ${minusDis?'disabled':''}>−</button>
+          <span class="pa-val">${fp.length}</span>
+          <button class="pa-btn" data-assign="${v.id}" data-d="1" ${plusDis?'disabled':''}>+</button>
+        </div></div>`; });
+    html+=`</div>`;
+  }
+  if(st.hireTarget && st.hireTarget>cur){
+    const now=Date.now(); const nextIn=Math.max(0, CONFIG.personnelDayMs-(now-(st.lastHireAt||now)));
+    html+=`<div class="pers-active">
+        <div>Anwerbung läuft — Ziel <b>${st.hireTarget}</b> Personal.</div>
+        <div>Noch <b>${st.hireTarget-cur}</b> Person(en).</div>
+        <div>Nächste Kraft in <b>${fmtDur(nextIn)}</b>.</div>
+        <button class="btn sm" id="sv-cancelhire">Anwerbung abbrechen</button>
+      </div>`;
+  } else {
+    html+=`<div class="pers-form">
+        <div class="pers-hint">Personal anwerben — pro Tag kommt <b>1 Person</b> hinzu, bis die Zielstärke erreicht ist.</div>
+        <label class="fld"><span>Zielstärke</span><input id="sv-hire-target" type="number" min="${cur+1}" max="${CONFIG.maxStaff}" value="${Math.min(CONFIG.maxStaff, cur+5)}" /></label>
+        <button class="btn primary" id="sv-hire">Anwerben starten</button>
+      </div>`;
+  }
+  box.innerHTML=html;
+  box.querySelectorAll('[data-assign]').forEach(b=> b.onclick=()=>assignCrew(b.dataset.assign, parseInt(b.dataset.d)));
+  const c=document.getElementById('sv-cancelhire'); if(c) c.onclick=()=>cancelHire(st.id);
+  const h=document.getElementById('sv-hire'); if(h) h.onclick=()=>startHire(st.id);
+}
+
+/* ---------- Feuerwehr-Akademie ---------- */
+let avId=null, avStationId=null, avCourseId=null, avSelected=new Set();
+const academyById=id=>(state.buildings||[]).find(b=>b.id===id&&b.typeId==='academy');
+function academyRooms(a){ return CONFIG.classroomsForLevel(a.level||1); }
+function personById(pid){ for(const st of state.stations){ const p=(st.roster||[]).find(x=>x.id===pid); if(p) return {p,st}; } return null; }
+function finishDueCourses(now){ let changed=false;
+  academies().forEach(a=>{ if(!a.courses) a.courses=[]; const keep=[];
+    a.courses.forEach(c=>{
+      if((now-(c.startedAt||now)) < (c.durationMs||0)){ keep.push(c); return; }
+      (c.personIds||[]).forEach(id=>{ const r=personById(id); if(r){ r.p.quals=r.p.quals||[]; if(!r.p.quals.includes(c.courseId)) r.p.quals.push(c.courseId); } });
+      changed=true;
+    });
+    a.courses=keep; });
+  return changed;
+}
+function courseTick(){ if(finishDueCourses(Date.now())){ if(avId) renderAcademyView(); renderStations(); if(svStationId) renderStationView(); saveGame(true); toast('Lehrgang abgeschlossen','ok'); } }
+
+function openAcademyView(id){ const a=academyById(id); if(!a) return; avId=id;
+  avStationId = state.stations[0]?state.stations[0].id:null; avCourseId = COURSES[0]?COURSES[0].id:null; avSelected=new Set();
+  renderAcademyView(); showModal('modal-academy'); }
+function renderAcademyView(){
+  const a=academyById(avId); if(!a){ hideModal('modal-academy'); return; }
+  finishDueCourses(Date.now());
+  const rooms=academyRooms(a), used=(a.courses||[]).length, free=rooms-used;
+  document.getElementById('av-title').textContent=`🎓 ${a.name}`;
+  document.getElementById('av-sub').innerHTML=`Level ${a.level} · Klassenräume ${used}/${rooms} belegt · je Raum max. ${CONFIG.classroomCapacity} Personen (gleicher Lehrgang)`;
+
+  // Laufende Lehrgänge
+  let running='';
+  if(used){ running=(a.courses).map(c=>{ const co=courseById(c.courseId); const rem=Math.max(0,(c.durationMs||0)-(Date.now()-(c.startedAt||0)));
+      const names=(c.personIds||[]).map(id=>{ const r=personById(id); return r?r.p.name:'—'; });
+      return `<div class="ac-room"><div class="ac-room-top"><span class="ac-cname">${co?co.name:'Lehrgang'}</span><span class="ac-time">⏳ ${fmtDur(rem)}</span></div>
+        <div class="ac-people">${names.map(n=>`<span class="pchip">${n}</span>`).join('')||'<span class="pchip empty">—</span>'}</div></div>`; }).join('');
+  } else running=`<div class="empty-hint" style="padding:14px">Kein Klassenraum belegt.</div>`;
+
+  // Neuer Lehrgang
+  const stationOpts=state.stations.map(s=>`<option value="${s.id}"${s.id===avStationId?' selected':''}>${s.name}</option>`).join('') || '<option value="">— keine Wache —</option>';
+  const courseOpts=COURSES.length? COURSES.map(c=>`<option value="${c.id}"${c.id===avCourseId?' selected':''}>${c.name} (${fmtDur(c.durationMs)})</option>`).join('') : '<option value="">— keine Lehrgänge —</option>';
+  const st=avStationId?stationById(avStationId):null;
+  const co=courseById(avCourseId);
+  const availAll=st?stationAvailablePeople(st):[];
+  // Nur Personen ohne diese Qualifikation und mit erfüllter Voraussetzung
+  const avail=availAll.filter(p=> co ? (!hasQual(p,co.id) && (!co.requiresCourse || hasQual(p,co.requiresCourse))) : true);
+  const qb=p=>(p.quals||[]).map(q=>`<span class="qbadge">${qualShort(q)}</span>`).join('');
+  let people = avail.length? avail.map(p=>`<label class="ac-pick"><input type="checkbox" data-pp="${p.id}" ${avSelected.has(p.id)?'checked':''}/> ${p.name} ${qb(p)}</label>`).join('')
+    : `<div class="pers-hint">Kein berechtigtes Personal an dieser Wache${co&&co.requiresCourse?` (Voraussetzung: ${qualLabel(co.requiresCourse)})`:''}.</div>`;
+  const prereqNote = co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: abgeschlossener Lehrgang „${qualLabel(co.requiresCourse)}“.</div>`:'';
+  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost;
+  const upCost=CONFIG.academyUpgradeCost(a.level), canUp=a.level<CONFIG.maxAcademyLevel;
+
+  document.getElementById('av-content').innerHTML=`
+    <div class="ac-section-h">Laufende Lehrgänge</div>
+    <div class="ac-rooms">${running}</div>
+    <div class="ac-section-h">Neuen Lehrgang starten</div>
+    <div class="ac-form">
+      <label class="fld"><span>Wache</span><select id="av-station">${stationOpts}</select></label>
+      <label class="fld"><span>Lehrgang</span><select id="av-course">${courseOpts}</select></label>
+      ${prereqNote}
+      <div class="fld"><span>Personal (<span id="av-count">${avSelected.size}</span>/${CONFIG.classroomCapacity})</span><div class="ac-people-pick">${people}</div></div>
+      <button class="btn primary" id="av-start" ${canStart?'':'disabled'}>${free<=0?'Alle Klassenräume belegt':(COURSES.length===0?'Keine Lehrgänge verfügbar':(state.credits<CONFIG.courseCost?`Zu wenig Guthaben (${fmt(CONFIG.courseCost)} €)`:`Lehrgang starten · ${fmt(CONFIG.courseCost)} €`))}</button>
+    </div>
+    <div class="sv-actions"><button class="btn sm ghost" id="av-upgrade" ${canUp?'':'disabled'}>${canUp?`⬆️ Akademie ausbauen (${fmt(upCost)} €)`:'Max. Level'}</button></div>`;
+
+  document.getElementById('av-station').onchange=e=>{ avStationId=e.target.value; avSelected=new Set(); renderAcademyView(); };
+  document.getElementById('av-course').onchange=e=>{ avCourseId=e.target.value; avSelected=new Set(); renderAcademyView(); };
+  document.getElementById('av-content').querySelectorAll('[data-pp]').forEach(cb=> cb.onchange=()=>{
+    if(cb.checked){ if(avSelected.size>=CONFIG.classroomCapacity){ cb.checked=false; toast(`Max. ${CONFIG.classroomCapacity} pro Klassenraum`,'warn'); return; } avSelected.add(cb.dataset.pp); }
+    else avSelected.delete(cb.dataset.pp);
+    updateAcademyStart();
+  });
+  const sb2=document.getElementById('av-start'); if(sb2) sb2.onclick=startCourse;
+  const up=document.getElementById('av-upgrade'); if(up) up.onclick=()=>upgradeAcademy(avId);
+}
+function updateAcademyStart(){
+  const a=academyById(avId); if(!a) return;
+  const st=avStationId?stationById(avStationId):null;
+  const free=academyRooms(a)-(a.courses||[]).length;
+  const cnt=document.getElementById('av-count'); if(cnt) cnt.textContent=avSelected.size;
+  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost;
+  const b=document.getElementById('av-start'); if(b) b.disabled=!canStart;
+}
+function startCourse(){
+  const a=academyById(avId); if(!a) return;
+  const rooms=academyRooms(a); if((a.courses||[]).length>=rooms){ toast('Alle Klassenräume belegt','warn'); return; }
+  const co=courseById(avCourseId); if(!co){ toast('Kein Lehrgang gewählt','warn'); return; }
+  const ids=[...avSelected]; if(!ids.length){ toast('Kein Personal gewählt','warn'); return; }
+  if(ids.length>CONFIG.classroomCapacity){ toast(`Max. ${CONFIG.classroomCapacity} pro Klassenraum`,'warn'); return; }
+  if(state.credits<CONFIG.courseCost){ toast(`Nicht genug Guthaben (${fmt(CONFIG.courseCost)} € pro Lehrgang)`,'err'); return; }
+  state.credits-=CONFIG.courseCost;
+  a.courses.push({ id:nid(), courseId:co.id, stationId:avStationId, personIds:ids, startedAt:Date.now(), durationMs:co.durationMs });
+  avSelected=new Set();
+  renderTopbar(); renderAcademyView(); renderStations(); if(svStationId) renderStationView(); saveGame(true);
+  toast(`Lehrgang „${co.name}“ gestartet (${ids.length} Personen, −${fmt(CONFIG.courseCost)} €)`,'ok');
+}
+function upgradeAcademy(id){ const a=academyById(id); if(!a||a.level>=CONFIG.maxAcademyLevel) return;
+  const cost=CONFIG.academyUpgradeCost(a.level); if(state.credits<cost){ toast('Nicht genug Guthaben','err'); return; }
+  state.credits-=cost; a.level++; renderTopbar(); renderAcademyView(); saveGame(true); toast(`Akademie auf Level ${a.level} (${academyRooms(a)} Klassenräume)`,'ok'); }
+
+/* Wache bearbeiten (Name, Nummer, Ort) */
+let editStationId=null;
+function openStationEdit(id){ const st=stationById(id); if(!st) return; editStationId=id; fillStationForm(st); showModal('modal-station'); }
+function fillStationForm(st){
+  document.getElementById('se-name').value=st.name||'';
+  document.getElementById('se-number').value=st.number||'';
+  document.getElementById('se-ort').value=st.ort||'';
+  updateCallsignPreview();
+}
+function updateCallsignPreview(){
+  const ort=document.getElementById('se-ort').value.trim()||'Ort';
+  const num=document.getElementById('se-number').value.trim()||'1';
+  document.getElementById('se-preview').textContent=`Florian-${ort}-HLF-${num}-1`;
+}
+function saveStationEdit(){
+  const st=stationById(editStationId); if(!st) return;
+  st.name=document.getElementById('se-name').value.trim()||st.name;
+  const num=parseInt(document.getElementById('se-number').value); if(!isNaN(num)) st.number=num;
+  st.ort=document.getElementById('se-ort').value.trim();
+  hideModal('modal-station'); refreshStationMarker(st);
+  renderStations(); renderVehicles(); renderMissions(); if(svStationId===st.id) renderStationView(); saveGame(true);
+  toast(`${st.name} aktualisiert`,'ok');
+}
+
+/* Fahrzeug-Kauf */
+let buyStationId=null, buyCategory=VEHICLE_CATEGORIES[0].id;
+const CAP_MAX={ water:2500, foam:300, pump:2500 };  // Balken-Referenzwerte
+function openBuyModal(stationId){ openStationView(stationId, 'shop'); }
+function renderBuyMenu(){
+  const st=stationById(buyStationId); if(!st) return;
+  const bays=CONFIG.baysForLevel(st.level), used=vehiclesOfStation(st.id).length, free=bays-used;
+  document.getElementById('buy-sub').innerHTML=`<b style="color:${free>0?'var(--ok)':'var(--danger)'}">${free}</b> von ${bays} Stellplätzen frei · Guthaben ${fmt(state.credits)} €`;
+
+  // Tabs
+  const tabsEl=document.getElementById('buy-tabs');
+  tabsEl.innerHTML=VEHICLE_CATEGORIES.map(c=>{
+    const n=Object.values(VEHICLES).filter(v=>v.category===c.id).length;
+    return `<button class="buy-tab${c.id===buyCategory?' active':''}" data-cat="${c.id}">${c.name} <span class="bt-n">${n}</span></button>`;
+  }).join('');
+  tabsEl.querySelectorAll('[data-cat]').forEach(b=> b.onclick=()=>{ buyCategory=b.dataset.cat; renderBuyMenu(); });
+
+  // Karten
+  const grid=document.getElementById('buy-grid');
+  const list=Object.values(VEHICLES).filter(v=>v.category===buyCategory);
+  grid.innerHTML=list.map(t=>{
+    const owned=state.vehicles.filter(v=>v.type===t.id).length;
+    const afford=state.credits>=t.cost, canBuy=afford&&free>0;
+    const bar=(val,max,cls)=> val>0?`<div class="cap"><div class="cap-lbl">${cls==='water'?'💧 Wasser':cls==='foam'?'🫧 Schaum':'⚙️ Pumpe'}<span>${val}${cls==='pump'?' l/min':' L'}</span></div><div class="cap-track"><div class="cap-fill ${cls}" style="width:${Math.min(100,val/max*100)}%"></div></div></div>`:'';
+    const btnLabel = free<=0 ? 'Kein Stellplatz frei' : (!afford ? 'Zu wenig Guthaben' : `Kaufen · ${fmt(t.cost)} €`);
+    return `<div class="vcard">
+      <div class="vc-head">
+        <div class="vc-ico">${t.icon}</div>
+        <div class="vc-title"><span class="vc-name">${t.name}</span><span class="vc-full">${t.fullname}</span></div>
+        ${owned>0?`<span class="vc-owned">${owned}× im Bestand</span>`:''}
+      </div>
+      <div class="vc-specs">
+        <div class="vc-spec">👥 Besatzung <b>${t.crewMin}–${t.crewMax}</b></div>
+        <div class="vc-spec">🏷️ ${t.desc}</div>
+        ${t.requiresCourse?`<div class="vc-spec" style="color:#6aa8ff">🎓 benötigt: ${qualLabel(t.requiresCourse)}</div>`:''}
+      </div>
+      <div class="vc-bars">${bar(t.water,CAP_MAX.water,'water')}${bar(t.foam,CAP_MAX.foam,'foam')}${bar(t.pump,CAP_MAX.pump,'pump')}</div>
+      <button class="btn ${canBuy?'primary':''} vc-buy" data-buy-type="${t.id}" ${canBuy?'':'disabled'}>${btnLabel}</button>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('[data-buy-type]').forEach(b=> b.onclick=()=> buyVehicle(b.dataset.buyType));
+}
+function buyVehicle(typeId){ const st=stationById(buyStationId), t=VEHICLES[typeId]; if(!st||!t) return;
+  if(vehiclesOfStation(st.id).length>=CONFIG.baysForLevel(st.level)){ toast('Kein freier Stellplatz','warn'); return; }
+  if(state.credits<t.cost){ toast('Nicht genug Guthaben','err'); return; }
+  state.credits-=t.cost;
+  const seq=state.vehicles.filter(x=>x.stationId===st.id && x.type===t.id).length+1;
+  const v={ id:nid(), type:t.id, stationId:st.id, status:2, lat:st.lat, lng:st.lng, water:t.water, foam:t.foam,
+    targetMissionId:null, nextMissionId:null, seq, assigned:0 };
+  state.vehicles.push(v);
+  renderStations(); renderVehicles(); renderTopbar(); renderStationView();  // Fenster offen lassen, Zähler aktualisieren
+  toast(`${vehName(v)} beschafft`,'ok'); saveGame(true);
+}
+
+/* Einsatz-Modal */
+let openMissionId=null;
+function openMissionModal(id){ const m=missionById(id); if(!m) return; openMissionId=id;
+  const t=missionType(m.type); document.getElementById('mm-title').textContent=`${t.code} · ${t.name}`;
+  renderMissionModal(); showModal('modal-mission'); }
+function renderMissionModal(){
+  const m=missionById(openMissionId); if(!m){ hideModal('modal-mission'); return; }
+  const t=missionType(m.type), box=document.getElementById('mm-content');
+  const onScene=m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id).length;
+  const enRoute=m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===3&&v.targetMissionId===m.id).length;
+  const effTotal=(m.status==='working'&&m.effMinutes)?m.effMinutes:effMissionMinutes(t, Math.max(1,onScene));
+  const rest=(m.status==='working'&&m.effMinutes)?`${mmss(m.effMinutes*(1-m.progress))} / ${mmss(m.effMinutes)}`:'—';
+  const avail=state.vehicles.filter(v=>v.status===2);
+  const busy=state.vehicles.filter(v=>[1,3,4,6].includes(v.status));
+
+  // Reihenfolge: einsatzbereit zuerst, dann nach geschätzter Anfahrtszeit
+  const statusRank={2:0,1:1,3:2,4:3,6:4};
+  const roster=[...avail,...busy].sort((a,b)=>{
+    const ra=statusRank[a.status]??9, rb=statusRank[b.status]??9;
+    if(ra!==rb) return ra-rb;
+    return estimateDriveSeconds({lat:a.lat,lng:a.lng},{lat:m.lat,lng:m.lng})-estimateDriveSeconds({lat:b.lat,lng:b.lng},{lat:m.lat,lng:m.lng});
+  });
+
+  let rows = roster.length?'':`<div class="empty-hint" style="padding:14px">Noch keine Fahrzeuge. Beschaffe an einer Wache ein Fahrzeug.</div>`;
+  roster.forEach(v=>{ const st=stationById(v.stationId);
+    const here = v.targetMissionId===m.id;           // fährt an / ist an DIESEM Einsatz
+    const queued = v.nextMissionId===m.id;           // als Folgeeinsatz eingeplant
+    const eta = etaText(v,m);
+    let right, act='';
+    if(here){ right=`<button class="btn sm alz-recall" data-recall="${v.id}">↩ Einrücken</button>`; }
+    else if(queued){ right=`<button class="btn sm" data-unqueue="${v.id}">Folge entfernen</button>`; }
+    else { right=`<span class="alz-eta">⏱ ${eta} min</span>`; act=`data-disp="${v.id}"`; }
+    rows+=`<div class="alz-row${(here||queued)?' assigned':''}" ${act}>
+      <span class="alz-fms">FMS<span class="fnum fnum-${v.status}">${v.status}</span></span>
+      <span class="alz-call">${vehName(v)}</span>
+      <span class="alz-station">${st?st.name:''}</span>
+      ${right}
+    </div>`; });
+
+  const foamReq=t.need.foam>0?`<span class="tag foam">🫧 ${t.need.foam} L Schaum</span>`:'';
+  const waterReq=t.need.water>0?`<span class="tag water">💧 ${t.need.water} L Wasser</span>`:'';
+  const sup=missionSupply(m);
+  box.innerHTML=`
+    <div style="color:var(--text-mut);font-size:13px">📍 ${m.address}</div>
+    <div class="tags">
+      ${waterReq}${foamReq}
+      <span class="tag veh">🚒 ${(t.req&&t.req.length)?t.req.map(r=>r.count+'× '+reqLabel(r)).join(', '):'—'}</span>
+      <span class="tag time">⏱ ${mmss(t.minutes)} → ${mmss(effMissionMinutes(t,CONFIG.usefulVehicleCap))}</span>
+    </div>
+    ${missionProgressHTML(m)}
+    <div style="font-size:12px;color:var(--text-dim)">Vor Ort: <b style="color:var(--text)">${sup.onScene}</b> · Anfahrt: <b style="color:var(--text)">${enRoute}</b> · Löschmittel-Deckung <b style="color:${sup.coverage>=1?'var(--ok)':'var(--warn)'}">${Math.round(sup.coverage*100)} %</b> · Belohnung <b style="color:var(--warn)">${fmt(missionReward(t))} €</b></div>
+    <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-mut);margin-top:2px">Fahrzeug alarmieren <span style="font-weight:400;text-transform:none;color:var(--text-dim)">— Zeile antippen (belegte werden umgeleitet/als Folge eingeplant)</span></div>
+    <div class="alz-list">${rows}</div>`;
+  box.querySelectorAll('[data-disp]').forEach(b=>b.onclick=()=>{ dispatch(b.dataset.disp,m.id); setTimeout(renderMissionModal,60); });
+  box.querySelectorAll('[data-recall]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); recallVehicle(b.dataset.recall); setTimeout(renderMissionModal,60); });
+  box.querySelectorAll('[data-unqueue]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const v=state.vehicles.find(x=>x.id===b.dataset.unqueue); if(v){ v.nextMissionId=null; toast(`${vehName(v)}: Folgeeinsatz entfernt`,'ok'); renderVehicles(); renderMissions(); saveGame(true); } setTimeout(renderMissionModal,60); });
+}
+
+/* Fortschritts-/Löschmittelanzeige (geliefert vs. benötigt + Zeitbalken mit Deckungs-Marke) */
+function missionProgressHTML(m){
+  const t=missionType(m.type), sup=missionSupply(m), rs=missionReqStatus(m);
+  let html='';
+  if(rs.items.length){
+    html += `<div class="reqveh">${rs.items.map(it=>`<span class="reqv ${it.have>=it.count?'ok':''}">${it.have}/${it.count} ${it.label}</span>`).join('')}</div>`;
+  }
+  const sbar=(cur,need,cls,ic)=> need>0
+    ? `<div class="sbar"><span class="sl">${ic}</span><div class="st"><div class="sf ${cls}" style="width:${Math.min(100,cur/need*100)}%"></div></div><span class="sv">${Math.round(cur)}/${need} L</span></div>` : '';
+  html += sbar(sup.sumW,sup.needW,'water','💧') + sbar(sup.sumF,sup.needF,'foam','🫧');
+  if(m.status==='waiting'){
+    const miss=rs.items.filter(it=>it.have<it.count).map(it=>`${it.count-it.have}× ${it.label}`);
+    html += `<div class="waitnote">Warte auf Fahrzeuge${miss.length?': fehlt '+miss.join(', '):''}</div>`;
+  } else if(m.status==='working'){
+    const eff=m.effMinutes||effMissionMinutes(t,Math.max(1,sup.onScene));
+    html += `<div class="progress"><div class="track"><div class="fill" style="width:${Math.min(100,(m.progress||0)*100)}%"></div>${sup.coverage<1?`<div class="capline" style="left:${(sup.coverage*100).toFixed(0)}%"></div>`:''}</div><div class="rest">⏱ ${mmss(eff*(1-(m.progress||0)))} / ${mmss(eff)}</div></div>`;
+    const remW=Math.max(0,sup.needW-sup.sumW), remF=Math.max(0,sup.needF-sup.sumF);
+    if(sup.coverage<1 && (m.progress||0)>=sup.coverage-0.002){
+      const needs=[]; if(remW>0) needs.push(`${remW} L Wasser`); if(remF>0) needs.push(`${remF} L Schaum`);
+      if(needs.length) html += `<div class="stall">⛔ Fortschritt gestoppt — es fehlen ${needs.join(' + ')}</div>`;
+    }
+  }
+  return html;
+}
+
+/* Einsatz-Liste */
+function renderMissions(){
+  const list=document.getElementById('missions-list'), cnt=document.getElementById('missions-count');
+  const active=state.missions.filter(m=>m.status!=='done');
+  cnt.textContent=active.length; cnt.classList.toggle('zero',active.length===0);
+  if(state.missions.length===0){ list.innerHTML=`<div class="empty-hint">Keine Einsätze.<br>Sobald eine Wache steht, treten automatisch Einsätze auf.</div>`;
+    if(document.getElementById('modal-mission').classList.contains('show')) renderMissionModal(); return; }
+  list.innerHTML='';
+  for(const m of state.missions){
+    const t=missionType(m.type);
+    const badge= m.status==='done'?'<span class="m-badge done">fertig</span>'
+      : m.status==='working'?'<span class="m-badge working">im Einsatz</span>'
+      : m.status==='waiting'?'<span class="m-badge wait">wartet</span>'
+      : '<span class="m-badge">offen</span>';
+    const body=`<div class="tags"><span class="tag time">⏱ ${mmss(t.minutes)}</span></div>${missionProgressHTML(m)}`;
+    const el=document.createElement('div'); el.className='mission '+missionCls(m);
+    el.innerHTML=`<div class="m-top"><span class="mcode ${t.cat}">${t.code}</span><span class="m-name">${t.name}</span>${badge}</div>
+      <div class="m-addr">📍 ${m.address}</div>${body}`;
+    el.onclick=()=>{ map.panTo([m.lat,m.lng]); openMissionModal(m.id); };
+    list.appendChild(el);
+  }
+  if(document.getElementById('modal-mission').classList.contains('show')) renderMissionModal();
+}
+
+/* ------------------------- FAHRZEUG-STATUS (Tab) ------------------------- */
+function vehicleActivity(v){
+  if(v.status===3){ const m=missionById(v.targetMissionId); return m?`Anfahrt → ${missionType(m.type).name}`:'Auf Anfahrt'; }
+  if(v.status===4){ const m=missionById(v.targetMissionId); return m?`Am Einsatz · ${missionType(m.type).name}`:'Am Einsatzort'; }
+  if(v.status===1) return 'Rückfahrt zur Wache';
+  if(v.status===6) return 'Außer Dienst';
+  return 'Einsatzbereit auf Wache';
+}
+function vehicleRow(v){
+  const t=VEHICLES[v.type];
+  let next='';
+  if(v.nextMissionId){ const nm=missionById(v.nextMissionId); if(nm) next=`<span class="v-next">→ Folge: ${missionType(nm.type).name}</span>`; }
+  const recall=[3,4].includes(v.status)?`<button class="btn sm v-recall" data-recall="${v.id}" title="Zur Wache einrücken">↩ Einrücken</button>`:'';
+  const follow=(v.nextMissionId && [3,4].includes(v.status))?`<button class="btn sm" data-follow="${v.id}" title="Sofort zum Folgeeinsatz fahren">→ Folge</button>`:'';
+  const custom=(v.customName&&v.customName.trim())?' <span class="v-custom" title="Eigener Name">✱</span>':'';
+  return `<div class="vrow">
+    <span class="v-ico">${t.icon}</span>
+    <div class="v-main">
+      <span class="v-call">${vehName(v)}${custom}</span>
+      <span class="v-act">${vehicleActivity(v)} ${next}</span>
+    </div>
+    <span class="fms fms-${v.status}"><span class="n">${v.status}</span></span>
+    <button class="btn sm v-edit" data-vedit="${v.id}" title="Namen ändern">✏️</button>
+    ${follow}
+    ${recall}
+    <button class="btn sm v-redispatch" data-redispatch="${v.id}" title="Einsatz zuweisen">Alarm</button>
+  </div>`;
+}
+function renderVehicles(){
+  const list=document.getElementById('vehicles-list'), cnt=document.getElementById('vehicles-count');
+  if(!list) return;
+  cnt.textContent=state.vehicles.length; cnt.classList.toggle('zero',state.vehicles.length===0);
+  if(state.vehicles.length===0){ list.innerHTML=`<div class="empty-hint">Noch keine Fahrzeuge.<br>Beschaffe an einer Wache ein Fahrzeug.</div>`; return; }
+  let html='';
+  for(const st of state.stations){
+    const vs=vehiclesOfStation(st.id); if(!vs.length) continue;
+    html+=`<div class="vgroup-head">${st.name} <span class="vg-cnt">${vs.length} Fzg</span></div>`;
+    vs.forEach(v=> html+=vehicleRow(v));
+  }
+  list.innerHTML=html;
+  list.querySelectorAll('[data-redispatch]').forEach(b=> b.onclick=()=> openRedispatch(b.dataset.redispatch));
+  list.querySelectorAll('[data-recall]').forEach(b=> b.onclick=()=> recallVehicle(b.dataset.recall));
+  list.querySelectorAll('[data-follow]').forEach(b=> b.onclick=()=> goToFollowUp(b.dataset.follow));
+  list.querySelectorAll('[data-vedit]').forEach(b=> b.onclick=()=> openVehicleEdit(b.dataset.vedit));
+}
+/* Fahrzeugname manuell setzen (überschreibt automatischen Rufnamen) */
+let editVehicleId=null;
+function openVehicleEdit(id){
+  const v=state.vehicles.find(x=>x.id===id); if(!v) return; editVehicleId=id;
+  const inp=document.getElementById('ve-name');
+  inp.value=v.customName||''; inp.placeholder=vehAutoName(v);
+  document.getElementById('ve-auto').textContent=vehAutoName(v);
+  showModal('modal-vehicle'); setTimeout(()=>inp.focus(),50);
+}
+function saveVehicleEdit(){
+  const v=state.vehicles.find(x=>x.id===editVehicleId); if(!v) return;
+  const val=document.getElementById('ve-name').value.trim();
+  v.customName = val || null;
+  hideModal('modal-vehicle'); renderVehicles(); renderStations(); renderMissions();
+  toast(val?`Umbenannt in „${val}“`:'Automatischer Rufname wiederhergestellt','ok'); saveGame(true);
+}
+function resetVehicleName(){ document.getElementById('ve-name').value=''; }
+/* Rückalarmieren: Fahrzeug von Anfahrt/Einsatz zur Wache einrücken lassen */
+function recallVehicle(id){
+  const v=state.vehicles.find(x=>x.id===id); if(!v) return;
+  if(v.status===1||v.status===2){ toast(`${vehName(v)} ist bereits auf dem Rückweg / auf Wache`,'warn'); return; }
+  v.nextMissionId=null;               // etwaigen Folgeeinsatz verwerfen
+  sendVehicleHome(v);
+  toast(`${vehName(v)} rückt ein`,'ok');
+}
+function goToFollowUp(id){
+  const v=state.vehicles.find(x=>x.id===id); if(!v) return;
+  const nm=missionById(v.nextMissionId); if(!nm){ toast('Kein Folgeeinsatz vorhanden','warn'); return; }
+  v.nextMissionId=null;
+  routeVehicleTo(v, nm, CONFIG.outboundFactor);   // aktuellen Einsatz verlassen, sofort zum Folgeeinsatz
+  toast(`${vehName(v)} fährt zum Folgeeinsatz: ${missionType(nm.type).name}`,'ok');
+}
+
+/* Fahrzeug einem (anderen) Einsatz zuweisen */
+function openRedispatch(vehicleId){
+  const v=state.vehicles.find(x=>x.id===vehicleId); if(!v) return;
+  const active=state.missions.filter(m=>m.status!=='done');
+  const box=document.getElementById('rd-content');
+  document.getElementById('rd-title').textContent=`${vehName(v)} — Einsatz zuweisen`;
+  if(!active.length && ![3,4].includes(v.status)){ box.innerHTML=`<div class="empty-hint">Aktuell keine offenen Einsätze.</div>`; showModal('modal-redispatch'); return; }
+  const hint = (v.status===3||v.status===4) ? `<div class="rd-hint">Fahrzeug ist im Einsatz — die Auswahl wird als <b>Folgeeinsatz</b> eingeplant (rückt direkt nach dem aktuellen Einsatz aus).</div>`
+    : (v.status===1) ? `<div class="rd-hint">Fahrzeug ist auf Rückfahrt — wird <b>sofort umgeleitet</b>.</div>`
+    : (v.status===6) ? `<div class="rd-hint">Fahrzeug ist außer Dienst — rückt aus, sobald wieder dienstbereit.</div>` : '';
+  const recallRow = [3,4].includes(v.status) ? `<div class="veh-pick"><span style="font-size:16px">↩</span>
+      <span class="vp-name">Zur Wache einrücken</span><span class="vp-meta">Einsatz abbrechen</span>
+      <button class="btn sm" data-recall-rd="1">Einrücken</button></div>` : '';
+  box.innerHTML = hint + recallRow + active.map(m=>{ const t=missionType(m.type);
+    const already = v.targetMissionId===m.id||v.nextMissionId===m.id;
+    return `<div class="veh-pick"><span class="mcode ${t.cat}">${t.code}</span>
+      <span class="vp-name">${t.name}</span><span class="vp-meta">${m.address}</span>
+      <button class="btn sm primary" data-rd="${m.id}" ${already?'disabled':''}>${already?'zugewiesen':'Alarm'}</button></div>`; }).join('');
+  box.querySelectorAll('[data-rd]').forEach(b=> b.onclick=()=>{ dispatch(vehicleId,b.dataset.rd); hideModal('modal-redispatch'); });
+  const rb=box.querySelector('[data-recall-rd]'); if(rb) rb.onclick=()=>{ recallVehicle(vehicleId); hideModal('modal-redispatch'); };
+  showModal('modal-redispatch');
+}
+
+/* ------------------------- FUNK-FENSTER ------------------------- */
+function renderFunk(){
+  const list=document.getElementById('funk-list'), cnt=document.getElementById('funk-count');
+  if(!list) return;
+  cnt.textContent=funkLog.length; cnt.classList.toggle('zero',funkLog.length===0);
+  if(!funkLog.length){ list.innerHTML=`<div class="funk-empty">Noch kein Funkverkehr.</div>`; return; }
+  list.innerHTML=funkLog.map(e=> e.status
+    ? `<div class="funk-row"><span class="f-time">${e.t}</span><span class="f-txt"><b>${e.name}</b> meldet sich Status <span class="fbox fbox-${e.status}">${e.status}</span> ${e.label}${e.note?' · '+e.note:''}</span></div>`
+    : `<div class="funk-row"><span class="f-time">${e.t}</span><span class="f-txt">📻 <b>${e.name}</b>: ${e.note}</span></div>`
+  ).join('');
+}
+
+/* Tabs */
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.getElementById('tab-missions').classList.toggle('hidden',name!=='missions');
+  document.getElementById('tab-vehicles').classList.toggle('hidden',name!=='vehicles');
+  document.getElementById('tab-stations').classList.toggle('hidden',name!=='stations');
+  if(name==='vehicles') renderVehicles(); else if(name==='stations') renderStations(); else renderMissions();
+}
+
+/* Einsatzarten-Übersicht */
+function renderCatalog(){
+  const box=document.getElementById('catalog-list'); box.innerHTML='';
+  if(!MISSION_TYPES.length){ box.innerHTML=`<div class="empty-hint">Noch keine Einsätze definiert.<br>Trage neue Einsätze über die Vorlage in <b>MISSION_TYPES</b> ein.</div>`; showModal('modal-catalog'); return; }
+  MISSION_TYPES.forEach(t=>{
+    const foamTag=t.need.foam>0?`<span class="tag foam">🫧 ${t.need.foam} L Schaum</span>`:'';
+    const solo=t.minutes, best=effMissionMinutes(t, CONFIG.usefulVehicleCap);
+    const waterTag=t.need.water>0?`<span class="tag water">💧 ${t.need.water} L Wasser</span>`:'';
+    const el=document.createElement('div'); el.className='cat-row';
+    el.innerHTML=`<div class="cr-top"><span class="mcode ${t.cat}">${t.code}</span><span class="cr-name">${t.name}</span><span class="cr-reward">+${fmt(missionReward(t))} €</span></div>
+      <div class="cr-tags">
+        ${waterTag}${foamTag}
+        <span class="tag veh">🚒 ${(t.req&&t.req.length)?t.req.map(r=>r.count+'× '+reqLabel(r)).join(', '):'ab '+t.minVehicles}</span>
+        <span class="tag time">⏱ ${mmss(solo)} min</span>
+      </div>
+      <div class="cr-scale">Dauer: ${mmss(solo)} (1 Fzg) → ${mmss(best)} (2 Fzg, −25 %) · ab 3 Fzg kein Zeitgewinn${t.need.foam>0?' · braucht schaumfähiges Fahrzeug':''}${t.need.water===0&&t.need.foam===0?' · kein Löschmittel nötig':''}</div>`;
+    box.appendChild(el);
+  });
+  showModal('modal-catalog');
+}
+
+/* Rebuild nach Load/Import */
+function rebuildEverything(){
+  routeLayer.clearLayers(); stationLayer.clearLayers(); missionLayer.clearLayers(); vehicleLayer.clearLayers(); buildingLayer.clearLayers();
+  if(state.view) map.setView([state.view.lat,state.view.lng],state.view.zoom);
+  state.stations.forEach(addStationMarker);
+  (state.buildings||[]).forEach(b=>{ b.marker=null; addBuildingMarker(b); });
+  state.missions.forEach(m=>{ if(m.status!=='done') addMissionMarker(m); });
+  state.vehicles.forEach(v=>{ v.marker=null; refreshVehicleMarker(v); });
+  renderStations(); renderMissions(); renderVehicles(); renderFunk(); renderTopbar(); if(document.getElementById('speed-ctl')) renderSpeed();
+}
+/* Nach dem Laden fahrende Fahrzeuge (Status 1/3) mit frischer Route fortsetzen */
+async function resumeDriving(){
+  for(const v of state.vehicles){
+    try{
+      if(v.status===3){
+        const m=missionById(v.targetMissionId);
+        if(!m || m.status==='done'){ sendVehicleHome(v); continue; }
+        const route=await getRoute({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng});
+        route.coords.push({lat:m.lat,lng:m.lng}); startDrive(v,route.coords,route.duration,CONFIG.outboundFactor);
+      } else if(v.status===1){
+        const st=stationById(v.stationId); if(!st){ v.status=2; refreshVehicleMarker(v); continue; }
+        const route=await getRoute({lat:v.lat,lng:v.lng},{lat:st.lat,lng:st.lng});
+        route.coords.push({lat:st.lat,lng:st.lng}); startDrive(v,route.coords,route.duration,CONFIG.returnFactor);
+      }
+    }catch(e){ console.error('resume',e); }
+  }
+}
+
+/* Toasts / Modals */
+function toast(msg,kind='ok'){ const t=document.createElement('div'); t.className='toast '+kind; t.textContent=msg;
+  document.getElementById('toasts').appendChild(t); setTimeout(()=>{ t.style.opacity='0'; t.style.transition='.3s'; setTimeout(()=>t.remove(),300); },2600); }
+function showModal(id){ document.getElementById(id).classList.add('show'); }
+function hideModal(id){ document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=e=>e.target.closest('.modal-bg').classList.remove('show'));
+document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }));
+
+/* Suche */
+document.getElementById('search').addEventListener('keydown',async e=>{
+  if(e.key!=='Enter') return; const q=e.target.value.trim(); if(!q) return;
+  try{ const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=de&q=${encodeURIComponent(q)}`);
+    const data=await res.json(); if(data&&data[0]) map.setView([+data[0].lat,+data[0].lon],14); else toast('Ort nicht gefunden','warn');
+  }catch(err){ toast('Suche nicht verfügbar','err'); }
+});
+
+/* UI-Events */
+document.getElementById('btn-build').onclick=openBuildMenu;
+document.getElementById('btn-build-cancel').onclick=()=>{ setBuildMode(false); pendingBuild=null; };
+document.getElementById('build-start').onclick=startBuildPlacement;
+document.getElementById('btn-catalog').onclick=renderCatalog;
+function toggleMenu(force){ const m=document.getElementById('topbar-menu'); m.classList.toggle('hidden', force===undefined?undefined:!force); }
+function closeMenu(){ document.getElementById('topbar-menu').classList.add('hidden'); }
+function openShopQuick(){ const st = (svStationId&&stationById(svStationId)) || state.stations[0]; if(!st){ toast('Erst eine Wache bauen','warn'); return; } openStationView(st.id,'shop'); }
+function openShop(){ document.getElementById('shop-real').innerHTML='<div class="empty-hint" style="padding:50px 16px;font-size:15px">🚧 Shop momentan nicht verfügbar.</div>'; showModal('modal-shop'); }
+async function renderShop(){
+  const box=document.getElementById('shop-real'); box.innerHTML='<div class="empty-hint" style="padding:30px">Lade Angebote …</div>';
+  try{
+    const { data, error } = await sb.from('shop_products').select('*').eq('active',true).order('sort');
+    if(error) throw error;
+    if(!data || !data.length){ box.innerHTML='<div class="empty-hint" style="padding:40px 16px">Noch keine Angebote.</div>'; return; }
+    box.innerHTML=data.map(p=>`<div class="shop-item">
+        <div class="si-info"><span class="si-name">${p.name}</span><span class="si-credits">+ ${Number(p.credits).toLocaleString('de-DE')} € Ingame</span></div>
+        <button class="btn primary" data-buy-prod="${p.id}">${(p.price_cents/100).toLocaleString('de-DE',{minimumFractionDigits:2})} ${(p.currency||'eur').toUpperCase()}</button>
+      </div>`).join('');
+    box.querySelectorAll('[data-buy-prod]').forEach(b=> b.onclick=()=>buyProduct(b.dataset.buyProd));
+  }catch(e){ box.innerHTML='<div class="empty-hint" style="padding:30px">Shop nicht verfügbar. (Ist das Shop-SQL ausgeführt?)</div>'; console.error('shop',e); }
+}
+async function buyProduct(id){
+  toast('Weiterleitung zu Stripe …','ok');
+  try{
+    const base=location.origin+location.pathname;
+    const { data, error } = await sb.functions.invoke('create-checkout',{ body:{ token:AUTH.token, productId:id, successUrl:base, cancelUrl:base } });
+    if(error){
+      let detail=error.message||'Fehler';
+      try{ const b=await error.context.json(); if(b&&b.error) detail=b.error; }
+      catch(_){ try{ const t=await error.context.text(); if(t) detail=t; }catch(__){} }
+      toast('Checkout-Fehler: '+detail,'err'); console.error('checkout',error,detail); return;
+    }
+    if(data && data.error){ toast(data.error,'err'); return; }
+    if(data && data.url){ location.href=data.url; return; }
+    toast('Keine Checkout-URL erhalten','err');
+  }catch(e){ toast('Zahlung fehlgeschlagen: '+errMsg(e),'err'); console.error('checkout',e); }
+}
+function handlePurchaseReturn(){
+  const p=new URLSearchParams(location.search).get('purchase'); if(!p) return;
+  history.replaceState({}, '', location.origin+location.pathname);   // URL säubern
+  if(p==='success'){
+    toast('✅ Zahlung erfolgreich — Guthaben wird gutgeschrieben …','ok');
+    setTimeout(async ()=>{ try{ await loadGame(); rebuildEverything(); toast('Guthaben aktualisiert','ok'); }catch(e){} }, 4000);
+  } else if(p==='cancel'){ toast('Zahlung abgebrochen','warn'); }
+}
+document.getElementById('btn-menu').onclick=(e)=>{ e.stopPropagation(); document.getElementById('topbar-menu').classList.toggle('hidden'); };
+document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-wrap'); if(w && !w.contains(e.target)) closeMenu(); });
+document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
+document.getElementById('dd-save').onclick=()=>{ closeMenu(); saveGame(); };
+document.getElementById('dd-settings').onclick=()=>{ closeMenu(); openSettings(); };
+document.getElementById('dd-admin').onclick=()=>{ closeMenu(); openAdmin(); };
+document.getElementById('dd-logout').onclick=()=>{ closeMenu(); doLogout(); };
+document.getElementById('btn-force-mission').onclick=()=>{ if(!MISSION_TYPES.length){ toast('Keine Einsätze definiert (Vorlage ausfüllen)','warn'); return; } if(state.stations.length===0){ toast('Erst eine Wache bauen','warn'); return; } spawnMission(); };
+document.getElementById('speed-ctl').onchange=e=>setSpeed(e.target.value);
+document.getElementById('se-save').onclick=saveStationEdit;
+document.getElementById('ve-save').onclick=saveVehicleEdit;
+document.getElementById('ve-reset').onclick=resetVehicleName;
+document.getElementById('ve-name').addEventListener('keydown',e=>{ if(e.key==='Enter') saveVehicleEdit(); });
+document.getElementById('se-detect').onclick=()=>{ const st=stationById(editStationId); if(st){ toast('Ort wird erkannt …','ok'); detectOrt(st); } };
+document.getElementById('se-number').addEventListener('input',updateCallsignPreview);
+document.getElementById('se-ort').addEventListener('input',updateCallsignPreview);
+document.querySelectorAll('.tab').forEach(t=> t.onclick=()=>switchTab(t.dataset.tab));
+document.getElementById('btn-funk-clear').onclick=()=>{ funkLog=[]; renderFunk(); };
+document.querySelectorAll('#modal-stationview [data-svtab]').forEach(b=> b.onclick=()=>{ svTab=b.dataset.svtab; renderStationView(); });
+
+/* ========================================================================
+   AUTH / ADMIN / START
+   ======================================================================== */
+let gameStarted=false, myReloadToken=null, testMode=false;
+
+function showScreen(id){ ['screen-config','screen-auth','screen-admin','screen-maint'].forEach(s=>{ const el=document.getElementById(s); if(el) el.classList.toggle('show', s===id); }); }
+function hideScreens(){ ['screen-config','screen-auth','screen-admin','screen-maint'].forEach(s=>{ const el=document.getElementById(s); if(el) el.classList.remove('show'); }); }
+
+function applyAuth(res, tok){ AUTH.token=tok||res.token; AUTH.username=res.username; AUTH.is_admin=!!res.is_admin; AUTH.maintenance=!!res.maintenance; AUTH.maintenance_text=res.maintenance_text||''; }
+function routeAfterAuth(){
+  if(AUTH.is_admin){ showAdminScreen(); return; }
+  if(AUTH.maintenance){ showMaintenance(AUTH.maintenance_text); return; }
+  startGame(false);
+}
+function showMaintenance(txt){
+  hideScreens(); const el=document.getElementById('screen-maint');
+  document.getElementById('maint-text').textContent = txt || 'Das Spiel ist derzeit für Wartungsarbeiten offline.';
+  el.classList.add('show');
+}
+
+async function initApp(){
+  if(!initSupabase()){ showScreen('screen-config'); return; }
+  const tok=TokenStore.get();
+  if(tok){
+    try{ const me=await rpc('app_me',{p_token:tok});
+      if(me && !me.error){ applyAuth(me, tok); routeAfterAuth(); return; }
+    }catch(e){}
+    TokenStore.clear();
+  }
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){
+      const res=await rpc('app_oauth_login');
+      if(res && res.error){ toast(res.error,'err'); }
+      else if(res && res.token){ applyAuth(res); TokenStore.set(res.token); routeAfterAuth(); return; }
+    }
+  }catch(e){ console.error('OAuth-Bridge:',e); }
+  showScreen('screen-auth');
+}
+
+async function googleLogin(){
+  const err=document.getElementById('auth-err'); err.textContent='';
+  try{ const { error } = await sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: location.href.split('#')[0].split('?')[0] } });
+    if(error){ err.textContent=errMsg(error); }
+  }catch(e){ err.textContent=errMsg(e); }
+}
+
+function errMsg(e){ if(!e) return 'Unbekannter Fehler'; return [e.message,e.details,e.hint,e.code].filter(Boolean).join(' · ') || (typeof e==='string'?e:JSON.stringify(e)); }
+async function doAuth(mode){
+  const u=document.getElementById('auth-user').value.trim();
+  const p=document.getElementById('auth-pass').value;
+  const err=document.getElementById('auth-err'); err.textContent='';
+  if(!u||!p){ err.textContent='Benutzername und Passwort eingeben.'; return; }
+  try{
+    const res=await rpc(mode==='signup'?'app_signup':'app_login',{p_username:u, p_password:p});
+    if(res && res.error){ err.textContent=res.error; return; }
+    if(!res || !res.token){ err.textContent='Keine Antwort vom Server. Wurde das SQL ausgeführt?'; return; }
+    applyAuth(res); TokenStore.set(res.token); routeAfterAuth();
+  }catch(e){ err.textContent=errMsg(e); console.error('Auth-Fehler:',e); }
+}
+
+async function doLogout(){
+  try{ if(AUTH.token) await rpc('app_logout',{p_token:AUTH.token}); }catch(e){}
+  try{ await sb.auth.signOut(); }catch(e){}
+  TokenStore.clear(); location.reload();
+}
+
+async function startGame(test){
+  testMode=!!test; hideScreens();
+  const authScreen=document.getElementById('screen-auth');
+  if(authScreen){ const pw=document.getElementById('auth-pass'); if(pw) pw.value=''; authScreen.remove(); }
+  document.getElementById('app').style.display='flex';
+  document.getElementById('dd-admin').classList.toggle('hidden', !AUTH.is_admin);
+  document.getElementById('topbar-test')?.classList.toggle('hidden', !testMode);
+  document.getElementById('btn-force-mission')?.classList.toggle('hidden', !testMode);
+  if(testMode){ state=freshState(); } else { await loadGame(); settlePayday(); }
+  if(!gameStarted){
+    initMap(); rebuildEverything(); renderSpeed();
+    setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },120);
+    updateClock(); setInterval(updateClock,250);
+    setInterval(()=>{ tick(); spawnLoop(); },CONFIG.tickMs);
+    setInterval(()=>saveGame(true),15000);
+    setInterval(pollReload,20000);
+    setInterval(accrueAllStaff,60000);
+    setInterval(courseTick,30000);
+    setInterval(settlePayday,30000);
+    window.addEventListener('beforeunload',()=>saveGame(true));
+    gameStarted=true;
+  } else { rebuildEverything(); }
+  if(!testMode) setTimeout(resumeDriving, 300);
+  if(!testMode) setTimeout(handlePurchaseReturn, 600);
+  state.stations.filter(s=>!s.ort).forEach((s,i)=> setTimeout(()=>detectOrt(s), 800+i*1300));
+  if(testMode) setTimeout(()=>toast('🧪 Testspiel — wird beim Abmelden zurückgesetzt','warn'),500);
+  else if(state.stations.length===0) setTimeout(()=>toast(`Willkommen, ${AUTH.username}! Baue deine erste Feuerwache 🏗️`,'ok'),500);
+}
+
+async function pollReload(){
+  try{ const {data}=await sb.from('app_system').select('reload_token').eq('id',1).single();
+    if(data){ if(myReloadToken===null) myReloadToken=data.reload_token;
+      else if(data.reload_token!==myReloadToken){ toast('Neustart durch Administrator …','warn'); await saveGame(true); setTimeout(()=>location.reload(),1000); } }
+  }catch(e){}
+}
+
+/* ---------- Admin-Bereich ---------- */
+function openAdmin(){ if(!AUTH.is_admin) return; adminActiveQ='admin-q'; adminActiveRes='admin-results'; document.getElementById('admin-q').value=''; document.getElementById('admin-results').innerHTML='<div class="empty-hint">Benutzername suchen …</div>'; renderAdminGod(); showModal('modal-admin'); adminSearch('admin-q','admin-results'); }
+function renderAdminGod(){
+  const stOpts=state.stations.map(s=>`<option value="${s.id}">${s.name}</option>`).join('') || '<option value="">— keine Wache —</option>';
+  document.getElementById('adm-staff-station').innerHTML=stOpts;
+  document.getElementById('adm-veh-station').innerHTML=stOpts;
+  document.getElementById('adm-staff-quals').innerHTML = COURSES.length
+    ? COURSES.map(c=>`<label class="ac-pick"><input type="checkbox" data-aq="${c.id}"/> ${c.name}</label>`).join('')
+    : '<div class="pers-hint">Keine Lehrgänge im Katalog.</div>';
+  document.getElementById('adm-veh-type').innerHTML=Object.values(VEHICLES).map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  syncAdmVehStats();
+}
+function syncAdmVehStats(){ const t=VEHICLES[document.getElementById('adm-veh-type').value]; if(!t) return;
+  document.getElementById('adm-veh-water').value=t.water; document.getElementById('adm-veh-foam').value=t.foam;
+  document.getElementById('adm-veh-cmin').value=t.crewMin; document.getElementById('adm-veh-cmax').value=t.crewMax;
+  document.getElementById('adm-veh-pump').value=t.pump;
+}
+function adminAddStaff(){
+  const stId=document.getElementById('adm-staff-station').value; const st=stationById(stId);
+  if(!st){ toast('Keine Wache gewählt','warn'); return; }
+  const quals=[...document.querySelectorAll('#adm-staff-quals [data-aq]:checked')].map(x=>x.dataset.aq);
+  const n=Math.max(1,Math.min(100,parseInt(document.getElementById('adm-staff-count').value)||0));
+  for(let i=0;i<n;i++){ const p=makePerson(); p.quals=[...quals]; st.roster.push(p); }
+  renderStations(); if(svStationId===st.id) renderStationView(); saveGame(true);
+  toast(`${n} Personal zu ${st.name} hinzugefügt${quals.length?' ('+quals.map(qualShort).join(', ')+')':''}`,'ok');
+}
+function adminAddVehicle(){
+  const stId=document.getElementById('adm-veh-station').value; const st=stationById(stId);
+  if(!st){ toast('Keine Wache gewählt','warn'); return; }
+  const t=VEHICLES[document.getElementById('adm-veh-type').value]; if(!t) return;
+  const num=id=>{ const x=parseInt(document.getElementById(id).value); return isNaN(x)?null:x; };
+  const mod={}; const w=num('adm-veh-water'),f=num('adm-veh-foam'),cn=num('adm-veh-cmin'),cx=num('adm-veh-cmax'),pp=num('adm-veh-pump');
+  if(w!=null&&w!==t.water) mod.water=w; if(f!=null&&f!==t.foam) mod.foam=f;
+  if(cn!=null&&cn!==t.crewMin) mod.crewMin=cn; if(cx!=null&&cx!==t.crewMax) mod.crewMax=cx; if(pp!=null&&pp!==t.pump) mod.pump=pp;
+  const seq=state.vehicles.filter(x=>x.stationId===st.id && x.type===t.id).length+1;
+  const v={ id:nid(), type:t.id, stationId:st.id, status:2, lat:st.lat, lng:st.lng,
+    water:(mod.water!=null?mod.water:t.water), foam:(mod.foam!=null?mod.foam:t.foam),
+    targetMissionId:null, nextMissionId:null, seq, assigned:0, crewIds:[], mod:Object.keys(mod).length?mod:null };
+  state.vehicles.push(v);
+  renderStations(); renderVehicles(); if(svStationId===st.id) renderStationView(); saveGame(true);
+  toast(`${vehName(v)} zu ${st.name} hinzugefügt${v.mod?' (modifiziert)':''}`,'ok');
+}
+let adminSearchTimer=null, adminActiveQ='admin-q', adminActiveRes='admin-results';
+let adminRowsByName={}, adminAcctUser=null, adminAcctSave=null, adminAcctRow=null;
+function adminSearchDebounced(){ clearTimeout(adminSearchTimer); adminSearchTimer=setTimeout(()=>adminSearch(),250); }
+function adminRowHTML(r){
+  const badges=`${r.is_admin?' <span class="adm-badge">ADMIN</span>':''}${r.flagged?` <span class="adm-flag" title="${(r.flag_reason||'').replace(/"/g,'')}">⚑ verdächtig</span>`:''}${r.banned?' <span class="adm-ban">GESPERRT</span>':''}`;
+  const actions=r.is_admin?'' : `<div class="adm-actions">
+      <input type="number" class="adm-amt" placeholder="Betrag" data-amt="${r.username}" />
+      <button class="btn sm primary" data-give="${r.username}">Geld</button>
+      <button class="btn sm" data-pw="${r.username}">Passwort</button>
+      <button class="btn sm" data-ban="${r.username}" data-b="${r.banned?0:1}">${r.banned?'Entsperren':'Bannen'}</button>
+      ${r.flagged?`<button class="btn sm" data-unflag="${r.username}">Flag löschen</button>`:''}
+      <button class="btn sm danger" data-del="${r.username}">Löschen</button>
+    </div>`;
+  return `<div class="adm-row${r.flagged?' fl':''}"><div class="adm-main"><span class="adm-name">${r.username}${badges}</span>
+      <span class="adm-credits">${Number(r.credits||0).toLocaleString('de-DE')} €</span></div>${actions}</div>`;
+}
+function adminRowClickable(r){
+  const badges=`${r.is_admin?' <span class="adm-badge">ADMIN</span>':''}${r.flagged?` <span class="adm-flag">⚑ verdächtig</span>`:''}${r.banned?' <span class="adm-ban">GESPERRT</span>':''}`;
+  const cl=r.is_admin?'':' clickable';
+  return `<div class="adm-row${r.flagged?' fl':''}${cl}" ${r.is_admin?'':`data-acct="${r.username}"`}>
+      <div class="adm-main"><span class="adm-name">${r.username}${badges}</span>
+      <span class="adm-credits">${Number(r.credits||0).toLocaleString('de-DE')} €</span></div>
+      ${r.is_admin?'':'<span class="adm-open">›</span>'}</div>`;
+}
+async function adminSearch(qId, resId){
+  qId=qId||adminActiveQ; resId=resId||adminActiveRes; adminActiveQ=qId; adminActiveRes=resId;
+  const qEl=document.getElementById(qId), box=document.getElementById(resId); if(!box) return;
+  const q=qEl?qEl.value.trim():'';
+  try{ const rows=await rpc('app_admin_search',{p_token:AUTH.token, p_query:q});
+    if(rows.error){ toast(rows.error,'err'); return; }
+    if(!rows.length){ box.innerHTML='<div class="empty-hint">Keine Treffer.</div>'; return; }
+    if(resId==='adminS-results'){                       // Admin-Screen: Account auswählen
+      adminRowsByName={}; rows.forEach(r=>adminRowsByName[r.username]=r);
+      box.innerHTML=rows.map(adminRowClickable).join('');
+      box.querySelectorAll('[data-acct]').forEach(el=> el.onclick=()=>adminOpenAccount(el.dataset.acct));
+    } else {                                             // In-Game-Modal: Inline-Aktionen
+      box.innerHTML=rows.map(adminRowHTML).join('');
+      box.querySelectorAll('[data-give]').forEach(b=> b.onclick=()=>adminGive(b.dataset.give,box));
+      box.querySelectorAll('[data-pw]').forEach(b=> b.onclick=()=>adminResetPw(b.dataset.pw));
+      box.querySelectorAll('[data-ban]').forEach(b=> b.onclick=()=>adminBan(b.dataset.ban, b.dataset.b==='1'));
+      box.querySelectorAll('[data-unflag]').forEach(b=> b.onclick=()=>adminUnflag(b.dataset.unflag));
+      box.querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>adminDelUser(b.dataset.del));
+    }
+  }catch(e){ toast('Suche: '+errMsg(e),'err'); console.error('admin-search',e); }
+}
+/* ---------- Account-Detail (Admin-Screen) ---------- */
+async function adminOpenAccount(username){
+  adminAcctUser=username; adminAcctRow=adminRowsByName[username]||{username};
+  document.getElementById('adminS-list').classList.add('hidden');
+  const box=document.getElementById('adminS-detail'); box.classList.remove('hidden');
+  box.innerHTML='<div class="empty-hint" style="padding:24px">Lade Konto …</div>';
+  try{ const save=await rpc('app_admin_load_save',{p_token:AUTH.token, p_username:username});
+    adminAcctSave=(save && !save.error)?save:{};
+  }catch(e){ adminAcctSave={}; }
+  renderAccountDetail();
+}
+function adminCloseAccount(){
+  adminAcctUser=null; adminAcctSave=null; adminAcctRow=null;
+  document.getElementById('adminS-detail').classList.add('hidden');
+  document.getElementById('adminS-list').classList.remove('hidden');
+  adminSearch('adminS-q','adminS-results');
+}
+function renderAccountDetail(){
+  const box=document.getElementById('adminS-detail'); const u=adminAcctUser; const r=adminAcctRow||{};
+  const save=adminAcctSave||{}; const stations=save.stations||[];
+  const stOpts=stations.length?stations.map(s=>`<option value="${s.id}">${s.name||s.id}</option>`).join(''):'<option value="">— keine Wache —</option>';
+  const qualChecks=COURSES.length?COURSES.map(c=>`<label class="ac-pick"><input type="checkbox" data-dq="${c.id}"/> ${c.name}</label>`).join(''):'<div class="pers-hint">Keine Lehrgänge.</div>';
+  const vehOpts=Object.values(VEHICLES).map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  const badges=`${r.banned?' <span class="adm-ban">GESPERRT</span>':''}${r.flagged?` <span class="adm-flag">⚑ ${(r.flag_reason||'verdächtig')}</span>`:''}`;
+  box.innerHTML=`
+    <div class="acct-head"><button class="btn sm ghost" id="ad-back">← Zurück</button>
+      <span class="adm-name" style="font-size:16px;flex:1">${u}${badges}</span>
+      <span class="adm-credits">${Number(r.credits||0).toLocaleString('de-DE')} €</span></div>
+    <div class="acct-grid">
+      <div class="acct-box"><div class="ac-section-h">💰 Geld geben</div>
+        <div style="display:flex;gap:8px"><input type="number" id="ad-amt" class="adm-amt" placeholder="Betrag (auch negativ)" style="flex:1"/><button class="btn sm primary" id="ad-give">Gutschreiben</button></div></div>
+      <div class="acct-box"><div class="ac-section-h">🛡️ Status</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm" id="ad-ban">${r.banned?'Entsperren':'Bannen'}</button>
+          <button class="btn sm" id="ad-unflag" ${r.flagged?'':'disabled'}>Flag entfernen</button>
+          <button class="btn sm" id="ad-pw">Passwort ändern</button>
+          <button class="btn sm danger" id="ad-del">Konto löschen</button></div></div>
+      <div class="acct-box"><div class="ac-section-h">👥 Personal hinzufügen</div>
+        <label class="fld"><span>Wache</span><select id="ad-staff-st">${stOpts}</select></label>
+        <div class="fld"><span>Qualifikationen</span><div class="ac-people-pick">${qualChecks}</div></div>
+        <label class="fld"><span>Anzahl</span><input type="number" id="ad-staff-n" value="5" min="1" max="100"/></label>
+        <button class="btn sm primary" id="ad-staff-go" ${stations.length?'':'disabled'}>Hinzufügen</button></div>
+      <div class="acct-box"><div class="ac-section-h">🚒 Fahrzeug hinzufügen</div>
+        <label class="fld"><span>Wache</span><select id="ad-veh-st">${stOpts}</select></label>
+        <label class="fld"><span>Typ</span><select id="ad-veh-type">${vehOpts}</select></label>
+        <button class="btn sm primary" id="ad-veh-go" ${stations.length?'':'disabled'}>Hinzufügen</button></div>
+    </div>
+    <div class="pers-hint">Personal/Fahrzeuge werden direkt in den Spielstand geschrieben. Ist der Spieler gerade online, kann sein nächstes Auto-Speichern die Änderung überschreiben — am besten bei Offline-Spielern nutzen.</div>`;
+  document.getElementById('ad-back').onclick=adminCloseAccount;
+  document.getElementById('ad-give').onclick=adminAcctGive;
+  document.getElementById('ad-ban').onclick=adminAcctBan;
+  document.getElementById('ad-unflag').onclick=adminAcctUnflag;
+  document.getElementById('ad-pw').onclick=()=>adminResetPw(u);
+  document.getElementById('ad-del').onclick=adminAcctDelete;
+  document.getElementById('ad-staff-go').onclick=adminGrantStaff;
+  document.getElementById('ad-veh-go').onclick=adminGrantVehicle;
+}
+async function adminAcctGive(){
+  const amt=parseInt(document.getElementById('ad-amt').value); if(isNaN(amt)||amt===0){ toast('Betrag eingeben','warn'); return; }
+  try{ const res=await rpc('app_admin_add_credits',{p_token:AUTH.token,p_username:adminAcctUser,p_amount:amt});
+    if(res.error){ toast(res.error,'err'); return; } adminAcctRow.credits=res.credits; if(adminAcctSave) adminAcctSave.credits=res.credits;
+    toast(`Neues Guthaben ${Number(res.credits).toLocaleString('de-DE')} €`,'ok'); renderAccountDetail();
+  }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+async function adminAcctBan(){
+  const ban=!adminAcctRow.banned; if(!confirm(`${adminAcctUser} ${ban?'bannen':'entsperren'}?`)) return;
+  const res=await rpc('app_admin_set_ban',{p_token:AUTH.token,p_username:adminAcctUser,p_banned:ban});
+  if(res.error){ toast(res.error,'err'); return; } adminAcctRow.banned=ban; toast(ban?'Gebannt':'Entsperrt','ok'); renderAccountDetail();
+}
+async function adminAcctUnflag(){
+  const res=await rpc('app_admin_clear_flag',{p_token:AUTH.token,p_username:adminAcctUser});
+  if(res.error){ toast(res.error,'err'); return; } adminAcctRow.flagged=false; adminAcctRow.flag_reason=null; toast('Flag entfernt','ok'); renderAccountDetail();
+}
+async function adminAcctDelete(){
+  if(!confirm(`Konto „${adminAcctUser}“ unwiderruflich löschen?`)) return;
+  const res=await rpc('app_admin_delete_user',{p_token:AUTH.token,p_username:adminAcctUser});
+  if(res.error){ toast(res.error,'err'); return; } toast('Gelöscht','ok'); adminCloseAccount();
+}
+async function adminSaveAcct(){
+  const res=await rpc('app_admin_write_save',{p_token:AUTH.token,p_username:adminAcctUser,p_data:adminAcctSave});
+  if(res&&res.error){ toast(res.error,'err'); return false; } return true;
+}
+async function adminGrantStaff(){
+  const st=(adminAcctSave.stations||[]).find(s=>s.id===document.getElementById('ad-staff-st').value);
+  if(!st){ toast('Keine Wache','warn'); return; }
+  const quals=[...document.querySelectorAll('#adminS-detail [data-dq]:checked')].map(x=>x.dataset.dq);
+  const n=Math.max(1,Math.min(100,parseInt(document.getElementById('ad-staff-n').value)||0));
+  if(!Array.isArray(st.roster)) st.roster=[];
+  for(let i=0;i<n;i++){ const p=makePerson(); p.quals=[...quals]; st.roster.push(p); }
+  if(await adminSaveAcct()) toast(`${n} Personal zu ${st.name} hinzugefügt${quals.length?' ('+quals.map(qualShort).join(', ')+')':''}`,'ok');
+}
+async function adminGrantVehicle(){
+  const st=(adminAcctSave.stations||[]).find(s=>s.id===document.getElementById('ad-veh-st').value);
+  if(!st){ toast('Keine Wache','warn'); return; }
+  const t=VEHICLES[document.getElementById('ad-veh-type').value]; if(!t) return;
+  adminAcctSave.vehicles=adminAcctSave.vehicles||[];
+  const seq=adminAcctSave.vehicles.filter(x=>x.stationId===st.id&&x.type===t.id).length+1;
+  adminAcctSave.vehicles.push({ id:nid(), type:t.id, stationId:st.id, status:2, lat:st.lat, lng:st.lng, water:t.water, foam:t.foam, seq, customName:null, mod:null, crew:0, crewIds:[], targetMissionId:null, nextMissionId:null });
+  if(await adminSaveAcct()) toast(`${t.name} zu ${st.name} hinzugefügt`,'ok');
+}
+function adminRefresh(){ adminSearch(adminActiveQ, adminActiveRes); }
+async function adminGive(username, box){
+  const scope=box||document; const inp=scope.querySelector(`.adm-amt[data-amt="${CSS.escape(username)}"]`);
+  const amount=parseInt(inp&&inp.value); if(isNaN(amount)||amount===0){ toast('Betrag eingeben','warn'); return; }
+  try{ const r=await rpc('app_admin_add_credits',{p_token:AUTH.token, p_username:username, p_amount:amount});
+    if(r.error){ toast(r.error,'err'); return; } toast(`${username}: neues Guthaben ${Number(r.credits).toLocaleString('de-DE')} €`,'ok'); adminRefresh();
+  }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+async function adminResetPw(username){
+  const np=prompt(`Neues Passwort für „${username}“:`); if(np===null) return;
+  try{ const r=await rpc('app_admin_reset_pw',{p_token:AUTH.token, p_username:username, p_new:np});
+    if(r.error){ toast(r.error,'err'); return; } toast(`Passwort von ${username} zurückgesetzt`,'ok');
+  }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+async function adminBan(username, ban){
+  if(!confirm(`${username} wirklich ${ban?'bannen':'entsperren'}?`)) return;
+  try{ const r=await rpc('app_admin_set_ban',{p_token:AUTH.token, p_username:username, p_banned:ban});
+    if(r.error){ toast(r.error,'err'); return; } toast(`${username} ${ban?'gebannt':'entsperrt'}`,'ok'); adminRefresh();
+  }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+async function adminUnflag(username){
+  try{ const r=await rpc('app_admin_clear_flag',{p_token:AUTH.token, p_username:username});
+    if(r.error){ toast(r.error,'err'); return; } toast(`Flag von ${username} entfernt`,'ok'); adminRefresh();
+  }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+async function adminDelUser(username){
+  if(!confirm(`Konto „${username}“ UNWIDERRUFLICH löschen?`)) return;
+  try{ const r=await rpc('app_admin_delete_user',{p_token:AUTH.token, p_username:username});
+    if(r.error){ toast(r.error,'err'); return; } toast(`${username} gelöscht`,'ok'); adminRefresh();
+  }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+async function adminReloadAll(){
+  if(!confirm('Alle Instanzen neu laden? Alle Spieler werden neu geladen.')) return;
+  try{ const r=await rpc('app_admin_reload',{p_token:AUTH.token}); if(r.error){ toast(r.error,'err'); return; } toast('Neustart ausgelöst','ok'); }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+/* ---------- Admin-Startseite ---------- */
+async function showAdminScreen(){
+  hideScreens(); document.getElementById('app').style.display='none';
+  document.getElementById('screen-admin').classList.add('show');
+  adminActiveQ='adminS-q'; adminActiveRes='adminS-results';
+  document.getElementById('adminS-detail').classList.add('hidden');
+  document.getElementById('adminS-list').classList.remove('hidden');
+  try{ const {data}=await sb.from('app_system').select('maintenance,maintenance_text').eq('id',1).single();
+    if(data){ document.getElementById('maint-toggle').checked=!!data.maintenance; document.getElementById('maint-input').value=data.maintenance_text||''; }
+  }catch(e){}
+  adminSearch('adminS-q','adminS-results');
+}
+async function adminSaveMaintenance(){
+  const on=document.getElementById('maint-toggle').checked; const txt=document.getElementById('maint-input').value;
+  try{ const r=await rpc('app_admin_set_maintenance',{p_token:AUTH.token, p_on:on, p_text:txt});
+    if(r.error){ toast(r.error,'err'); return; } toast(on?'Wartungsmodus AN — Spieler ausgeloggt':'Wartungsmodus AUS','ok');
+  }catch(e){ toast('Fehlgeschlagen','err'); }
+}
+
+/* Auth-/Admin-Events */
+document.getElementById('auth-login').onclick=()=>doAuth('login');
+document.getElementById('auth-signup').onclick=()=>doAuth('signup');
+document.getElementById('auth-google').onclick=googleLogin;
+document.getElementById('auth-pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doAuth('login'); });
+document.getElementById('admin-q').addEventListener('input',()=>{ adminActiveQ='admin-q'; adminActiveRes='admin-results'; adminSearchDebounced(); });
+document.getElementById('admin-reload').onclick=adminReloadAll;
+document.getElementById('adminS-q').addEventListener('input',()=>{ adminActiveQ='adminS-q'; adminActiveRes='adminS-results'; adminSearchDebounced(); });
+document.getElementById('adminS-reload').onclick=adminReloadAll;
+document.getElementById('adminS-maint-save').onclick=adminSaveMaintenance;
+document.getElementById('adminS-test').onclick=()=>startGame(true);
+document.getElementById('adminS-logout').onclick=doLogout;
+
+/* ---------- Einstellungen (Spieler) ---------- */
+function openSettings(){ document.getElementById('set-user').value=AUTH.username||''; document.getElementById('set-pass').value=''; showModal('modal-settings'); }
+async function settingsSaveUser(){
+  const nu=document.getElementById('set-user').value.trim();
+  if(!nu||nu===AUTH.username){ toast('Neuen Benutzernamen eingeben','warn'); return; }
+  try{ const r=await rpc('app_change_username',{p_token:AUTH.token, p_new:nu});
+    if(r.error){ toast(r.error,'err'); return; } AUTH.username=r.username; toast('Benutzername geändert','ok');
+  }catch(e){ toast('Fehlgeschlagen: '+errMsg(e),'err'); }
+}
+async function settingsSavePass(){
+  const np=document.getElementById('set-pass').value;
+  if(!np||np.length<4){ toast('Passwort zu kurz (min. 4)','warn'); return; }
+  try{ const r=await rpc('app_change_password',{p_token:AUTH.token, p_new:np});
+    if(r.error){ toast(r.error,'err'); return; } document.getElementById('set-pass').value=''; toast('Passwort geändert','ok');
+  }catch(e){ toast('Fehlgeschlagen: '+errMsg(e),'err'); }
+}
+async function settingsDelete(){
+  if(!confirm('Dein Konto UNWIDERRUFLICH löschen? Spielstand geht verloren.')) return;
+  try{ const r=await rpc('app_delete_account',{p_token:AUTH.token});
+    if(r.error){ toast(r.error,'err'); return; } TokenStore.clear(); try{ await sb.auth.signOut(); }catch(e){} toast('Konto gelöscht','ok'); setTimeout(()=>location.reload(),800);
+  }catch(e){ toast('Fehlgeschlagen: '+errMsg(e),'err'); }
+}
+document.getElementById('maint-logout').onclick=doLogout;
+document.getElementById('set-user-save').onclick=settingsSaveUser;
+document.getElementById('set-pass-save').onclick=settingsSavePass;
+document.getElementById('set-delete').onclick=settingsDelete;
+document.getElementById('adm-staff-add').onclick=adminAddStaff;
+document.getElementById('adm-veh-add').onclick=adminAddVehicle;
+document.getElementById('adm-veh-type').onchange=syncAdmVehStats;
+
+/* Start */
+document.getElementById('app').style.display='none';
+initApp();
+</script>
+</body>
+</html>
