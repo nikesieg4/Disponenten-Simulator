@@ -262,7 +262,7 @@ for name,kind,levels,extra,pat,freq in S:
         nveh=sum(r['count'] for r in req)
         mid=slug(name)+'_'+str(lvl); assert mid not in ids,mid; ids.add(mid)
         t={'id':mid,'code':stw,'short':short,'cat':cat,'name':name,'need':{'water':w,'foam':f},'minutes':m,
-           'reward':int(round((10000+250*m*nveh)/500.0)*500),'weight':max(1,round(freq*{1:1,2:.8,3:.5,4:.3,5:.15,6:.08}[lvl if kind!='klein' else 1]*10)/10),
+'weight':max(1,round(freq*{1:1,2:.8,3:.5,4:.3,5:.15,6:.08}[lvl if kind!='klein' else 1]*10)/10),
            'minVehicles':nveh,'req':req}
         if pmax>0: t['pat']=[pmin,pmax,na,dept]
         out.append(t)
