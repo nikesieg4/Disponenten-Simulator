@@ -757,7 +757,11 @@ const CONFIG = {
   bulkDiscountPerLevel:0.10, bulkDiscountMax:0.30,   // Rabatt auf direkt mitgebaute Ausbaustufen
   academyBuildMs:5*24*60*60*1000,      // Bauzeit der Akademie
 
-  startStaff:10,                       // Personal je Wache zu Beginn
+  startStaff:10,                       // Personal alter Wachen (ohne Stellplatzangabe)
+  startStaffPerBay:6,                  // Startpersonal neuer Wachen je Stellplatz
+  hireCost:50000,                      // sofortiges Anwerben je Person
+  overdraftLimit:10000000,             // Dispo: Guthaben darf bis −10 Mio. € ins Minus
+  overdraftInterest:0.01,              // Dispo-Zinsen pro Tag auf den Minusbetrag (um 0 Uhr)
   personnelDayMs:24*60*60*1000,        // „ein Tag“ = +1 Person (Echtzeit; hier anpassbar)
   maxStaff:200,
 
@@ -1083,12 +1087,12 @@ function syncBuildCost(){
 }
 function startBuildPlacement(){
   const b=buildingById(buildTypeId); if(!b) return;
-  if(state.credits < b.cost){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
+  if(!canAfford(b.cost)){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
   const name=document.getElementById('build-name').value.trim() || b.name;
   const number=b.isStation ? (parseInt(document.getElementById('build-number').value)||nextStationNumber()) : null;
   const q=b.isStation ? stationBuildQuote(parseInt(document.getElementById('build-bays').value)||1) : null;
   const cost=q?q.total:b.cost;
-  if(state.credits < cost){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); return; }
+  if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); return; }
   pendingBuild={ typeId:b.id, name, number, cost, quote:q };
   hideModal('modal-build'); setBuildMode(true);
 }
@@ -1097,13 +1101,13 @@ function onMapClick(e){
   if(!buildMode || !pendingBuild) return;
   const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
   const cost=pendingBuild.cost??b.cost;
-  if(state.credits < cost){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); setBuildMode(false); return; }
+  if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); setBuildMode(false); return; }
   state.credits-=cost;
   const now=Date.now();
   if(b.isStation){
     const first=state.stations.length===0, q=pendingBuild.quote||stationBuildQuote(1);
     const st={ id:nid(), name:pendingBuild.name, number:pendingBuild.number, ort:'', lat:e.latlng.lat, lng:e.latlng.lng, level:q.level,
-      roster:makeRoster(CONFIG.startStaff), hireTarget:0, lastHireAt:0,
+      roster:makeRoster(CONFIG.startStaffPerBay*CONFIG.baysForLevel(q.level)), hireTarget:0, lastHireAt:0,
       buildPaid:cost, builtLevel:q.level,
       placedAt:now, readyAt: first ? now : now+q.buildMs };   // erste Wache sofort einsatzbereit
     state.stations.push(st); addStationMarker(st);
@@ -1363,6 +1367,7 @@ function settlePayday(){
   if(!state.payDayKey){ state.payDayKey=d; return; }
   if(state.payDayKey!==d){
     if(state.earnings>0){ state.credits+=state.earnings; toast(`Tageseinnahmen gutgeschrieben: +${fmt(state.earnings)} €`,'ok'); }
+    if(state.credits<0){ const z=Math.ceil(-state.credits*CONFIG.overdraftInterest); state.credits-=z; toast(`Dispo-Zinsen: −${fmt(z)} €`,'warn'); }
     state.earnings=0; state.payDayKey=d; renderTopbar(); saveGame(true);
   }
 }
@@ -1622,8 +1627,11 @@ function etaText(v, m){
   const secs = estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng}, CONFIG.outboundFactor);
   return mmss(secs/60);
 }
+/* Dispo: Ausgaben sind erlaubt, solange das Guthaben danach nicht unter −overdraftLimit fällt */
+function canAfford(cost){ return (state.credits - (cost||0)) >= -CONFIG.overdraftLimit; }
 function renderTopbar(){
-  const c=document.getElementById('stat-credits'); if(c) c.textContent=fmt(state.credits)+' €';
+  const c=document.getElementById('stat-credits'); if(c){ c.textContent=fmt(state.credits)+' €'; c.style.color=state.credits<0?'var(--danger)':'';
+    c.title=`Dispo-Rahmen: ${fmt(CONFIG.overdraftLimit)} € · noch verfügbar: ${fmt(state.credits+CONFIG.overdraftLimit)} €${state.credits<0?` · Zinsen ${CONFIG.overdraftInterest*100} % pro Tag`:''}`; }
   const e=document.getElementById('stat-earnings'); if(e) e.textContent='+'+fmt(state.earnings||0)+' €';
 }
 
@@ -1698,7 +1706,7 @@ function renderStations(){
   list.querySelectorAll('[data-buy]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openStationView(b.dataset.buy,'shop'); });
 }
 function upgradeStation(id){ const st=stationById(id); if(!st||st.level>=CONFIG.maxStationLevel) return;
-  const cost=CONFIG.upgradeCost(st.level); if(state.credits<cost){ toast('Nicht genug Guthaben für den Ausbau','err'); return; }
+  const cost=CONFIG.upgradeCost(st.level); if(!canAfford(cost)){ toast('Nicht genug Guthaben für den Ausbau','err'); return; }
   state.credits-=cost; st.level++; refreshStationMarker(st); renderStations(); renderTopbar(); if(svStationId===id) renderStationView(); toast(`${st.name} auf Level ${st.level} ausgebaut`,'ok'); saveGame(true); }
 
 /* ---------- Personal / Anwerbung ---------- */
@@ -1709,12 +1717,13 @@ function makePerson(){ return { id:nid(), name:personName(), vehicleId:null, qua
 function makeRoster(n){ const r=[]; for(let i=0;i<n;i++) r.push(makePerson()); return r; }
 
 function staffCount(st){ return (st.roster||[]).length; }
+function inTransit(p){ return !!(p && p.transitUntil && p.transitUntil>Date.now()); }   // wird gerade versetzt
 function poolPeople(st){ return (st.roster||[]).filter(p=>!p.vehicleId); }
 function fixedPeople(st,v){ return (st.roster||[]).filter(p=>p.vehicleId===v.id); }
 function deployedIdSet(st){ const s=new Set(); state.vehicles.filter(v=>v.stationId===st.id&&v.status!==2).forEach(v=>(v.crewIds||[]).forEach(id=>s.add(id))); return s; }
 function trainingSet(){ const s=new Set(); (state.buildings||[]).forEach(b=>{ if(b.courses) b.courses.forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); }); return s; }
-function poolFreePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return poolPeople(st).filter(p=>!dep.has(p.id)&&!tr.has(p.id)); }
-function stationAvailablePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return (st.roster||[]).filter(p=>!dep.has(p.id)&&!tr.has(p.id)); }
+function poolFreePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return poolPeople(st).filter(p=>!dep.has(p.id)&&!tr.has(p.id)&&!inTransit(p)); }
+function stationAvailablePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return (st.roster||[]).filter(p=>!dep.has(p.id)&&!tr.has(p.id)&&!inTransit(p)); }
 function trainingCountOf(st){ const tr=trainingSet(); return (st.roster||[]).filter(p=>tr.has(p.id)).length; }
 function vAssigned(v){ const st=stationById(v.stationId); return st?fixedPeople(st,v).length:0; }
 function stationAssignedSum(st){ return (st.roster||[]).filter(p=>p.vehicleId).length; }
@@ -1744,6 +1753,24 @@ function startHire(id){
   if(target>CONFIG.maxStaff){ toast(`Maximal ${CONFIG.maxStaff} Personal`,'warn'); return; }
   st.hireTarget=target; st.lastHireAt=Date.now();
   renderStationView(); saveGame(true); toast(`Anwerbung gestartet: Ziel ${target} (${target-cur} in ${target-cur} Tagen)`,'ok');
+}
+function hireNow(id,n){
+  const st=stationById(id); if(!st||n<1) return;
+  n=Math.min(n, CONFIG.maxStaff-staffCount(st)); if(n<1){ toast(`Maximal ${CONFIG.maxStaff} Personal`,'warn'); return; }
+  const cost=n*CONFIG.hireCost;
+  if(!canAfford(cost)){ toast(`Nicht genug Guthaben bzw. Dispo (${fmt(cost)} € nötig)`,'err'); return; }
+  state.credits-=cost; for(let i=0;i<n;i++) st.roster.push(makePerson());
+  renderTopbar(); renderStations(); renderStationView(); saveGame(true); toast(`${n} Person(en) angeworben (−${fmt(cost)} €)`,'ok');
+}
+function movePeople(fromId,toId,ids){
+  const from=stationById(fromId), to=stationById(toId); if(!from||!to||!ids.length){ toast('Niemand ausgewählt','warn'); return; }
+  const secs=estimateDriveSeconds(from,to,CONFIG.returnFactor);
+  const until=Date.now()+secs*1000;
+  const moving=from.roster.filter(p=>ids.includes(p.id) && poolFreePeople(from).includes(p));
+  from.roster=from.roster.filter(p=>!moving.includes(p));
+  moving.forEach(p=>{ p.vehicleId=null; p.transitUntil=until; to.roster.push(p); });
+  renderStations(); renderStationView(); saveGame(true);
+  toast(`${moving.length} Person(en) nach ${to.name} unterwegs (ca. ${fmtDur(secs*1000)})`,'ok');
 }
 function cancelHire(id){ const st=stationById(id); if(!st) return; st.hireTarget=0; st.lastHireAt=0; renderStationView(); saveGame(true); toast('Anwerbung abgebrochen','ok'); }
 function assignCrew(vehicleId, delta){
@@ -1888,7 +1915,27 @@ function renderSvPersonal(st){
         <button class="btn primary" id="sv-hire">Anwerben starten</button>
       </div>`;
   }
+  // Sofort anwerben (gegen Geld)
+  const room=Math.max(0,CONFIG.maxStaff-cur);
+  html+=`<div class="pers-form">
+      <div class="pers-hint">Sofort anwerben — <b>${fmt(CONFIG.hireCost)} €</b> je Person, sofort einsatzbereit.</div>
+      <label class="fld"><span>Anzahl</span><input id="sv-buy-n" type="number" min="1" max="${room}" value="${Math.min(6,room)}" /></label>
+      <button class="btn primary" id="sv-buy" ${room?'':'disabled'}>Sofort anwerben</button>
+    </div>`;
+  // Versetzen an andere Wache
+  const others=state.stations.filter(o=>o.id!==st.id);
+  const movable=poolFreePeople(st);
+  const transit=(st.roster||[]).filter(inTransit);
+  html+=`<div class="pers-form">
+      <div class="pers-hint">Personal versetzen — freie Springer fahren zur Zielwache und sind während der Fahrt nicht einsetzbar.</div>
+      ${others.length?`<label class="fld"><span>Zielwache</span><select id="sv-move-to" style="background:var(--panel-3);border:1px solid var(--border-2);border-radius:8px;color:var(--text);padding:8px 10px">${others.map(o=>`<option value="${o.id}">${o.name} (${(distM(st,o)/1000).toFixed(1)} km)</option>`).join('')}</select></label>
+      <div class="ac-people-pick">${movable.length?movable.map(p=>`<label class="ac-pick"><input type="checkbox" data-move="${p.id}"/> ${p.name} ${(p.quals||[]).map(q=>`<span class="qbadge">${qualShort(q)}</span>`).join('')}</label>`).join(''):'<div class="pers-hint">Keine freien Springer.</div>'}</div>
+      <button class="btn" id="sv-move" ${movable.length?'':'disabled'}>Ausgewählte versetzen</button>`:'<div class="pers-hint">Erst eine zweite Wache bauen.</div>'}
+      ${transit.length?`<div class="pers-hint">Unterwegs zu dieser Wache: ${transit.map(p=>`${p.name} (${fmtDur(p.transitUntil-Date.now())})`).join(', ')}</div>`:''}
+    </div>`;
   box.innerHTML=html;
+  const bb=document.getElementById('sv-buy'); if(bb) bb.onclick=()=>hireNow(st.id, parseInt(document.getElementById('sv-buy-n').value)||0);
+  const mv=document.getElementById('sv-move'); if(mv) mv.onclick=()=>movePeople(st.id, document.getElementById('sv-move-to').value, [...box.querySelectorAll('[data-move]:checked')].map(x=>x.dataset.move));
   box.querySelectorAll('[data-assign]').forEach(b=> b.onclick=()=>assignCrew(b.dataset.assign, parseInt(b.dataset.d)));
   const c=document.getElementById('sv-cancelhire'); if(c) c.onclick=()=>cancelHire(st.id);
   const h=document.getElementById('sv-hire'); if(h) h.onclick=()=>startHire(st.id);
@@ -1941,7 +1988,7 @@ function renderAcademyView(){
   let people = avail.length? avail.map(p=>`<label class="ac-pick"><input type="checkbox" data-pp="${p.id}" ${avSelected.has(p.id)?'checked':''}/> ${p.name} ${qb(p)}</label>`).join('')
     : `<div class="pers-hint">Kein berechtigtes Personal an dieser Wache${co&&co.requiresCourse?` (Voraussetzung: ${qualLabel(co.requiresCourse)})`:''}.</div>`;
   const prereqNote = co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: abgeschlossener Lehrgang „${qualLabel(co.requiresCourse)}“.</div>`:'';
-  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost && stationReady(a);
+  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && canAfford(CONFIG.courseCost) && stationReady(a);
   const upCost=CONFIG.academyUpgradeCost(a.level), canUp=a.level<CONFIG.maxAcademyLevel;
 
   document.getElementById('av-content').innerHTML=`
@@ -1953,7 +2000,7 @@ function renderAcademyView(){
       <label class="fld"><span>Lehrgang</span><select id="av-course">${courseOpts}</select></label>
       ${prereqNote}
       <div class="fld"><span>Personal (<span id="av-count">${avSelected.size}</span>/${CONFIG.classroomCapacity})</span><div class="ac-people-pick">${people}</div></div>
-      <button class="btn primary" id="av-start" ${canStart?'':'disabled'}>${free<=0?'Alle Klassenräume belegt':(COURSES.length===0?'Keine Lehrgänge verfügbar':(state.credits<CONFIG.courseCost?`Zu wenig Guthaben (${fmt(CONFIG.courseCost)} €)`:`Lehrgang starten · ${fmt(CONFIG.courseCost)} €`))}</button>
+      <button class="btn primary" id="av-start" ${canStart?'':'disabled'}>${free<=0?'Alle Klassenräume belegt':(COURSES.length===0?'Keine Lehrgänge verfügbar':(!canAfford(CONFIG.courseCost)?`Zu wenig Guthaben (${fmt(CONFIG.courseCost)} €)`:`Lehrgang starten · ${fmt(CONFIG.courseCost)} €`))}</button>
     </div>
     <div class="sv-actions"><button class="btn sm ghost" id="av-upgrade" ${canUp?'':'disabled'}>${canUp?`Akademie ausbauen (${fmt(upCost)} €)`:'Max. Level'}</button></div>`;
 
@@ -1972,7 +2019,7 @@ function updateAcademyStart(){
   const st=avStationId?stationById(avStationId):null;
   const free=academyRooms(a)-(a.courses||[]).length;
   const cnt=document.getElementById('av-count'); if(cnt) cnt.textContent=avSelected.size;
-  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && state.credits>=CONFIG.courseCost && stationReady(a);
+  const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && canAfford(CONFIG.courseCost) && stationReady(a);
   const b=document.getElementById('av-start'); if(b) b.disabled=!canStart;
 }
 function startCourse(){
@@ -1982,7 +2029,7 @@ function startCourse(){
   const co=courseById(avCourseId); if(!co){ toast('Kein Lehrgang gewählt','warn'); return; }
   const ids=[...avSelected]; if(!ids.length){ toast('Kein Personal gewählt','warn'); return; }
   if(ids.length>CONFIG.classroomCapacity){ toast(`Max. ${CONFIG.classroomCapacity} pro Klassenraum`,'warn'); return; }
-  if(state.credits<CONFIG.courseCost){ toast(`Nicht genug Guthaben (${fmt(CONFIG.courseCost)} € pro Lehrgang)`,'err'); return; }
+  if(!canAfford(CONFIG.courseCost)){ toast(`Nicht genug Guthaben (${fmt(CONFIG.courseCost)} € pro Lehrgang)`,'err'); return; }
   state.credits-=CONFIG.courseCost;
   a.courses.push({ id:nid(), courseId:co.id, stationId:avStationId, personIds:ids, startedAt:Date.now(), durationMs:co.durationMs });
   avSelected=new Set();
@@ -1990,7 +2037,7 @@ function startCourse(){
   toast(`Lehrgang „${co.name}“ gestartet (${ids.length} Personen, −${fmt(CONFIG.courseCost)} €)`,'ok');
 }
 function upgradeAcademy(id){ const a=academyById(id); if(!a||a.level>=CONFIG.maxAcademyLevel) return;
-  const cost=CONFIG.academyUpgradeCost(a.level); if(state.credits<cost){ toast('Nicht genug Guthaben','err'); return; }
+  const cost=CONFIG.academyUpgradeCost(a.level); if(!canAfford(cost)){ toast('Nicht genug Guthaben','err'); return; }
   state.credits-=cost; a.level++; renderTopbar(); renderAcademyView(); saveGame(true); toast(`Akademie auf Level ${a.level} (${academyRooms(a)} Klassenräume)`,'ok'); }
 
 /* Wache bearbeiten (Name, Nummer, Ort) */
@@ -2039,7 +2086,7 @@ function renderBuyMenu(){
   const list=Object.values(VEHICLES).filter(v=>v.category===buyCategory);
   grid.innerHTML=list.map(t=>{
     const owned=state.vehicles.filter(v=>v.type===t.id).length;
-    const afford=state.credits>=t.cost, canBuy=afford&&free>0&&stationReady(stationById(buyStationId));
+    const afford=canAfford(t.cost), canBuy=afford&&free>0&&stationReady(stationById(buyStationId));
     const bar=(val,max,cls)=> val>0?`<div class="cap"><div class="cap-lbl">${cls==='water'?'Wasser':cls==='foam'?'Schaum':'Pumpe'}<span>${val}${cls==='pump'?' l/min':' L'}</span></div><div class="cap-track"><div class="cap-fill ${cls}" style="width:${Math.min(100,val/max*100)}%"></div></div></div>`:'';
     const building=!stationReady(stationById(buyStationId));
     const btnLabel = building ? 'Wache im Bau' : free<=0 ? 'Kein Stellplatz frei' : (!afford ? 'Zu wenig Guthaben' : `Kaufen · ${fmt(t.cost)} €`);
@@ -2063,7 +2110,7 @@ function renderBuyMenu(){
 function buyVehicle(typeId){ const st=stationById(buyStationId), t=VEHICLES[typeId]; if(!st||!t) return;
   if(!stationReady(st)){ toast(`${st.name} ist noch im Bau (fertig in ${fmtDur(st.readyAt-Date.now())})`,'warn'); return; }
   if(vehiclesOfStation(st.id).length>=CONFIG.baysForLevel(st.level)){ toast('Kein freier Stellplatz','warn'); return; }
-  if(state.credits<t.cost){ toast('Nicht genug Guthaben','err'); return; }
+  if(!canAfford(t.cost)){ toast('Nicht genug Guthaben','err'); return; }
   state.credits-=t.cost;
   const seq=state.vehicles.filter(x=>x.stationId===st.id && x.type===t.id).length+1;
   const v={ id:nid(), type:t.id, stationId:st.id, status:2, lat:st.lat, lng:st.lng, water:t.water, foam:t.foam,
