@@ -983,7 +983,16 @@ async function saveGame(silent){
           toast('In einem anderen Browser angemeldet — diese Sitzung wird beendet.','err');
           TokenStore.clear(); setTimeout(()=>location.reload(),2500); } }
       else if(!silent) toast('Speichern: '+r.error,'err');
-    } else { saveWarned=false; if(!silent) toast('Gespeichert ','ok'); }
+    } else {
+      saveWarned=false;
+      if(r && r.corrected){                             // Server hat unplausible Einnahmen abgezogen
+        const ce=Math.round(r.cut_earnings||0), cc=Math.round(r.cut_credits||0);
+        state.earnings=Math.max(0,(state.earnings||0)-ce); state.credits-=cc;
+        if(ce) book('korrektur','Tageskasse vom Server korrigiert',-ce);
+        if(cc) book('korrektur','Guthaben vom Server korrigiert',-cc);
+        renderTopbar(); toast(`Spielstand vom Server korrigiert: −${fmt(ce+cc)} €`,'err');
+      } else if(!silent) toast('Gespeichert ','ok');
+    }
   }catch(e){ if(!silent) toast('Speichern fehlgeschlagen: '+errMsg(e),'err'); else console.warn('save',e); }
   finally{ saveInFlight=false; }
 }
@@ -2077,6 +2086,7 @@ const BOOK_CATS={
   erstattung:{name:'Erstattungen',kind:'in'},
   fahrzeug:{name:'Fahrzeuge',kind:'out'}, gebaeude:{name:'Gebäude',kind:'out'}, ausbau:{name:'Ausbau',kind:'out'},
   personal:{name:'Personal',kind:'out'}, lehrgang:{name:'Lehrgänge',kind:'out'}, zinsen:{name:'Dispo-Zinsen',kind:'out'},
+  korrektur:{name:'Korrektur (Server)',kind:'out'},
   auszahlung:{name:'Auszahlung Tageskasse',kind:'transfer'} };
 const LEDGER_MAX=500;
 function book(cat,text,amt){
