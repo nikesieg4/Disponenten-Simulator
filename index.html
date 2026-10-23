@@ -68,12 +68,6 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
 .dd-item:hover{ background:var(--panel-3); }
 .dd-item.danger{ color:#fca5a5; } .dd-item.danger:hover{ background:rgba(239,68,68,.12); }
 .dd-sep{ height:1px; background:var(--border); margin:4px 6px; }
-.shop-item{ display:flex; align-items:center; gap:12px; background:var(--panel-2); border:1px solid var(--border);
-  border-radius:10px; padding:12px 14px; margin-bottom:8px; }
-.si-info{ flex:1; display:flex; flex-direction:column; gap:3px; }
-.si-name{ font-weight:700; font-size:15px; }
-.si-credits{ font-family:var(--font-mono); font-size:13px; color:var(--ok); }
-.shop-item .btn{ flex:0 0 auto; min-width:96px; justify-content:center; }
 .btn.ghost{ background:transparent; } .btn.sm{ padding:5px 9px; font-size:12px; }
 .btn:disabled{ opacity:.45; cursor:not-allowed; }
 .icon-btn{ width:38px; height:38px; padding:0; justify-content:center; font-size:16px; background:var(--panel-3);
@@ -244,8 +238,6 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
 .ac-pick input{ width:16px; height:16px; accent-color:var(--fire); }
 .qbadge{ font-family:var(--font-mono); font-size:9px; font-weight:700; background:rgba(59,130,246,.15); color:#6aa8ff;
   border:1px solid rgba(59,130,246,.4); border-radius:4px; padding:0 4px; margin-left:2px; }
-.admin-god{ margin-top:6px; border-top:1px solid var(--border); padding-top:10px; display:flex; flex-direction:column; gap:10px; }
-.admin-god .ac-form{ gap:9px; }
 .adm-stats{ display:flex; flex-wrap:wrap; gap:8px; }
 .fld.sm{ flex:1; min-width:110px; }
 .fld.sm input{ width:100%; }
@@ -416,39 +408,7 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
 .google-btn:hover{ background:#f5f6f7; border-color:#c9cdd2; }
 .google-btn svg{ flex:0 0 auto; }
 
-/* Admin */
-.admin-search{ background:var(--panel-2); border:1px solid var(--border-2); border-radius:9px; color:var(--text);
-  font-family:var(--font-ui); font-size:14px; padding:10px 12px; width:100%; }
-.admin-search:focus{ outline:none; border-color:var(--fire); }
-.admin-results{ display:flex; flex-direction:column; gap:7px; max-height:52vh; overflow-y:auto; }
-.adm-row{ border:1px solid var(--border); border-radius:9px; background:var(--panel-2); padding:9px 11px;
-  display:flex; flex-direction:column; gap:8px; }
-.adm-main{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.adm-name{ font-family:var(--font-mono); font-weight:700; }
-.adm-badge{ font-size:9px; background:var(--fire); color:#fff; padding:1px 6px; border-radius:20px; font-family:var(--font-ui); }
-.adm-flag{ font-size:9px; background:rgba(245,158,11,.2); color:#fbbf24; border:1px solid rgba(245,158,11,.5); padding:1px 6px; border-radius:20px; }
-.adm-ban{ font-size:9px; background:rgba(239,68,68,.2); color:#fca5a5; border:1px solid rgba(239,68,68,.5); padding:1px 6px; border-radius:20px; }
-.adm-row.fl{ border-color:rgba(245,158,11,.5); }
-.adm-row.clickable{ cursor:pointer; } .adm-row.clickable:hover{ border-color:var(--fire); background:var(--panel-3); }
-.adm-open{ font-size:22px; color:var(--text-dim); padding:0 6px; }
-.acct-head{ display:flex; align-items:center; gap:12px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
-.acct-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
-.acct-box{ background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:9px; }
-/* Admin-Startseite */
-.admin-page{ width:100%; max-width:820px; display:flex; flex-direction:column; gap:14px; max-height:92vh; overflow-y:auto; padding:8px; }
-.admin-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
-.admin-card{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:var(--shadow); }
-.maint-row{ display:flex; align-items:center; gap:9px; font-size:13px; }
-.maint-row input{ width:18px; height:18px; accent-color:var(--fire); }
-.maint-input{ width:100%; min-height:80px; background:var(--panel-2); border:1px solid var(--border-2); border-radius:8px; color:var(--text); font-family:var(--font-ui); font-size:13px; padding:10px; resize:vertical; }
-.maint-input:focus{ outline:none; border-color:var(--fire); }
 .set-danger{ margin-top:8px; border-top:1px solid var(--border); padding-top:12px; display:flex; flex-direction:column; gap:8px; }
-.test-badge{ background:var(--warn); color:#231703; font-weight:800; font-size:11px; padding:3px 9px; border-radius:20px; font-family:var(--font-mono); }
-.adm-credits{ font-family:var(--font-mono); color:var(--warn); }
-.adm-actions{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-.adm-amt{ width:110px; background:var(--panel-3); border:1px solid var(--border-2); border-radius:7px; color:var(--text);
-  font-family:var(--font-mono); font-size:13px; padding:6px 9px; }
-.adm-amt:focus{ outline:none; border-color:var(--fire); }
 </style>
 </head>
 <body>
@@ -468,7 +428,6 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
         <button class="dd-item" id="dd-shop">🛒 Shop</button>
         <button class="dd-item" id="dd-save">💾 Speichern</button>
         <button class="dd-item" id="dd-settings">⚙️ Einstellungen</button>
-        <button class="dd-item hidden" id="dd-admin">🛡️ Administration</button>
         <div class="dd-sep"></div>
         <button class="dd-item danger" id="dd-logout">🚪 Abmelden</button>
       </div>
@@ -476,7 +435,6 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
     <select class="speed-select" id="speed-ctl" title="Einsatz-Häufigkeit (nur Spawn-Tempo)"></select>
     <button class="btn primary" id="btn-build">🏗️ Gebäude bauen</button>
     <button class="btn ghost" id="btn-catalog">📋 Einsatzarten</button>
-    <span class="test-badge hidden" id="topbar-test">🧪 TEST</span>
   </div>
 
   <div id="main">
@@ -492,7 +450,6 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
         <button class="tab active" data-tab="missions">Einsätze <span class="tcount zero" id="missions-count">0</span></button>
         <button class="tab" data-tab="vehicles">Fahrzeuge <span class="tcount zero" id="vehicles-count">0</span></button>
         <button class="tab" data-tab="stations">Wachen <span class="tcount zero" id="stations-count">0</span></button>
-        <button class="btn sm ghost hidden" id="btn-force-mission" title="Test-Einsatz erzeugen" style="margin-left:auto">+ Test</button>
       </div>
       <div class="tab-body" id="tab-missions"><div class="panel-body" id="missions-list"></div></div>
       <div class="tab-body hidden" id="tab-vehicles"><div class="panel-body" id="vehicles-list"></div></div>
@@ -591,44 +548,6 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
   </div>
 </div></div>
 
-<!-- Admin-Bereich -->
-<div class="modal-bg" id="modal-admin"><div class="modal wide">
-  <h3>🛡️ Administration</h3>
-  <div class="buy-sub">Benutzer suchen, Guthaben gutschreiben, Passwörter zurücksetzen</div>
-  <div class="m-content">
-    <input id="admin-q" type="text" class="admin-search" placeholder="Benutzername suchen …" autocomplete="off" />
-    <div id="admin-results" class="admin-results"></div>
-
-    <div class="admin-god">
-      <div class="ac-section-h">🚒 Eigenes Spiel — Personal hinzufügen</div>
-      <div class="ac-form">
-        <label class="fld"><span>Wache</span><select id="adm-staff-station"></select></label>
-        <div class="fld"><span>Qualifikationen (optional)</span><div id="adm-staff-quals" class="ac-people-pick"></div></div>
-        <label class="fld"><span>Anzahl</span><input id="adm-staff-count" type="number" min="1" max="100" value="5" /></label>
-        <button class="btn primary" id="adm-staff-add">Personal hinzufügen</button>
-      </div>
-
-      <div class="ac-section-h">🚙 Eigenes Spiel — Fahrzeug hinzufügen</div>
-      <div class="ac-form">
-        <label class="fld"><span>Wache</span><select id="adm-veh-station"></select></label>
-        <label class="fld"><span>Fahrzeugtyp</span><select id="adm-veh-type"></select></label>
-        <div class="adm-stats">
-          <label class="fld sm"><span>Wasser (L)</span><input id="adm-veh-water" type="number" min="0" /></label>
-          <label class="fld sm"><span>Schaum (L)</span><input id="adm-veh-foam" type="number" min="0" /></label>
-          <label class="fld sm"><span>Besatzung min</span><input id="adm-veh-cmin" type="number" min="0" /></label>
-          <label class="fld sm"><span>Besatzung max</span><input id="adm-veh-cmax" type="number" min="0" /></label>
-          <label class="fld sm"><span>Pumpe (l/min)</span><input id="adm-veh-pump" type="number" min="0" /></label>
-        </div>
-        <button class="btn primary" id="adm-veh-add">Fahrzeug hinzufügen</button>
-      </div>
-    </div>
-  </div>
-  <div class="m-actions">
-    <button class="btn" id="admin-reload" style="margin-right:auto">🔄 Alle Instanzen neu laden</button>
-    <button class="btn ghost" data-close>Schließen</button>
-  </div>
-</div></div>
-
 <!-- Vollbild: Konto-Anmeldung -->
 <div class="screen" id="screen-auth">
   <div class="auth-card">
@@ -657,7 +576,7 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
       <b>Einrichtung nötig.</b><br>1. Supabase-Projekt anlegen.<br>
       2. Das mitgelieferte <b>supabase_setup.sql</b> im SQL-Editor ausführen.<br>
       3. In dieser Datei oben im Script <b>SUPABASE_URL</b> und <b>SUPABASE_ANON_KEY</b> eintragen.<br>
-      4. Seite neu laden. Admin-Login: <b>Administrator / 2521</b>.
+      4. Seite neu laden.
     </div>
   </div>
 </div>
@@ -674,35 +593,11 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
   </div>
 </div>
 
-<!-- Vollbild: Admin-Startseite -->
-<div class="screen" id="screen-admin">
-  <div class="admin-page">
-    <div class="admin-head"><span class="auth-brand"><span class="dot"></span> ADMINISTRATION</span>
-      <div style="display:flex;gap:8px"><button class="btn primary" id="adminS-test">🧪 Testspiel starten</button><button class="btn ghost" id="adminS-logout">🚪 Abmelden</button></div></div>
-
-    <div class="admin-card">
-      <div class="ac-section-h">🛠️ Wartungsarbeiten</div>
-      <label class="maint-row"><input type="checkbox" id="maint-toggle" /> Wartungsmodus aktiv (nur Admin kann sich einloggen)</label>
-      <textarea id="maint-input" class="maint-input" placeholder="Text, der Spielern angezeigt wird …"></textarea>
-      <div style="display:flex;gap:8px"><button class="btn primary" id="adminS-maint-save">Speichern</button><button class="btn" id="adminS-reload">🔄 Alle Instanzen neu laden</button></div>
-    </div>
-
-    <div class="admin-card">
-      <div class="ac-section-h">👤 Benutzerverwaltung</div>
-      <div id="adminS-list">
-        <input id="adminS-q" type="text" class="admin-search" placeholder="Benutzername suchen … (verdächtige zuerst)" autocomplete="off" />
-        <div id="adminS-results" class="admin-results" style="max-height:46vh"></div>
-      </div>
-      <div id="adminS-detail" class="hidden"></div>
-    </div>
-  </div>
-</div>
-
 <!-- Einstellungen (jeder Spieler) -->
 <div class="modal-bg" id="modal-shop"><div class="modal wide">
   <h3>🛒 Shop</h3>
   <div class="m-content">
-    <div class="shoppane" id="shop-real"><div class="empty-hint" style="padding:40px 16px">Noch keine Angebote.<br>Hier gibt es bald Käufe.</div></div>
+    <div class="empty-hint" style="padding:50px 16px;font-size:15px">🚧 Kommt noch — der Shop ist derzeit nicht verfügbar.</div>
   </div>
   <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
@@ -810,7 +705,7 @@ const SUPABASE_URL      = 'https://virsphrwhskjquenyhsj.supabase.co';   // API-U
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpcnNwaHJ3aHNranF1ZW55aHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MzYzMTIsImV4cCI6MjEwNDAxMjMxMn0.THEjf23Z_amiHsN0uZ5eRQbM0oj7yG9DgNbjmu8bca8';   // öffentlicher anon-Key
 
 let sb=null;
-const AUTH={ token:null, username:null, is_admin:false };
+const AUTH={ token:null, username:null };
 
 /* Nur der Login-Token wird lokal gehalten (kein Spielstand im Browser).
    In-Memory-Fallback, falls localStorage blockiert ist. */
@@ -856,7 +751,6 @@ function serializeObj(){ return {
 let saveInFlight=false;
 let saveWarned=false;
 async function saveGame(silent){
-  if(testMode) return;                               // Testspiel wird nicht gespeichert
   if(!sb || !AUTH.token || !state) return;
   if(saveInFlight) return; saveInFlight=true;
   try{
@@ -2107,52 +2001,13 @@ document.getElementById('btn-catalog').onclick=renderCatalog;
 function toggleMenu(force){ const m=document.getElementById('topbar-menu'); m.classList.toggle('hidden', force===undefined?undefined:!force); }
 function closeMenu(){ document.getElementById('topbar-menu').classList.add('hidden'); }
 function openShopQuick(){ const st = (svStationId&&stationById(svStationId)) || state.stations[0]; if(!st){ toast('Erst eine Wache bauen','warn'); return; } openStationView(st.id,'shop'); }
-function openShop(){ document.getElementById('shop-real').innerHTML='<div class="empty-hint" style="padding:50px 16px;font-size:15px">🚧 Shop momentan nicht verfügbar.</div>'; showModal('modal-shop'); }
-async function renderShop(){
-  const box=document.getElementById('shop-real'); box.innerHTML='<div class="empty-hint" style="padding:30px">Lade Angebote …</div>';
-  try{
-    const { data, error } = await sb.from('shop_products').select('*').eq('active',true).order('sort');
-    if(error) throw error;
-    if(!data || !data.length){ box.innerHTML='<div class="empty-hint" style="padding:40px 16px">Noch keine Angebote.</div>'; return; }
-    box.innerHTML=data.map(p=>`<div class="shop-item">
-        <div class="si-info"><span class="si-name">${p.name}</span><span class="si-credits">+ ${Number(p.credits).toLocaleString('de-DE')} € Ingame</span></div>
-        <button class="btn primary" data-buy-prod="${p.id}">${(p.price_cents/100).toLocaleString('de-DE',{minimumFractionDigits:2})} ${(p.currency||'eur').toUpperCase()}</button>
-      </div>`).join('');
-    box.querySelectorAll('[data-buy-prod]').forEach(b=> b.onclick=()=>buyProduct(b.dataset.buyProd));
-  }catch(e){ box.innerHTML='<div class="empty-hint" style="padding:30px">Shop nicht verfügbar. (Ist das Shop-SQL ausgeführt?)</div>'; console.error('shop',e); }
-}
-async function buyProduct(id){
-  toast('Weiterleitung zu Stripe …','ok');
-  try{
-    const base=location.origin+location.pathname;
-    const { data, error } = await sb.functions.invoke('create-checkout',{ body:{ token:AUTH.token, productId:id, successUrl:base, cancelUrl:base } });
-    if(error){
-      let detail=error.message||'Fehler';
-      try{ const b=await error.context.json(); if(b&&b.error) detail=b.error; }
-      catch(_){ try{ const t=await error.context.text(); if(t) detail=t; }catch(__){} }
-      toast('Checkout-Fehler: '+detail,'err'); console.error('checkout',error,detail); return;
-    }
-    if(data && data.error){ toast(data.error,'err'); return; }
-    if(data && data.url){ location.href=data.url; return; }
-    toast('Keine Checkout-URL erhalten','err');
-  }catch(e){ toast('Zahlung fehlgeschlagen: '+errMsg(e),'err'); console.error('checkout',e); }
-}
-function handlePurchaseReturn(){
-  const p=new URLSearchParams(location.search).get('purchase'); if(!p) return;
-  history.replaceState({}, '', location.origin+location.pathname);   // URL säubern
-  if(p==='success'){
-    toast('✅ Zahlung erfolgreich — Guthaben wird gutgeschrieben …','ok');
-    setTimeout(async ()=>{ try{ await loadGame(); rebuildEverything(); toast('Guthaben aktualisiert','ok'); }catch(e){} }, 4000);
-  } else if(p==='cancel'){ toast('Zahlung abgebrochen','warn'); }
-}
+function openShop(){ showModal('modal-shop'); }
 document.getElementById('btn-menu').onclick=(e)=>{ e.stopPropagation(); document.getElementById('topbar-menu').classList.toggle('hidden'); };
 document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-wrap'); if(w && !w.contains(e.target)) closeMenu(); });
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
 document.getElementById('dd-save').onclick=()=>{ closeMenu(); saveGame(); };
 document.getElementById('dd-settings').onclick=()=>{ closeMenu(); openSettings(); };
-document.getElementById('dd-admin').onclick=()=>{ closeMenu(); openAdmin(); };
 document.getElementById('dd-logout').onclick=()=>{ closeMenu(); doLogout(); };
-document.getElementById('btn-force-mission').onclick=()=>{ if(!MISSION_TYPES.length){ toast('Keine Einsätze definiert (Vorlage ausfüllen)','warn'); return; } if(state.stations.length===0){ toast('Erst eine Wache bauen','warn'); return; } spawnMission(); };
 document.getElementById('speed-ctl').onchange=e=>setSpeed(e.target.value);
 document.getElementById('se-save').onclick=saveStationEdit;
 document.getElementById('ve-save').onclick=saveVehicleEdit;
@@ -2166,18 +2021,17 @@ document.getElementById('btn-funk-clear').onclick=()=>{ funkLog=[]; renderFunk()
 document.querySelectorAll('#modal-stationview [data-svtab]').forEach(b=> b.onclick=()=>{ svTab=b.dataset.svtab; renderStationView(); });
 
 /* ========================================================================
-   AUTH / ADMIN / START
+   AUTH / START
    ======================================================================== */
-let gameStarted=false, myReloadToken=null, testMode=false;
+let gameStarted=false;
 
-function showScreen(id){ ['screen-config','screen-auth','screen-admin','screen-maint'].forEach(s=>{ const el=document.getElementById(s); if(el) el.classList.toggle('show', s===id); }); }
-function hideScreens(){ ['screen-config','screen-auth','screen-admin','screen-maint'].forEach(s=>{ const el=document.getElementById(s); if(el) el.classList.remove('show'); }); }
+function showScreen(id){ ['screen-config','screen-auth','screen-maint'].forEach(s=>{ const el=document.getElementById(s); if(el) el.classList.toggle('show', s===id); }); }
+function hideScreens(){ ['screen-config','screen-auth','screen-maint'].forEach(s=>{ const el=document.getElementById(s); if(el) el.classList.remove('show'); }); }
 
-function applyAuth(res, tok){ AUTH.token=tok||res.token; AUTH.username=res.username; AUTH.is_admin=!!res.is_admin; AUTH.maintenance=!!res.maintenance; AUTH.maintenance_text=res.maintenance_text||''; }
+function applyAuth(res, tok){ AUTH.token=tok||res.token; AUTH.username=res.username; AUTH.maintenance=!!res.maintenance; AUTH.maintenance_text=res.maintenance_text||''; }
 function routeAfterAuth(){
-  if(AUTH.is_admin){ showAdminScreen(); return; }
   if(AUTH.maintenance){ showMaintenance(AUTH.maintenance_text); return; }
-  startGame(false);
+  startGame();
 }
 function showMaintenance(txt){
   hideScreens(); const el=document.getElementById('screen-maint');
@@ -2232,295 +2086,34 @@ async function doLogout(){
   TokenStore.clear(); location.reload();
 }
 
-async function startGame(test){
-  testMode=!!test; hideScreens();
+async function startGame(){
+  hideScreens();
   const authScreen=document.getElementById('screen-auth');
   if(authScreen){ const pw=document.getElementById('auth-pass'); if(pw) pw.value=''; authScreen.remove(); }
   document.getElementById('app').style.display='flex';
-  document.getElementById('dd-admin').classList.toggle('hidden', !AUTH.is_admin);
-  document.getElementById('topbar-test')?.classList.toggle('hidden', !testMode);
-  document.getElementById('btn-force-mission')?.classList.toggle('hidden', !testMode);
-  if(testMode){ state=freshState(); } else { await loadGame(); settlePayday(); }
+  await loadGame(); settlePayday();
   if(!gameStarted){
     initMap(); rebuildEverything(); renderSpeed();
     setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },120);
     updateClock(); setInterval(updateClock,250);
     setInterval(()=>{ tick(); spawnLoop(); },CONFIG.tickMs);
     setInterval(()=>saveGame(true),15000);
-    setInterval(pollReload,20000);
     setInterval(accrueAllStaff,60000);
     setInterval(courseTick,30000);
     setInterval(settlePayday,30000);
     window.addEventListener('beforeunload',()=>saveGame(true));
     gameStarted=true;
   } else { rebuildEverything(); }
-  if(!testMode) setTimeout(resumeDriving, 300);
-  if(!testMode) setTimeout(handlePurchaseReturn, 600);
+  setTimeout(resumeDriving, 300);
   state.stations.filter(s=>!s.ort).forEach((s,i)=> setTimeout(()=>detectOrt(s), 800+i*1300));
-  if(testMode) setTimeout(()=>toast('🧪 Testspiel — wird beim Abmelden zurückgesetzt','warn'),500);
-  else if(state.stations.length===0) setTimeout(()=>toast(`Willkommen, ${AUTH.username}! Baue deine erste Feuerwache 🏗️`,'ok'),500);
+  if(state.stations.length===0) setTimeout(()=>toast(`Willkommen, ${AUTH.username}! Baue deine erste Feuerwache 🏗️`,'ok'),500);
 }
 
-async function pollReload(){
-  try{ const {data}=await sb.from('app_system').select('reload_token').eq('id',1).single();
-    if(data){ if(myReloadToken===null) myReloadToken=data.reload_token;
-      else if(data.reload_token!==myReloadToken){ toast('Neustart durch Administrator …','warn'); await saveGame(true); setTimeout(()=>location.reload(),1000); } }
-  }catch(e){}
-}
-
-/* ---------- Admin-Bereich ---------- */
-function openAdmin(){ if(!AUTH.is_admin) return; adminActiveQ='admin-q'; adminActiveRes='admin-results'; document.getElementById('admin-q').value=''; document.getElementById('admin-results').innerHTML='<div class="empty-hint">Benutzername suchen …</div>'; renderAdminGod(); showModal('modal-admin'); adminSearch('admin-q','admin-results'); }
-function renderAdminGod(){
-  const stOpts=state.stations.map(s=>`<option value="${s.id}">${s.name}</option>`).join('') || '<option value="">— keine Wache —</option>';
-  document.getElementById('adm-staff-station').innerHTML=stOpts;
-  document.getElementById('adm-veh-station').innerHTML=stOpts;
-  document.getElementById('adm-staff-quals').innerHTML = COURSES.length
-    ? COURSES.map(c=>`<label class="ac-pick"><input type="checkbox" data-aq="${c.id}"/> ${c.name}</label>`).join('')
-    : '<div class="pers-hint">Keine Lehrgänge im Katalog.</div>';
-  document.getElementById('adm-veh-type').innerHTML=Object.values(VEHICLES).map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-  syncAdmVehStats();
-}
-function syncAdmVehStats(){ const t=VEHICLES[document.getElementById('adm-veh-type').value]; if(!t) return;
-  document.getElementById('adm-veh-water').value=t.water; document.getElementById('adm-veh-foam').value=t.foam;
-  document.getElementById('adm-veh-cmin').value=t.crewMin; document.getElementById('adm-veh-cmax').value=t.crewMax;
-  document.getElementById('adm-veh-pump').value=t.pump;
-}
-function adminAddStaff(){
-  const stId=document.getElementById('adm-staff-station').value; const st=stationById(stId);
-  if(!st){ toast('Keine Wache gewählt','warn'); return; }
-  const quals=[...document.querySelectorAll('#adm-staff-quals [data-aq]:checked')].map(x=>x.dataset.aq);
-  const n=Math.max(1,Math.min(100,parseInt(document.getElementById('adm-staff-count').value)||0));
-  for(let i=0;i<n;i++){ const p=makePerson(); p.quals=[...quals]; st.roster.push(p); }
-  renderStations(); if(svStationId===st.id) renderStationView(); saveGame(true);
-  toast(`${n} Personal zu ${st.name} hinzugefügt${quals.length?' ('+quals.map(qualShort).join(', ')+')':''}`,'ok');
-}
-function adminAddVehicle(){
-  const stId=document.getElementById('adm-veh-station').value; const st=stationById(stId);
-  if(!st){ toast('Keine Wache gewählt','warn'); return; }
-  const t=VEHICLES[document.getElementById('adm-veh-type').value]; if(!t) return;
-  const num=id=>{ const x=parseInt(document.getElementById(id).value); return isNaN(x)?null:x; };
-  const mod={}; const w=num('adm-veh-water'),f=num('adm-veh-foam'),cn=num('adm-veh-cmin'),cx=num('adm-veh-cmax'),pp=num('adm-veh-pump');
-  if(w!=null&&w!==t.water) mod.water=w; if(f!=null&&f!==t.foam) mod.foam=f;
-  if(cn!=null&&cn!==t.crewMin) mod.crewMin=cn; if(cx!=null&&cx!==t.crewMax) mod.crewMax=cx; if(pp!=null&&pp!==t.pump) mod.pump=pp;
-  const seq=state.vehicles.filter(x=>x.stationId===st.id && x.type===t.id).length+1;
-  const v={ id:nid(), type:t.id, stationId:st.id, status:2, lat:st.lat, lng:st.lng,
-    water:(mod.water!=null?mod.water:t.water), foam:(mod.foam!=null?mod.foam:t.foam),
-    targetMissionId:null, nextMissionId:null, seq, assigned:0, crewIds:[], mod:Object.keys(mod).length?mod:null };
-  state.vehicles.push(v);
-  renderStations(); renderVehicles(); if(svStationId===st.id) renderStationView(); saveGame(true);
-  toast(`${vehName(v)} zu ${st.name} hinzugefügt${v.mod?' (modifiziert)':''}`,'ok');
-}
-let adminSearchTimer=null, adminActiveQ='admin-q', adminActiveRes='admin-results';
-let adminRowsByName={}, adminAcctUser=null, adminAcctSave=null, adminAcctRow=null;
-function adminSearchDebounced(){ clearTimeout(adminSearchTimer); adminSearchTimer=setTimeout(()=>adminSearch(),250); }
-function adminRowHTML(r){
-  const badges=`${r.is_admin?' <span class="adm-badge">ADMIN</span>':''}${r.flagged?` <span class="adm-flag" title="${(r.flag_reason||'').replace(/"/g,'')}">⚑ verdächtig</span>`:''}${r.banned?' <span class="adm-ban">GESPERRT</span>':''}`;
-  const actions=r.is_admin?'' : `<div class="adm-actions">
-      <input type="number" class="adm-amt" placeholder="Betrag" data-amt="${r.username}" />
-      <button class="btn sm primary" data-give="${r.username}">Geld</button>
-      <button class="btn sm" data-pw="${r.username}">Passwort</button>
-      <button class="btn sm" data-ban="${r.username}" data-b="${r.banned?0:1}">${r.banned?'Entsperren':'Bannen'}</button>
-      ${r.flagged?`<button class="btn sm" data-unflag="${r.username}">Flag löschen</button>`:''}
-      <button class="btn sm danger" data-del="${r.username}">Löschen</button>
-    </div>`;
-  return `<div class="adm-row${r.flagged?' fl':''}"><div class="adm-main"><span class="adm-name">${r.username}${badges}</span>
-      <span class="adm-credits">${Number(r.credits||0).toLocaleString('de-DE')} €</span></div>${actions}</div>`;
-}
-function adminRowClickable(r){
-  const badges=`${r.is_admin?' <span class="adm-badge">ADMIN</span>':''}${r.flagged?` <span class="adm-flag">⚑ verdächtig</span>`:''}${r.banned?' <span class="adm-ban">GESPERRT</span>':''}`;
-  const cl=r.is_admin?'':' clickable';
-  return `<div class="adm-row${r.flagged?' fl':''}${cl}" ${r.is_admin?'':`data-acct="${r.username}"`}>
-      <div class="adm-main"><span class="adm-name">${r.username}${badges}</span>
-      <span class="adm-credits">${Number(r.credits||0).toLocaleString('de-DE')} €</span></div>
-      ${r.is_admin?'':'<span class="adm-open">›</span>'}</div>`;
-}
-async function adminSearch(qId, resId){
-  qId=qId||adminActiveQ; resId=resId||adminActiveRes; adminActiveQ=qId; adminActiveRes=resId;
-  const qEl=document.getElementById(qId), box=document.getElementById(resId); if(!box) return;
-  const q=qEl?qEl.value.trim():'';
-  try{ const rows=await rpc('app_admin_search',{p_token:AUTH.token, p_query:q});
-    if(rows.error){ toast(rows.error,'err'); return; }
-    if(!rows.length){ box.innerHTML='<div class="empty-hint">Keine Treffer.</div>'; return; }
-    if(resId==='adminS-results'){                       // Admin-Screen: Account auswählen
-      adminRowsByName={}; rows.forEach(r=>adminRowsByName[r.username]=r);
-      box.innerHTML=rows.map(adminRowClickable).join('');
-      box.querySelectorAll('[data-acct]').forEach(el=> el.onclick=()=>adminOpenAccount(el.dataset.acct));
-    } else {                                             // In-Game-Modal: Inline-Aktionen
-      box.innerHTML=rows.map(adminRowHTML).join('');
-      box.querySelectorAll('[data-give]').forEach(b=> b.onclick=()=>adminGive(b.dataset.give,box));
-      box.querySelectorAll('[data-pw]').forEach(b=> b.onclick=()=>adminResetPw(b.dataset.pw));
-      box.querySelectorAll('[data-ban]').forEach(b=> b.onclick=()=>adminBan(b.dataset.ban, b.dataset.b==='1'));
-      box.querySelectorAll('[data-unflag]').forEach(b=> b.onclick=()=>adminUnflag(b.dataset.unflag));
-      box.querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>adminDelUser(b.dataset.del));
-    }
-  }catch(e){ toast('Suche: '+errMsg(e),'err'); console.error('admin-search',e); }
-}
-/* ---------- Account-Detail (Admin-Screen) ---------- */
-async function adminOpenAccount(username){
-  adminAcctUser=username; adminAcctRow=adminRowsByName[username]||{username};
-  document.getElementById('adminS-list').classList.add('hidden');
-  const box=document.getElementById('adminS-detail'); box.classList.remove('hidden');
-  box.innerHTML='<div class="empty-hint" style="padding:24px">Lade Konto …</div>';
-  try{ const save=await rpc('app_admin_load_save',{p_token:AUTH.token, p_username:username});
-    adminAcctSave=(save && !save.error)?save:{};
-  }catch(e){ adminAcctSave={}; }
-  renderAccountDetail();
-}
-function adminCloseAccount(){
-  adminAcctUser=null; adminAcctSave=null; adminAcctRow=null;
-  document.getElementById('adminS-detail').classList.add('hidden');
-  document.getElementById('adminS-list').classList.remove('hidden');
-  adminSearch('adminS-q','adminS-results');
-}
-function renderAccountDetail(){
-  const box=document.getElementById('adminS-detail'); const u=adminAcctUser; const r=adminAcctRow||{};
-  const save=adminAcctSave||{}; const stations=save.stations||[];
-  const stOpts=stations.length?stations.map(s=>`<option value="${s.id}">${s.name||s.id}</option>`).join(''):'<option value="">— keine Wache —</option>';
-  const qualChecks=COURSES.length?COURSES.map(c=>`<label class="ac-pick"><input type="checkbox" data-dq="${c.id}"/> ${c.name}</label>`).join(''):'<div class="pers-hint">Keine Lehrgänge.</div>';
-  const vehOpts=Object.values(VEHICLES).map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-  const badges=`${r.banned?' <span class="adm-ban">GESPERRT</span>':''}${r.flagged?` <span class="adm-flag">⚑ ${(r.flag_reason||'verdächtig')}</span>`:''}`;
-  box.innerHTML=`
-    <div class="acct-head"><button class="btn sm ghost" id="ad-back">← Zurück</button>
-      <span class="adm-name" style="font-size:16px;flex:1">${u}${badges}</span>
-      <span class="adm-credits">${Number(r.credits||0).toLocaleString('de-DE')} €</span></div>
-    <div class="acct-grid">
-      <div class="acct-box"><div class="ac-section-h">💰 Geld geben</div>
-        <div style="display:flex;gap:8px"><input type="number" id="ad-amt" class="adm-amt" placeholder="Betrag (auch negativ)" style="flex:1"/><button class="btn sm primary" id="ad-give">Gutschreiben</button></div></div>
-      <div class="acct-box"><div class="ac-section-h">🛡️ Status</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn sm" id="ad-ban">${r.banned?'Entsperren':'Bannen'}</button>
-          <button class="btn sm" id="ad-unflag" ${r.flagged?'':'disabled'}>Flag entfernen</button>
-          <button class="btn sm" id="ad-pw">Passwort ändern</button>
-          <button class="btn sm danger" id="ad-del">Konto löschen</button></div></div>
-      <div class="acct-box"><div class="ac-section-h">👥 Personal hinzufügen</div>
-        <label class="fld"><span>Wache</span><select id="ad-staff-st">${stOpts}</select></label>
-        <div class="fld"><span>Qualifikationen</span><div class="ac-people-pick">${qualChecks}</div></div>
-        <label class="fld"><span>Anzahl</span><input type="number" id="ad-staff-n" value="5" min="1" max="100"/></label>
-        <button class="btn sm primary" id="ad-staff-go" ${stations.length?'':'disabled'}>Hinzufügen</button></div>
-      <div class="acct-box"><div class="ac-section-h">🚒 Fahrzeug hinzufügen</div>
-        <label class="fld"><span>Wache</span><select id="ad-veh-st">${stOpts}</select></label>
-        <label class="fld"><span>Typ</span><select id="ad-veh-type">${vehOpts}</select></label>
-        <button class="btn sm primary" id="ad-veh-go" ${stations.length?'':'disabled'}>Hinzufügen</button></div>
-    </div>
-    <div class="pers-hint">Personal/Fahrzeuge werden direkt in den Spielstand geschrieben. Ist der Spieler gerade online, kann sein nächstes Auto-Speichern die Änderung überschreiben — am besten bei Offline-Spielern nutzen.</div>`;
-  document.getElementById('ad-back').onclick=adminCloseAccount;
-  document.getElementById('ad-give').onclick=adminAcctGive;
-  document.getElementById('ad-ban').onclick=adminAcctBan;
-  document.getElementById('ad-unflag').onclick=adminAcctUnflag;
-  document.getElementById('ad-pw').onclick=()=>adminResetPw(u);
-  document.getElementById('ad-del').onclick=adminAcctDelete;
-  document.getElementById('ad-staff-go').onclick=adminGrantStaff;
-  document.getElementById('ad-veh-go').onclick=adminGrantVehicle;
-}
-async function adminAcctGive(){
-  const amt=parseInt(document.getElementById('ad-amt').value); if(isNaN(amt)||amt===0){ toast('Betrag eingeben','warn'); return; }
-  try{ const res=await rpc('app_admin_add_credits',{p_token:AUTH.token,p_username:adminAcctUser,p_amount:amt});
-    if(res.error){ toast(res.error,'err'); return; } adminAcctRow.credits=res.credits; if(adminAcctSave) adminAcctSave.credits=res.credits;
-    toast(`Neues Guthaben ${Number(res.credits).toLocaleString('de-DE')} €`,'ok'); renderAccountDetail();
-  }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-async function adminAcctBan(){
-  const ban=!adminAcctRow.banned; if(!confirm(`${adminAcctUser} ${ban?'bannen':'entsperren'}?`)) return;
-  const res=await rpc('app_admin_set_ban',{p_token:AUTH.token,p_username:adminAcctUser,p_banned:ban});
-  if(res.error){ toast(res.error,'err'); return; } adminAcctRow.banned=ban; toast(ban?'Gebannt':'Entsperrt','ok'); renderAccountDetail();
-}
-async function adminAcctUnflag(){
-  const res=await rpc('app_admin_clear_flag',{p_token:AUTH.token,p_username:adminAcctUser});
-  if(res.error){ toast(res.error,'err'); return; } adminAcctRow.flagged=false; adminAcctRow.flag_reason=null; toast('Flag entfernt','ok'); renderAccountDetail();
-}
-async function adminAcctDelete(){
-  if(!confirm(`Konto „${adminAcctUser}“ unwiderruflich löschen?`)) return;
-  const res=await rpc('app_admin_delete_user',{p_token:AUTH.token,p_username:adminAcctUser});
-  if(res.error){ toast(res.error,'err'); return; } toast('Gelöscht','ok'); adminCloseAccount();
-}
-async function adminSaveAcct(){
-  const res=await rpc('app_admin_write_save',{p_token:AUTH.token,p_username:adminAcctUser,p_data:adminAcctSave});
-  if(res&&res.error){ toast(res.error,'err'); return false; } return true;
-}
-async function adminGrantStaff(){
-  const st=(adminAcctSave.stations||[]).find(s=>s.id===document.getElementById('ad-staff-st').value);
-  if(!st){ toast('Keine Wache','warn'); return; }
-  const quals=[...document.querySelectorAll('#adminS-detail [data-dq]:checked')].map(x=>x.dataset.dq);
-  const n=Math.max(1,Math.min(100,parseInt(document.getElementById('ad-staff-n').value)||0));
-  if(!Array.isArray(st.roster)) st.roster=[];
-  for(let i=0;i<n;i++){ const p=makePerson(); p.quals=[...quals]; st.roster.push(p); }
-  if(await adminSaveAcct()) toast(`${n} Personal zu ${st.name} hinzugefügt${quals.length?' ('+quals.map(qualShort).join(', ')+')':''}`,'ok');
-}
-async function adminGrantVehicle(){
-  const st=(adminAcctSave.stations||[]).find(s=>s.id===document.getElementById('ad-veh-st').value);
-  if(!st){ toast('Keine Wache','warn'); return; }
-  const t=VEHICLES[document.getElementById('ad-veh-type').value]; if(!t) return;
-  adminAcctSave.vehicles=adminAcctSave.vehicles||[];
-  const seq=adminAcctSave.vehicles.filter(x=>x.stationId===st.id&&x.type===t.id).length+1;
-  adminAcctSave.vehicles.push({ id:nid(), type:t.id, stationId:st.id, status:2, lat:st.lat, lng:st.lng, water:t.water, foam:t.foam, seq, customName:null, mod:null, crew:0, crewIds:[], targetMissionId:null, nextMissionId:null });
-  if(await adminSaveAcct()) toast(`${t.name} zu ${st.name} hinzugefügt`,'ok');
-}
-function adminRefresh(){ adminSearch(adminActiveQ, adminActiveRes); }
-async function adminGive(username, box){
-  const scope=box||document; const inp=scope.querySelector(`.adm-amt[data-amt="${CSS.escape(username)}"]`);
-  const amount=parseInt(inp&&inp.value); if(isNaN(amount)||amount===0){ toast('Betrag eingeben','warn'); return; }
-  try{ const r=await rpc('app_admin_add_credits',{p_token:AUTH.token, p_username:username, p_amount:amount});
-    if(r.error){ toast(r.error,'err'); return; } toast(`${username}: neues Guthaben ${Number(r.credits).toLocaleString('de-DE')} €`,'ok'); adminRefresh();
-  }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-async function adminResetPw(username){
-  const np=prompt(`Neues Passwort für „${username}“:`); if(np===null) return;
-  try{ const r=await rpc('app_admin_reset_pw',{p_token:AUTH.token, p_username:username, p_new:np});
-    if(r.error){ toast(r.error,'err'); return; } toast(`Passwort von ${username} zurückgesetzt`,'ok');
-  }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-async function adminBan(username, ban){
-  if(!confirm(`${username} wirklich ${ban?'bannen':'entsperren'}?`)) return;
-  try{ const r=await rpc('app_admin_set_ban',{p_token:AUTH.token, p_username:username, p_banned:ban});
-    if(r.error){ toast(r.error,'err'); return; } toast(`${username} ${ban?'gebannt':'entsperrt'}`,'ok'); adminRefresh();
-  }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-async function adminUnflag(username){
-  try{ const r=await rpc('app_admin_clear_flag',{p_token:AUTH.token, p_username:username});
-    if(r.error){ toast(r.error,'err'); return; } toast(`Flag von ${username} entfernt`,'ok'); adminRefresh();
-  }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-async function adminDelUser(username){
-  if(!confirm(`Konto „${username}“ UNWIDERRUFLICH löschen?`)) return;
-  try{ const r=await rpc('app_admin_delete_user',{p_token:AUTH.token, p_username:username});
-    if(r.error){ toast(r.error,'err'); return; } toast(`${username} gelöscht`,'ok'); adminRefresh();
-  }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-async function adminReloadAll(){
-  if(!confirm('Alle Instanzen neu laden? Alle Spieler werden neu geladen.')) return;
-  try{ const r=await rpc('app_admin_reload',{p_token:AUTH.token}); if(r.error){ toast(r.error,'err'); return; } toast('Neustart ausgelöst','ok'); }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-/* ---------- Admin-Startseite ---------- */
-async function showAdminScreen(){
-  hideScreens(); document.getElementById('app').style.display='none';
-  document.getElementById('screen-admin').classList.add('show');
-  adminActiveQ='adminS-q'; adminActiveRes='adminS-results';
-  document.getElementById('adminS-detail').classList.add('hidden');
-  document.getElementById('adminS-list').classList.remove('hidden');
-  try{ const {data}=await sb.from('app_system').select('maintenance,maintenance_text').eq('id',1).single();
-    if(data){ document.getElementById('maint-toggle').checked=!!data.maintenance; document.getElementById('maint-input').value=data.maintenance_text||''; }
-  }catch(e){}
-  adminSearch('adminS-q','adminS-results');
-}
-async function adminSaveMaintenance(){
-  const on=document.getElementById('maint-toggle').checked; const txt=document.getElementById('maint-input').value;
-  try{ const r=await rpc('app_admin_set_maintenance',{p_token:AUTH.token, p_on:on, p_text:txt});
-    if(r.error){ toast(r.error,'err'); return; } toast(on?'Wartungsmodus AN — Spieler ausgeloggt':'Wartungsmodus AUS','ok');
-  }catch(e){ toast('Fehlgeschlagen','err'); }
-}
-
-/* Auth-/Admin-Events */
+/* Auth-Events */
 document.getElementById('auth-login').onclick=()=>doAuth('login');
 document.getElementById('auth-signup').onclick=()=>doAuth('signup');
 document.getElementById('auth-google').onclick=googleLogin;
 document.getElementById('auth-pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doAuth('login'); });
-document.getElementById('admin-q').addEventListener('input',()=>{ adminActiveQ='admin-q'; adminActiveRes='admin-results'; adminSearchDebounced(); });
-document.getElementById('admin-reload').onclick=adminReloadAll;
-document.getElementById('adminS-q').addEventListener('input',()=>{ adminActiveQ='adminS-q'; adminActiveRes='adminS-results'; adminSearchDebounced(); });
-document.getElementById('adminS-reload').onclick=adminReloadAll;
-document.getElementById('adminS-maint-save').onclick=adminSaveMaintenance;
-document.getElementById('adminS-test').onclick=()=>startGame(true);
-document.getElementById('adminS-logout').onclick=doLogout;
 
 /* ---------- Einstellungen (Spieler) ---------- */
 function openSettings(){ document.getElementById('set-user').value=AUTH.username||''; document.getElementById('set-pass').value=''; showModal('modal-settings'); }
@@ -2548,9 +2141,6 @@ document.getElementById('maint-logout').onclick=doLogout;
 document.getElementById('set-user-save').onclick=settingsSaveUser;
 document.getElementById('set-pass-save').onclick=settingsSavePass;
 document.getElementById('set-delete').onclick=settingsDelete;
-document.getElementById('adm-staff-add').onclick=adminAddStaff;
-document.getElementById('adm-veh-add').onclick=adminAddVehicle;
-document.getElementById('adm-veh-type').onchange=syncAdmVehStats;
 
 /* Start */
 document.getElementById('app').style.display='none';
