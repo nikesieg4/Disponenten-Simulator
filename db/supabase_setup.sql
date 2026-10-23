@@ -35,10 +35,21 @@ drop function if exists shop_uid(uuid);
 drop table if exists shop_purchases;
 drop table if exists shop_products;
 alter table app_users drop column if exists is_admin;
-alter table app_system drop column if exists reload_token;
+alter table if exists app_system drop column if exists reload_token;
 
 create table if not exists app_saves ( user_id uuid primary key references app_users(id) on delete cascade, data jsonb, updated_at timestamptz not null default now() );
-create table if not exists app_sessions ( token uuid primary key default gen_random_uuid(), user_id uuid not null references app_users(id) on delete cascade, created_at timestamptz not null default now() );
+-- Sitzungen: nur der SHA-256-Hash des Tokens wird gespeichert, Ablauf nach 30 Tagen ohne Nutzung.
+-- Alte Tabelle mit Klartext-Tokens ersetzen (alle Spieler melden sich einmal neu an).
+do $$ begin
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='app_sessions' and column_name='token') then
+    drop table app_sessions;
+  end if;
+end $$;
+create table if not exists app_sessions ( token_hash text primary key, user_id uuid not null references app_users(id) on delete cascade,
+  created_at timestamptz not null default now(), expires_at timestamptz not null default now() + interval '30 days' );
+create index if not exists app_sessions_user on app_sessions(user_id);
+-- Fehlversuche beim Login (je Benutzername und je IP-Adresse)
+create table if not exists app_login_attempts ( key text primary key, fails int not null default 0, locked_until timestamptz, last_fail timestamptz not null default now() );
 create table if not exists app_system ( id int primary key default 1, maintenance boolean not null default false, maintenance_text text );
 insert into app_system(id) values (1) on conflict do nothing;
 alter table app_system add column if not exists maintenance boolean not null default false;
@@ -48,13 +59,42 @@ alter table app_users    enable row level security;
 alter table app_saves    enable row level security;
 alter table app_sessions enable row level security;
 alter table app_system   enable row level security;
+alter table app_login_attempts enable row level security;
 drop policy if exists app_system_read on app_system;
 create policy app_system_read on app_system for select using (true);
-revoke all on app_users, app_saves, app_sessions from anon, authenticated;
+revoke all on app_users, app_saves, app_sessions, app_login_attempts from anon, authenticated;
 grant  select on app_system to anon, authenticated;
 
+create or replace function _token_hash(p_token uuid) returns text language sql immutable set search_path=public, extensions as $$
+  select encode(digest(p_token::text,'sha256'),'hex'); $$;
 create or replace function _uid(p_token uuid) returns uuid language sql security definer set search_path=public, extensions as $$
-  select user_id from app_sessions where token=p_token; $$;
+  select user_id from app_sessions where token_hash=_token_hash(p_token) and expires_at > now(); $$;
+-- Neue Sitzung: alte Sitzungen des Kontos und abgelaufene Sitzungen löschen, Token nur einmal im Klartext zurückgeben
+create or replace function _new_session(p_uid uuid) returns uuid language plpgsql security definer set search_path=public, extensions as $$
+declare v_token uuid := gen_random_uuid();
+begin
+  delete from app_sessions where user_id=p_uid or expires_at <= now();
+  insert into app_sessions(token_hash, user_id) values (_token_hash(v_token), p_uid);
+  return v_token;
+end; $$;
+-- Login-Sperre: 5 Fehlversuche je Benutzername bzw. 30 je IP → 15 Minuten gesperrt
+create or replace function _client_ip() returns text language sql stable as $$
+  select nullif(split_part(coalesce(current_setting('request.headers',true)::json->>'x-forwarded-for',''),',',1),''); $$;
+create or replace function _login_locked(p_keys text[]) returns timestamptz language sql security definer set search_path=public, extensions as $$
+  select max(locked_until) from app_login_attempts where key = any(p_keys) and locked_until > now(); $$;
+create or replace function _login_fail(p_keys text[]) returns void language plpgsql security definer set search_path=public, extensions as $$
+declare k text; v_fails int;
+begin
+  foreach k in array p_keys loop
+    insert into app_login_attempts(key, fails, last_fail) values (k, 1, now())
+      on conflict (key) do update set fails = case when app_login_attempts.last_fail < now() - interval '15 minutes' then 1 else app_login_attempts.fails + 1 end, last_fail = now()
+      returning fails into v_fails;
+    if v_fails >= (case when k like 'ip:%' then 30 else 5 end) then
+      update app_login_attempts set locked_until = now() + interval '15 minutes', fails = 0 where key = k;
+    end if;
+  end loop;
+  delete from app_login_attempts where last_fail < now() - interval '1 day' and (locked_until is null or locked_until < now());
+end; $$;
 create or replace function _maint() returns json language sql security definer set search_path=public, extensions as $$
   select json_build_object('maintenance',maintenance,'maintenance_text',coalesce(maintenance_text,'')) from app_system where id=1; $$;
 
@@ -63,25 +103,33 @@ returns json language plpgsql security definer set search_path=public, extension
 declare v_id uuid; v_token uuid; m json;
 begin
   if length(coalesce(p_username,'')) < 3 then return json_build_object('error','Benutzername zu kurz (min. 3)'); end if;
-  if length(coalesce(p_password,'')) < 4 then return json_build_object('error','Passwort zu kurz (min. 4)'); end if;
+  if length(coalesce(p_password,'')) < 8 then return json_build_object('error','Passwort zu kurz (min. 8 Zeichen)'); end if;
   if exists(select 1 from app_users where lower(username)=lower(p_username)) then return json_build_object('error','Benutzername bereits vergeben'); end if;
   insert into app_users(username, pass_hash) values (p_username, crypt(p_password, gen_salt('bf',10))) returning id into v_id;
   insert into app_saves(user_id, data) values (v_id, null);
-  delete from app_sessions where user_id=v_id;
-  insert into app_sessions(user_id) values (v_id) returning token into v_token;
+  v_token := _new_session(v_id);
   m := _maint();
   return json_build_object('token',v_token,'username',p_username,'maintenance',(m->>'maintenance')::boolean,'maintenance_text',m->>'maintenance_text');
 end; $$;
 
 create or replace function app_login(p_username text, p_password text)
 returns json language plpgsql security definer set search_path=public, extensions as $$
-declare v_user app_users; v_token uuid; m json;
+declare v_user app_users; v_token uuid; m json; v_keys text[]; v_until timestamptz; v_ip text;
 begin
+  v_keys := array['user:'||lower(coalesce(p_username,''))]; v_ip := _client_ip();
+  if v_ip is not null then v_keys := v_keys || ('ip:'||v_ip); end if;
+  v_until := _login_locked(v_keys);
+  if v_until is not null then
+    return json_build_object('error','Zu viele Fehlversuche. Bitte in '||greatest(1,ceil(extract(epoch from v_until-now())/60))::int||' Minuten erneut versuchen.');
+  end if;
   select * into v_user from app_users where lower(username)=lower(p_username);
-  if v_user.id is null or v_user.pass_hash is null or v_user.pass_hash <> crypt(p_password, v_user.pass_hash) then return json_build_object('error','Benutzername oder Passwort falsch'); end if;
+  if v_user.id is null or v_user.pass_hash is null or v_user.pass_hash <> crypt(p_password, v_user.pass_hash) then
+    perform _login_fail(v_keys);
+    return json_build_object('error','Benutzername oder Passwort falsch');
+  end if;
   if v_user.banned then return json_build_object('error','Dieses Konto wurde gesperrt.'); end if;
-  delete from app_sessions where user_id=v_user.id;
-  insert into app_sessions(user_id) values (v_user.id) returning token into v_token;
+  delete from app_login_attempts where key = 'user:'||lower(v_user.username);
+  v_token := _new_session(v_user.id);
   m := _maint();
   return json_build_object('token',v_token,'username',v_user.username,'maintenance',(m->>'maintenance')::boolean,'maintenance_text',m->>'maintenance_text');
 end; $$;
@@ -90,14 +138,15 @@ create or replace function app_me(p_token uuid)
 returns json language plpgsql security definer set search_path=public, extensions as $$
 declare v_user app_users; m json;
 begin
-  select u.* into v_user from app_sessions s join app_users u on u.id=s.user_id where s.token=p_token;
+  select u.* into v_user from app_sessions s join app_users u on u.id=s.user_id where s.token_hash=_token_hash(p_token) and s.expires_at > now();
   if v_user.id is null then return json_build_object('error','Sitzung ungültig'); end if;
+  update app_sessions set expires_at = now() + interval '30 days' where token_hash=_token_hash(p_token);   -- aktive Spieler bleiben angemeldet
   if v_user.banned then return json_build_object('error','Dieses Konto wurde gesperrt.'); end if;
   m := _maint();
   return json_build_object('username',v_user.username,'maintenance',(m->>'maintenance')::boolean,'maintenance_text',m->>'maintenance_text');
 end; $$;
 
-create or replace function app_logout(p_token uuid) returns void language sql security definer set search_path=public, extensions as $$ delete from app_sessions where token=p_token; $$;
+create or replace function app_logout(p_token uuid) returns void language sql security definer set search_path=public, extensions as $$ delete from app_sessions where token_hash=_token_hash(p_token); $$;
 
 create or replace function app_oauth_login()
 returns json language plpgsql security definer set search_path=public, extensions as $$
@@ -114,8 +163,7 @@ begin
     insert into app_saves(user_id, data) values (v_user.id, null) on conflict (user_id) do nothing;
   end if;
   if v_user.banned then return json_build_object('error','Dieses Konto wurde gesperrt.'); end if;
-  delete from app_sessions where user_id=v_user.id;
-  insert into app_sessions(user_id) values (v_user.id) returning token into v_token;
+  v_token := _new_session(v_user.id);
   m := _maint();
   return json_build_object('token',v_token,'username',v_user.username,'maintenance',(m->>'maintenance')::boolean,'maintenance_text',m->>'maintenance_text');
 end; $$;
@@ -153,13 +201,19 @@ begin
   update app_users set username=p_new where id=v_uid; return json_build_object('ok',true,'username',p_new);
 end; $$;
 
-create or replace function app_change_password(p_token uuid, p_new text)
+drop function if exists app_change_password(uuid,text);
+-- Altes Passwort nötig (Google-Konten ohne Passwort können eines festlegen); danach nur diese Sitzung gültig
+create or replace function app_change_password(p_token uuid, p_old text, p_new text)
 returns json language plpgsql security definer set search_path=public, extensions as $$
-declare v_uid uuid;
+declare v_uid uuid; v_hash text;
 begin
   v_uid := _uid(p_token); if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
-  if length(coalesce(p_new,''))<4 then return json_build_object('error','Passwort zu kurz (min. 4)'); end if;
-  update app_users set pass_hash=crypt(p_new, gen_salt('bf',10)) where id=v_uid; return json_build_object('ok',true);
+  select pass_hash into v_hash from app_users where id=v_uid;
+  if v_hash is not null and v_hash <> crypt(coalesce(p_old,''), v_hash) then return json_build_object('error','Aktuelles Passwort ist falsch'); end if;
+  if length(coalesce(p_new,''))<8 then return json_build_object('error','Passwort zu kurz (min. 8 Zeichen)'); end if;
+  update app_users set pass_hash=crypt(p_new, gen_salt('bf',10)) where id=v_uid;
+  delete from app_sessions where user_id=v_uid and token_hash<>_token_hash(p_token);
+  return json_build_object('ok',true);
 end; $$;
 
 create or replace function app_delete_account(p_token uuid)
@@ -171,5 +225,7 @@ begin
 end; $$;
 
 grant execute on all functions in schema public to anon, authenticated;
+-- Interne Hilfsfunktionen nicht von außen aufrufbar
+revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
