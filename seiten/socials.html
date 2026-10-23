@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Socials – Disponenten-Simulator</title>
+<link rel="stylesheet" href="seiten.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><span class="brand"><span class="dot"></span> LEITSTELLE</span><a class="back" href="../">Zurück zum Spiel</a></div>
+  <div class="card">
+    <h1>Socials</h1>
+    <p>Neuigkeiten, Updates und Austausch mit anderen Disponentinnen und Disponenten.</p>
+    <div class="socials" id="socials"></div>
+  </div>
+  <div class="nav"><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a><a href="../">Spiel</a></div>
+</div>
+<script>
+/* Links hier eintragen. Leere url ⇒ Eintrag wird als „folgt bald“ angezeigt.
+   Weitere Plattformen einfach als neue Zeile ergänzen. */
+const SOCIALS = [
+  { name:'Discord',        tag:'DC', color:'#5865f2', url:'', desc:'Community-Server: Fragen, Feedback, Ideen' },
+  { name:'WhatsApp-Kanal', tag:'WA', color:'#25d366', url:'', desc:'Updates direkt aufs Handy' },
+  { name:'YouTube',        tag:'YT', color:'#ff0000', url:'', desc:'Videos und Einblicke in die Entwicklung' },
+];
+const box=document.getElementById('socials');
+box.innerHTML=SOCIALS.map(s=> s.url
+  ? `<a class="social" href="${s.url}" target="_blank" rel="noopener"><span class="tag" style="background:${s.color}">${s.tag}</span><span><span class="name">${s.name}</span><br><span class="desc">${s.desc}</span></span></a>`
+  : `<div class="social off"><span class="tag" style="background:${s.color}">${s.tag}</span><span><span class="name">${s.name}</span><br><span class="desc">${s.desc}</span></span><span class="soon">folgt bald</span></div>`
+).join('');
+</script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Datenschutz – Disponenten-Simulator</title>
+<link rel="stylesheet" href="seiten.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><span class="brand"><span class="dot"></span> LEITSTELLE</span><a class="back" href="../">Zurück zum Spiel</a></div>
+  <div class="card">
+    <h1>Datenschutzerklärung</h1>
+    <p class="small">Stand: Oktober 2026</p>
+
+    <h2>1. Verantwortlicher</h2>
+    <p>Philipp Konstantin Gomann, vertreten durch [VORNAME NACHNAME DER/DES ERZIEHUNGSBERECHTIGTEN]<br>
+       Scharnhorststraße 15, 10115 Berlin<br>
+       E-Mail: <a href="mailto:philipp.gomann15@gmail.com">philipp.gomann15@gmail.com</a></p>
+    <p>Der Disponenten-Simulator ist ein privates, nicht kommerzielles Hobbyprojekt. Es gibt keine Werbung, kein Tracking,
+       keine Analyse-Tools und keine Zahlungsfunktionen.</p>
+
+    <h2>2. Hosting der Website (GitHub Pages)</h2>
+    <p>Die Website wird über GitHub Pages bereitgestellt (GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA).
+       Beim Aufruf verarbeitet GitHub technisch notwendige Daten wie IP-Adresse, Zeitpunkt, aufgerufene Seite und Browserinformationen
+       in Server-Logfiles, um die Seite auszuliefern und abzusichern. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO
+       (berechtigtes Interesse an einer sicheren, funktionierenden Website). Dabei können Daten in die USA übermittelt werden;
+       GitHub ist nach dem EU-US Data Privacy Framework zertifiziert.
+       Weitere Informationen: <a href="https://docs.github.com/de/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">Datenschutzerklärung von GitHub</a>.</p>
+
+    <h2>3. Spielerkonto und Spielstand (Supabase)</h2>
+    <p>Für Anmeldung und Online-Speicherung nutzt das Spiel Supabase (Supabase, Inc., USA). Die Daten werden in einem
+       Rechenzentrum in der EU (Frankfurt am Main) gespeichert. Verarbeitet werden:</p>
+    <ul>
+      <li>Benutzername und Passwort (nur als verschlüsselter Hash gespeichert),</li>
+      <li>ein Anmelde-Token für die laufende Sitzung,</li>
+      <li>dein Spielstand (z. B. Wachen, Fahrzeuge, Personal, Guthaben, Einsätze),</li>
+      <li>Zeitpunkt der Kontoerstellung und der letzten Speicherung,</li>
+      <li>Kontostatus (z. B. Sperre) sowie ein Hinweis bei auffälligen Guthaben-Sprüngen zum Schutz vor Manipulation,</li>
+      <li>technische Verbindungsdaten wie die IP-Adresse beim Zugriff auf Supabase.</li>
+    </ul>
+    <p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Bereitstellung des Spiels mit Konto) bzw. für den Manipulationsschutz
+       Art. 6 Abs. 1 lit. f DSGVO. Die Daten werden gespeichert, bis du dein Konto löschst. Das geht jederzeit im Spiel unter
+       <b>Menü → Einstellungen → Konto löschen</b>; dabei werden Konto und Spielstand entfernt.</p>
+
+    <h2>4. Anmeldung mit Google (optional)</h2>
+    <p>Wenn du „Mit Google anmelden“ wählst, wirst du zu Google weitergeleitet (Google Ireland Limited, Gordon House,
+       Barrow Street, Dublin 4, Irland). Nach deiner Zustimmung bei Google erhält das Spiel über Supabase deinen Namen,
+       deine E-Mail-Adresse und eine Google-Kennung, um dein Konto anzulegen bzw. zuzuordnen. Rechtsgrundlage ist
+       Art. 6 Abs. 1 lit. b DSGVO. Für die Verarbeitung bei Google gilt die
+       <a href="https://policies.google.com/privacy?hl=de" target="_blank" rel="noopener">Datenschutzerklärung von Google</a>.
+       Du kannst dich auch ohne Google mit Benutzername und Passwort anmelden.</p>
+
+    <h2>5. Speicherung im Browser</h2>
+    <p>Das Spiel speichert dein Anmelde-Token im lokalen Speicher deines Browsers (localStorage), damit du angemeldet bleibst.
+       Beim Google-Login legt Supabase zusätzlich Sitzungsdaten im Browser ab. Diese Speicherung ist für den von dir gewünschten
+       Dienst unbedingt erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG). Beim Abmelden werden die Daten entfernt. Cookies zu Werbe- oder
+       Analysezwecken werden nicht verwendet.</p>
+
+    <h2>6. Karte, Ortssuche und Routen</h2>
+    <p>Beim Spielen lädt dein Browser Inhalte direkt von folgenden Diensten. Dabei wird jeweils deine IP-Adresse übertragen,
+       weil sonst keine Verbindung möglich ist:</p>
+    <ul>
+      <li><b>Kartenkacheln</b> von OpenStreetMap (OpenStreetMap Foundation, Cambridge, Vereinigtes Königreich) –
+          <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank" rel="noopener">Datenschutzerklärung</a>,</li>
+      <li><b>Ortssuche und Ortserkennung</b> über Nominatim (ebenfalls OpenStreetMap Foundation); übertragen werden dein Suchbegriff
+          bzw. die Koordinaten der Wache,</li>
+      <li><b>Routenberechnung</b> über den Demo-Server des OSRM-Projekts (router.project-osrm.org); übertragen werden Start- und
+          Zielkoordinaten im Spiel.</li>
+    </ul>
+    <p>Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einer funktionierenden Kartendarstellung).
+       Für das Vereinigte Königreich besteht ein Angemessenheitsbeschluss der EU-Kommission.</p>
+
+    <h2>7. Programmbibliotheken (CDN)</h2>
+    <p>Die Kartenbibliothek Leaflet wird von unpkg.com und die Supabase-Bibliothek von cdn.jsdelivr.net geladen.
+       Auch hierbei wird deine IP-Adresse an den jeweiligen Anbieter übertragen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO.</p>
+
+    <h2>8. Links zu sozialen Netzwerken</h2>
+    <p>Auf der Socials-Seite gibt es einfache Links (z. B. zu Discord, WhatsApp oder YouTube). Es werden keine Plugins eingebunden;
+       Daten werden erst übertragen, wenn du einen Link anklickst und die Seite des Anbieters öffnest. Dort gilt dessen
+       Datenschutzerklärung.</p>
+
+    <h2>9. Deine Rechte</h2>
+    <p>Du hast das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung
+       (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch gegen Verarbeitungen auf Grundlage berechtigter Interessen (Art. 21).
+       Schreib dazu einfach eine E-Mail an die oben genannte Adresse.</p>
+    <p>Außerdem kannst du dich bei einer Datenschutz-Aufsichtsbehörde beschweren, zum Beispiel bei der
+       Berliner Beauftragten für Datenschutz und Informationsfreiheit, Alt-Moabit 59–61, 10555 Berlin.</p>
+
+    <h2>10. Änderungen</h2>
+    <p>Wenn neue Funktionen hinzukommen (z. B. ein Shop mit Zahlungen), wird diese Datenschutzerklärung vorher angepasst.</p>
+  </div>
+  <div class="nav"><a href="impressum.html">Impressum</a><a href="socials.html">Socials</a><a href="../">Spiel</a></div>
+</div>
+</body>
+</html>

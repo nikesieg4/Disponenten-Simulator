@@ -23,3 +23,10 @@ Domain — ein Wechsel des Hosters erfordert keine Code-Änderung.
    Bei einer bestehenden Installation entfernt das Skript auch das frühere Administrator-Konto
    sowie die alten Admin- und Shop-Funktionen/-Tabellen.
 3. In `index.html` oben `SUPABASE_URL` und `SUPABASE_ANON_KEY` eintragen (bereits gesetzt).
+
+## Rechtliches und Socials
+
+- `seiten/impressum.html`, `seiten/datenschutz.html`, `seiten/socials.html` (gemeinsames Aussehen in `seiten/seiten.css`)
+- Verlinkt auf dem Login-Bildschirm, im Wartungsbildschirm und im Menü (☰) im Spiel.
+- Social-Links trägt man oben im Script von `seiten/socials.html` in die Liste `SOCIALS` ein (leere `url` = „folgt bald“).
+- Kommt der Shop mit Zahlungen dazu, müssen Impressum und Datenschutzerklärung angepasst werden.
