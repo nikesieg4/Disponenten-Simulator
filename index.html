@@ -371,6 +371,23 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .search-wrap{ position:absolute; top:12px; left:12px; z-index:1050; width:300px; max-width:45vw; }
 .search-wrap input{ width:100%; padding:10px 14px; border-radius:30px; border:1px solid var(--border); background:var(--panel); color:var(--text); font-family:var(--font-ui); font-size:13px; box-shadow:var(--shadow); }
 .search-wrap input::placeholder{ color:var(--text-dim); }
+/* Kartenfilter */
+.mapfilter{ position:absolute; top:58px; left:12px; z-index:1050; }
+.mapfilter-btn{ display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:30px; border:1px solid var(--border); background:var(--panel); color:var(--text); font-family:var(--font-ui); font-size:13px; font-weight:600; cursor:pointer; box-shadow:var(--shadow); }
+.mapfilter-btn:hover{ border-color:var(--border-2); }
+.mapfilter-btn .mf-count{ min-width:18px; padding:0 5px; border-radius:9px; background:var(--fire); color:#fff; font-family:var(--font-mono); font-size:11px; line-height:18px; text-align:center; }
+.mapfilter-panel{ margin-top:8px; width:250px; max-height:calc(100vh - 220px); overflow:auto; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:var(--panel); box-shadow:var(--shadow); font-size:13px; }
+.mapfilter-panel h4{ margin:10px 0 4px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); }
+.mapfilter-panel h4:first-child{ margin-top:0; }
+.mapfilter-panel label{ display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer; color:var(--text); }
+.mapfilter-panel label.sub{ padding-left:22px; }
+.mapfilter-panel input{ accent-color:var(--fire); width:15px; height:15px; margin:0; }
+.mapfilter-actions{ display:flex; gap:6px; margin-top:10px; }
+.mapfilter-actions .btn{ flex:1; }
+#map.hf-stations .f-st, #map.hf-academy .f-ac, #map.hf-hospitals .f-kh,
+#map.hf-m_b .f-m-b, #map.hf-m_th .f-m-th, #map.hf-m_rd .f-m-rd,
+#map.hf-ms_open .f-ms-open, #map.hf-ms_work .f-ms-work,
+#map.hf-v_fw .f-v-fw, #map.hf-v_rd .f-v-rd, #map.hf-routes .f-route{ display:none; }
 
 .modal-bg{ position:fixed; inset:0; background:rgba(4,7,12,.7); z-index:2000; display:none; align-items:center; justify-content:center; padding:20px; }
 .modal-bg.show{ display:flex; }
@@ -470,6 +487,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 @media (max-width:720px){
   #sidebar{ width:calc(100vw - 24px); top:auto; bottom:12px; height:58vh; }
   .search-wrap{ width:60vw; }
+  .mapfilter-panel{ width:min(250px, calc(100vw - 24px)); max-height:45vh; }
   .funk{ height:150px; }
 }
 @media (max-width:1100px){
@@ -534,6 +552,26 @@ a.dd-item{ text-decoration:none; color:var(--text); }
   <div id="main">
     <div id="map"></div>
     <div class="search-wrap"><input id="search" type="text" placeholder="Ort suchen (Enter)…" autocomplete="off" /></div>
+    <div class="mapfilter">
+      <button class="mapfilter-btn" id="mf-btn" aria-expanded="false" aria-controls="mf-panel">Filter<span class="mf-count hidden" id="mf-count">0</span></button>
+      <div class="mapfilter-panel hidden" id="mf-panel">
+        <h4>Gebäude</h4>
+        <label><input type="checkbox" data-mf="stations">Feuerwachen</label>
+        <label><input type="checkbox" data-mf="academy">Akademie / Schulen</label>
+        <label><input type="checkbox" data-mf="hospitals">Krankenhäuser</label>
+        <h4>Einsätze</h4>
+        <label><input type="checkbox" data-mf="m_b">Brand</label>
+        <label><input type="checkbox" data-mf="m_th">Technische Hilfe</label>
+        <label><input type="checkbox" data-mf="m_rd">Rettungsdienst</label>
+        <label class="sub"><input type="checkbox" data-mf="ms_open">offene Einsätze</label>
+        <label class="sub"><input type="checkbox" data-mf="ms_work">Einsätze in Arbeit</label>
+        <h4>Fahrzeuge</h4>
+        <label><input type="checkbox" data-mf="v_fw">Feuerwehr</label>
+        <label><input type="checkbox" data-mf="v_rd">Rettungsdienst</label>
+        <label><input type="checkbox" data-mf="routes">Fahrzeugrouten</label>
+        <div class="mapfilter-actions"><button class="btn sm ghost" id="mf-all">Alle zeigen</button></div>
+      </div>
+    </div>
     <div id="buildBanner">
       <span>Klicke auf die Karte, um die Feuerwache zu platzieren</span>
       <button class="btn sm ghost" id="btn-build-cancel" style="color:#fff;border-color:#fff5">Abbrechen</button>
@@ -1007,13 +1045,14 @@ function initMap(){
   buildingLayer=L.layerGroup().addTo(map);
   missionLayer=L.layerGroup().addTo(map); vehicleLayer=L.layerGroup().addTo(map);
   const khLayer=L.layerGroup().addTo(map);
-  HOSPITALS.forEach(h=>{ L.marker([h.lat,h.lng],{icon:L.divIcon({className:'',iconSize:[0,0],html:'<div class="mk-kh">KH</div>'})})
+  HOSPITALS.forEach(h=>{ L.marker([h.lat,h.lng],{icon:L.divIcon({iconSize:[0,0],className:'f-kh',html:'<div class="mk-kh">KH</div>'})})
     .bindTooltip(`${h.name}<br>${h.dept.map(d=>DEPTS[d]).join(' · ')}`,{direction:'top'}).addTo(khLayer); });
   map.on('click',onMapClick);
+  applyMapFilter();
 }
 function addBuildingMarker(b){
   const t=buildingById(b.typeId); if(!t) return;
-  const icon=L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-building${stationReady(b)?'':' building'}">${stationReady(b)?t.icon:'BAU'}</div>`});
+  const icon=L.divIcon({className:'f-ac',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-building${stationReady(b)?'':' building'}">${stationReady(b)?t.icon:'BAU'}</div>`});
   b.marker=L.marker([b.lat,b.lng],{icon}).addTo(buildingLayer);
   b.marker.bindTooltip(`${b.name}`,{direction:'top'});
   b.marker.on('click',()=>{ if(t.isAcademy) openAcademyView(b.id); else toast(`${b.name}${t.desc?' — '+t.desc:''}`,'ok'); });
@@ -1164,7 +1203,7 @@ async function detectOrt(st){
 
 /* ------------------------- MARKER ------------------------- */
 function addStationMarker(st){
-  const icon=L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-station${stationReady(st)?'':' building'}">${stationReady(st)?'FW':'BAU'}<span class="lvlbadge">L${st.level}</span></div>`});
+  const icon=L.divIcon({className:'f-st',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-station${stationReady(st)?'':' building'}">${stationReady(st)?'FW':'BAU'}<span class="lvlbadge">L${st.level}</span></div>`});
   st.marker=L.marker([st.lat,st.lng],{icon}).addTo(stationLayer); st.marker.on('click',()=>openBuyModal(st.id));
 }
 function stationReady(st){ return !st.readyAt || Date.now()>=st.readyAt; }
@@ -1178,20 +1217,32 @@ function checkStationsReady(){
     if(a._wasReady===false && r){ toast(`${a.name} ist fertig gebaut`,'ok'); if(a.marker){ buildingLayer.removeLayer(a.marker); addBuildingMarker(a); } renderStations(); }
     a._wasReady=r; });
 }
+/* Kartenfilter: ausgeblendete Ebenen als Klassen am Kartencontainer, Auswahl bleibt im Browser */
+const MAP_FILTER_KEYS=['stations','academy','hospitals','m_b','m_th','m_rd','ms_open','ms_work','v_fw','v_rd','routes'];
+const MAP_FILTER_STORE='leitstelle_mapfilter';
+let mapHidden=(()=>{ try{ const a=JSON.parse(localStorage.getItem(MAP_FILTER_STORE)||'[]');
+  return new Set(Array.isArray(a)?a.filter(k=>MAP_FILTER_KEYS.includes(k)):[]); }catch(e){ return new Set(); } })();
+function applyMapFilter(){
+  const el=document.getElementById('map'); if(el) MAP_FILTER_KEYS.forEach(k=>el.classList.toggle('hf-'+k,mapHidden.has(k)));
+  document.querySelectorAll('#mf-panel input[data-mf]').forEach(i=>{ i.checked=!mapHidden.has(i.dataset.mf); });
+  const c=document.getElementById('mf-count'); if(c){ c.textContent=mapHidden.size; c.classList.toggle('hidden',!mapHidden.size); }
+  try{ localStorage.setItem(MAP_FILTER_STORE,JSON.stringify([...mapHidden])); }catch(e){}
+}
 function refreshStationMarker(st){ if(st.marker) stationLayer.removeLayer(st.marker); addStationMarker(st); }
 function missionCls(m){ const rd=missionType(m.type)?.rd?' rd':''; return (m.status==='done'?'done':(m.status==='working'?'working':''))+rd; }
 function addMissionMarker(m){ const t=missionType(m.type);
-  const icon=L.divIcon({className:'',iconSize:[32,32],iconAnchor:[16,16],html:`<div class="mk-mission ${missionCls(m)}">${t.short||t.code}</div>`});
+  const fc=`f-m-${t.cat==='th'||t.cat==='rd'?t.cat:'b'} ${m.status==='open'||!m.status?'f-ms-open':'f-ms-work'}`;
+  const icon=L.divIcon({className:fc,iconSize:[32,32],iconAnchor:[16,16],html:`<div class="mk-mission ${missionCls(m)}">${t.short||t.code}</div>`});
   m.marker=L.marker([m.lat,m.lng],{icon}).addTo(missionLayer); m.marker.on('click',()=>openMissionModal(m.id)); }
 function refreshMissionMarker(m){ if(m.marker) missionLayer.removeLayer(m.marker); addMissionMarker(m); }
 function vehStatusColor(s){ return (getComputedStyle(document.documentElement).getPropertyValue(`--fms-${s}`)||'#888').trim(); }
 function addVehicleMarker(v){ const t=VEHICLES[v.type];
-  const icon=L.divIcon({className:'',iconSize:[0,0],iconAnchor:[0,0],html:`<div class="mk-veh" style="background:${vehStatusColor(v.status)}">${vehAbbr(v)}</div>`});
+  const icon=L.divIcon({className:t?.category==='rd'?'f-v-rd':'f-v-fw',iconSize:[0,0],iconAnchor:[0,0],html:`<div class="mk-veh" style="background:${vehStatusColor(v.status)}">${vehAbbr(v)}</div>`});
   v.marker=L.marker([v.lat,v.lng],{icon,zIndexOffset:500}).addTo(vehicleLayer); }
 function refreshVehicleMarker(v){ if(v.marker){ vehicleLayer.removeLayer(v.marker); v.marker=null; }
   if(v.status===2||v.status===6||v.status===4||v.status===5||v.status===8) return; addVehicleMarker(v); }
 function drawRoute(v,coords){ clearRoute(v); const color=v.status===1?'#8a97a8':'#e5352b';
-  v.routeLine=L.polyline(coords.map(c=>[c.lat,c.lng]),{color,weight:3,opacity:.4,dashArray:'6 6'}).addTo(routeLayer); }
+  v.routeLine=L.polyline(coords.map(c=>[c.lat,c.lng]),{color,weight:3,opacity:.4,dashArray:'6 6',className:'f-route'}).addTo(routeLayer); }
 function clearRoute(v){ if(v.routeLine){ routeLayer.removeLayer(v.routeLine); v.routeLine=null; } }
 
 /* ------------------------- LOOKUPS ------------------------- */
@@ -2662,6 +2713,13 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=e=>e.target.close
 document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }));
 
 /* Suche */
+document.getElementById('mf-btn').addEventListener('click',()=>{
+  const p=document.getElementById('mf-panel'), open=p.classList.toggle('hidden')===false;
+  document.getElementById('mf-btn').setAttribute('aria-expanded',open);
+});
+document.getElementById('mf-panel').addEventListener('change',e=>{ const k=e.target.dataset?.mf; if(!k) return;
+  if(e.target.checked) mapHidden.delete(k); else mapHidden.add(k); applyMapFilter(); });
+document.getElementById('mf-all').addEventListener('click',()=>{ mapHidden.clear(); applyMapFilter(); });
 document.getElementById('search').addEventListener('keydown',async e=>{
   if(e.key!=='Enter') return; const q=e.target.value.trim(); if(!q) return;
   try{ const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=de&q=${encodeURIComponent(q)}`);
