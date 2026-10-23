@@ -387,7 +387,28 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 #map.hf-stations .f-st, #map.hf-academy .f-ac, #map.hf-hospitals .f-kh,
 #map.hf-m_b .f-m-b, #map.hf-m_th .f-m-th, #map.hf-m_rd .f-m-rd,
 #map.hf-ms_open .f-ms-open, #map.hf-ms_work .f-ms-work,
-#map.hf-v_fw .f-v-fw, #map.hf-v_rd .f-v-rd, #map.hf-routes .f-route{ display:none; }
+#map.hf-v_fw .f-v-fw, #map.hf-v_rd .f-v-rd, #map.hf-routes .f-route,
+#map.hf-areas .f-area, #map.area-editing .f-area{ display:none; }
+/* Alarmierungsgebiet-Editor */
+#areaBar{ position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:1300; width:min(560px, calc(100vw - 24px)); display:none; flex-direction:column; gap:8px;
+  padding:12px 14px; border-radius:14px; border:1px solid var(--border); background:var(--panel); box-shadow:var(--shadow); font-size:13px; }
+#areaBar.show{ display:flex; }
+#areaBar .ab-title{ font-weight:700; }
+#areaBar .ab-modes{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+#areaBar .ab-grp{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); margin-left:6px; }
+#areaBar .ab-grp:first-child{ margin-left:0; }
+#areaBar [data-amode].active{ background:var(--fire); border-color:var(--fire); color:#fff; }
+#areaBar .ab-hint{ color:var(--text-mut); }
+#areaBar .ab-polys{ display:flex; flex-wrap:wrap; gap:6px; }
+#areaBar .ab-poly{ display:inline-flex; align-items:center; gap:6px; padding:3px 4px 3px 10px; border-radius:20px; border:1px solid var(--border); font-family:var(--font-mono); font-size:11px; }
+#areaBar .ab-info{ font-family:var(--font-mono); font-size:12px; line-height:1.5; }
+#areaBar .ab-bad{ color:#f87171; }
+#areaBar .ab-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+.area-h{ position:absolute; width:14px; height:14px; transform:translate(-50%,-50%); border-radius:50%; background:#fff; border:3px solid var(--fire); box-shadow:0 1px 5px rgba(0,0,0,.6); cursor:grab; }
+.area-h.move{ width:18px; height:18px; border-radius:5px; background:var(--fire); border-color:#fff; cursor:move; }
+.area-h.dot{ width:9px; height:9px; border-width:2px; cursor:pointer; }
+#map.area-free, #map.area-free .leaflet-grab, #map.area-poly, #map.area-poly .leaflet-grab{ cursor:crosshair; }
+#map.area-free{ touch-action:none; }
 
 .modal-bg{ position:fixed; inset:0; background:rgba(4,7,12,.7); z-index:2000; display:none; align-items:center; justify-content:center; padding:20px; }
 .modal-bg.show{ display:flex; }
@@ -569,7 +590,25 @@ a.dd-item{ text-decoration:none; color:var(--text); }
         <label><input type="checkbox" data-mf="v_fw">Feuerwehr</label>
         <label><input type="checkbox" data-mf="v_rd">Rettungsdienst</label>
         <label><input type="checkbox" data-mf="routes">Fahrzeugrouten</label>
+        <h4>Gebiete</h4>
+        <label><input type="checkbox" data-mf="areas">Alarmierungsgebiete</label>
         <div class="mapfilter-actions"><button class="btn sm ghost" id="mf-all">Alle zeigen</button></div>
+      </div>
+    </div>
+    <div id="areaBar">
+      <div class="ab-title" id="ab-title">Alarmierungsgebiet</div>
+      <div class="ab-modes">
+        <span class="ab-grp">Basic</span><button class="btn sm ghost" data-amode="circle">Kreis</button><button class="btn sm ghost" data-amode="rect">Rechteck</button>
+        <span class="ab-grp">Advanced</span><button class="btn sm ghost" data-amode="free">Stift</button><button class="btn sm ghost" data-amode="poly">Polygon</button>
+      </div>
+      <div class="ab-hint" id="ab-hint"></div>
+      <div class="ab-polys" id="ab-polys"></div>
+      <div class="ab-info" id="ab-info"></div>
+      <div class="ab-actions">
+        <button class="btn sm ghost hidden" id="ab-polydone">Fläche schließen</button>
+        <button class="btn sm ghost hidden" id="ab-polyundo">Letzten Punkt entfernen</button>
+        <button class="btn sm ghost" id="ab-cancel">Abbrechen</button>
+        <button class="btn sm primary" id="ab-save">Speichern</button>
       </div>
     </div>
     <div id="buildBanner">
@@ -817,6 +856,8 @@ const CONFIG = {
   transportBase:40000, transportPerKm:2500, naBonus:0.5, // Vergütung je Transport, +50 % mit Notarzt
   determinantWeights:{A:79,B:138,C:175,D:131,E:6,O:4},  // Verteilung der AMPDS-Dringlichkeit (BF-Open-Data 2025)
   missionIntervalMs:76000, missionRadiusM:6000, maxOpenMissions:8,
+  // Alarmierungsgebiete: Rate und Grenze offener Einsätze wachsen mit der Gesamtfläche (6-km-Kreis ≈ 113 km² = Grundwert)
+  areaDefaultM:6000, areaMinKm2:1, areaMaxKm2:400, areaCapKm2:900, maxOpenCap:40,
 
   stationBuildCost:5000000, maxStationLevel:6,
   baysForLevel:l=>2*l, upgradeCost:l=>1000000+500000*l,   // Ausbau: zusätzliche Fahrzeughalle
@@ -922,7 +963,7 @@ function freshState(){ return {
 function serializeObj(){ return {
   version:CONFIG.saveVersion, autoHospital:!!state.autoHospital, ledger:state.ledger||[], daily:state.daily||{}, credits:state.credits, createdAt:state.createdAt, gameSpeed:state.gameSpeed, earnings:state.earnings, payDayKey:state.payDayKey, savedAt:Date.now(),
   view:(map?{lat:map.getCenter().lat,lng:map.getCenter().lng,zoom:map.getZoom()}:state.view),
-  stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null,turnout:s.turnout||0})),
+  stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null,turnout:s.turnout||0,area:s.area||null})),
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
   buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,placedAt:b.placedAt||null,readyAt:b.readyAt||null})),
@@ -1039,7 +1080,7 @@ function offlineCatchUp(elapsedMs){
 }
 
 /* ------------------------- MAP ------------------------- */
-let map, stationLayer, missionLayer, vehicleLayer, routeLayer, buildingLayer;
+let map, stationLayer, missionLayer, vehicleLayer, routeLayer, buildingLayer, areaLayer;
 function initMap(){
   map=L.map('map',{zoomControl:true,attributionControl:true}).setView([state.view.lat,state.view.lng],state.view.zoom);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -1047,6 +1088,7 @@ function initMap(){
     attribution:'&copy; OpenStreetMap contributors',
     errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
   }).addTo(map);
+  areaLayer=L.layerGroup().addTo(map);
   routeLayer=L.layerGroup().addTo(map); stationLayer=L.layerGroup().addTo(map);
   buildingLayer=L.layerGroup().addTo(map);
   missionLayer=L.layerGroup().addTo(map); vehicleLayer=L.layerGroup().addTo(map);
@@ -1054,6 +1096,10 @@ function initMap(){
   HOSPITALS.forEach(h=>{ L.marker([h.lat,h.lng],{icon:L.divIcon({iconSize:[0,0],className:'f-kh',html:'<div class="mk-kh">KH</div>'})})
     .bindTooltip(`${h.name}<br>${h.dept.map(d=>DEPTS[d]).join(' · ')}`,{direction:'top'}).addTo(khLayer); });
   map.on('click',onMapClick);
+  map.on('click',areaMapClick); map.on('dblclick',areaMapDblClick);
+  const mc=map.getContainer();
+  mc.addEventListener('pointerdown',areaPointerDown); mc.addEventListener('pointermove',areaPointerMove);
+  mc.addEventListener('pointerup',areaPointerUp); mc.addEventListener('pointercancel',areaPointerUp);
   applyMapFilter();
 }
 function addBuildingMarker(b){
@@ -1168,6 +1214,7 @@ function startBuildPlacement(){
 }
 
 function onMapClick(e){
+  if(areaEdit) return;
   if(!buildMode || !pendingBuild) return;
   const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
   const cost=pendingBuild.cost??b.cost;
@@ -1207,10 +1254,224 @@ async function detectOrt(st){
   }catch(err){ /* kein Netz → Ort bleibt leer */ }
 }
 
+/* ------------------------- ALARMIERUNGSGEBIETE ------------------------- */
+// Gebiet je Wache: {mode:'circle',lat,lng,r} | {mode:'rect',s,w,n,e} | {mode:'poly',polys:[{kind:'free'|'pts',pts:[[lat,lng],…]}]}
+let areaRev=0;                                        // Zähler für Gebietsänderungen (Flächen-Cache)
+const M_LAT=111320, mLng=lat=>111320*Math.cos(lat*Math.PI/180);
+const AREA_REF_KM2=Math.PI*36;                        // 6-km-Kreis ≈ 113 km² entspricht der Grundrate
+function stationArea(st){ return st.area || {mode:'circle',lat:st.lat,lng:st.lng,r:CONFIG.areaDefaultM}; }
+function areaShapes(a){
+  if(a.mode==='circle') return [{c:true,lat:a.lat,lng:a.lng,r:a.r}];
+  if(a.mode==='rect') return [{pts:[[a.s,a.w],[a.s,a.e],[a.n,a.e],[a.n,a.w]]}];
+  return (a.polys||[]).filter(p=>p.pts.length>=3).map(p=>({pts:p.pts}));
+}
+function shapeBox(sh){
+  if(sh.c){ const dy=sh.r/M_LAT, dx=sh.r/mLng(sh.lat); return [sh.lat-dy,sh.lng-dx,sh.lat+dy,sh.lng+dx]; }
+  let s=90,w=180,n=-90,e=-180; for(const [la,lo] of sh.pts){ s=Math.min(s,la); n=Math.max(n,la); w=Math.min(w,lo); e=Math.max(e,lo); } return [s,w,n,e];
+}
+function boxOf(shapes){ return shapes.map(shapeBox).reduce((a,b)=>[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[2],b[2]),Math.max(a[3],b[3])]); }
+function inShape(sh,lat,lng){
+  if(sh.c){ const dy=(lat-sh.lat)*M_LAT, dx=(lng-sh.lng)*mLng(sh.lat); return dx*dx+dy*dy<=sh.r*sh.r; }
+  let inside=false; const p=sh.pts;
+  for(let i=0,j=p.length-1;i<p.length;j=i++){ const [yi,xi]=p[i],[yj,xj]=p[j];
+    if((yi>lat)!==(yj>lat) && lng<(xj-xi)*(lat-yi)/(yj-yi)+xi) inside=!inside; }
+  return inside;
+}
+/* Fläche der Vereinigung in km² (Raster) — überlappende Flächen zählen nur einmal */
+function unionKm2(shapes, cells=30000){
+  if(!shapes.length) return 0;
+  if(shapes.length===1 && shapes[0].c) return Math.PI*shapes[0].r**2/1e6;
+  const sb=shapes.map(shapeBox), [s,w,n,e]=boxOf(shapes), lat0=(s+n)/2;
+  const H=(n-s)*M_LAT, W=(e-w)*mLng(lat0); if(!(H>0&&W>0)) return 0;
+  const step=Math.max(20,Math.sqrt(H*W/cells)), ny=Math.ceil(H/step), nx=Math.ceil(W/step), dLat=(n-s)/ny, dLng=(e-w)/nx;
+  let hit=0;
+  for(let iy=0;iy<ny;iy++){ const la=s+(iy+.5)*dLat;
+    for(let ix=0;ix<nx;ix++){ const lo=w+(ix+.5)*dLng;
+      for(let k=0;k<shapes.length;k++){ const b=sb[k];
+        if(la<b[0]||la>b[2]||lo<b[1]||lo>b[3]) continue;
+        if(inShape(shapes[k],la,lo)){ hit++; break; } } } }
+  return hit*(H/ny)*(W/nx)/1e6;
+}
+function readyAreaShapes(except){ return state.stations.filter(st=>stationReady(st)&&st.id!==except).flatMap(st=>areaShapes(stationArea(st))); }
+let _areaCache={key:'',km2:0};
+function totalAreaKm2(){
+  const key=areaRev+'|'+state.stations.map(s=>s.id+(stationReady(s)?'+':'-')).join(',');
+  if(_areaCache.key!==key) _areaCache={key,km2:unionKm2(readyAreaShapes())};
+  return _areaCache.km2;
+}
+function spawnFactor(km2){ return Math.min(km2,CONFIG.areaCapKm2)/AREA_REF_KM2; }
+function spawnIntervalMs(km2){ const f=spawnFactor(km2); return f>0?CONFIG.missionIntervalMs/f:Infinity; }
+function maxOpenMissions(km2){ return Math.max(1,Math.min(CONFIG.maxOpenCap,Math.round(CONFIG.maxOpenMissions*spawnFactor(km2)))); }
+function missionsPerHour(km2){ const i=spawnIntervalMs(km2); return isFinite(i)?3600000/i:0; }
+/* Zufallspunkt gleichmäßig in der Vereinigung aller Gebiete fertiger Wachen */
+function randomPointInAreas(){
+  const shapes=readyAreaShapes(); if(!shapes.length) return null;
+  const [s,w,n,e]=boxOf(shapes);
+  for(let i=0;i<500;i++){ const la=s+Math.random()*(n-s), lo=w+Math.random()*(e-w);
+    if(shapes.some(sh=>inShape(sh,la,lo))) return {lat:la,lng:lo}; }
+  return null;
+}
+function fmtKm2(x){ return x.toLocaleString('de-DE',{maximumFractionDigits:1}); }
+function drawAreaShapes(layer,a,style){
+  areaShapes(a).forEach(sh=>{ (sh.c?L.circle([sh.lat,sh.lng],{...style,radius:sh.r}):L.polygon(sh.pts,style)).addTo(layer); });
+}
+function renderAreas(){ if(!areaLayer) return; areaLayer.clearLayers();
+  state.stations.forEach(st=>drawAreaShapes(areaLayer,stationArea(st),{color:'#e5352b',weight:2,opacity:.7,fillOpacity:.06,dashArray:'6 6',className:'f-area',interactive:false})); }
+
+/* Editor: Basic (Kreis/Rechteck mit Griffen) und Advanced (mehrere Flächen per Stift oder Polygon) */
+let areaEdit=null;
+function openAreaEditor(stId){
+  const st=stationById(stId); if(!st) return;
+  if(areaEdit) closeAreaEditor();
+  if(buildMode) setBuildMode(false);
+  hideModal('modal-stationview');
+  const a=JSON.parse(JSON.stringify(stationArea(st)));
+  areaEdit={stId, draft:a, mode:a.mode==='poly'?'poly':a.mode, layer:L.layerGroup().addTo(map), shapeLayer:null, polyPts:[], drawing:null};
+  map.getContainer().classList.add('area-editing'); map.doubleClickZoom.disable();
+  document.getElementById('areaBar').classList.add('show');
+  setAreaMode(areaEdit.mode);
+  const sh=areaShapes(a); if(sh.length){ const [s,w,n,e]=boxOf(sh); map.fitBounds([[s,w],[n,e]],{padding:[60,60]}); }
+}
+function closeAreaEditor(){
+  if(!areaEdit) return; areaEdit.layer.remove(); areaEdit=null;
+  map.getContainer().classList.remove('area-editing','area-free','area-poly'); map.dragging.enable(); map.doubleClickZoom.enable();
+  document.getElementById('areaBar').classList.remove('show');
+}
+function areaToPolys(a){
+  if(a.mode==='poly') return a.polys||[];
+  if(a.mode==='rect') return [{kind:'pts',pts:[[a.s,a.w],[a.s,a.e],[a.n,a.e],[a.n,a.w]]}];
+  const pts=[]; for(let i=0;i<32;i++){ const t=i/32*2*Math.PI; pts.push([a.lat+a.r*Math.sin(t)/M_LAT, a.lng+a.r*Math.cos(t)/mLng(a.lat)]); }
+  return [{kind:'pts',pts}];
+}
+function setAreaMode(mode){
+  const E=areaEdit; if(!E) return; const st=stationById(E.stId), a=E.draft;
+  const basic=mode==='circle'||mode==='rect';
+  if(basic && a.mode!==mode){                          // Mittelpunkt und Fläche übernehmen
+    let c={lat:st.lat,lng:st.lng};
+    if(a.mode==='circle') c={lat:a.lat,lng:a.lng}; else if(a.mode==='rect') c={lat:(a.s+a.n)/2,lng:(a.w+a.e)/2};
+    const k=Math.min(CONFIG.areaMaxKm2,Math.max(CONFIG.areaMinKm2,unionKm2(areaShapes(a))||AREA_REF_KM2))*1e6;
+    if(mode==='circle') E.draft={mode:'circle',lat:c.lat,lng:c.lng,r:Math.sqrt(k/Math.PI)};
+    else { const h=Math.sqrt(k)/2; E.draft={mode:'rect',s:c.lat-h/M_LAT,n:c.lat+h/M_LAT,w:c.lng-h/mLng(c.lat),e:c.lng+h/mLng(c.lat)}; }
+  } else if(!basic && a.mode!=='poly') E.draft={mode:'poly',polys:areaToPolys(a)};
+  E.mode=mode; E.polyPts=[];
+  const mc=map.getContainer(); mc.classList.toggle('area-free',mode==='free'); mc.classList.toggle('area-poly',mode==='poly');
+  if(mode==='free') map.dragging.disable(); else map.dragging.enable();
+  drawAreaEditor();
+}
+function areaHandle(latlng,cls,{onStart,onDrag}={}){
+  const m=L.marker(latlng,{draggable:true,zIndexOffset:1000,icon:L.divIcon({className:'',iconSize:[0,0],html:`<div class="area-h ${cls||''}"></div>`})}).addTo(areaEdit.layer);
+  if(onStart) m.on('dragstart',onStart);
+  m.on('drag',()=>onDrag(m.getLatLng())); m.on('dragend',()=>drawAreaEditor());
+  return m;
+}
+/* Nur die Flächen neu zeichnen (während des Ziehens, Griffe bleiben bestehen) */
+function redrawAreaDraft(){
+  const E=areaEdit; if(!E) return;
+  if(E.shapeLayer) E.shapeLayer.remove();
+  E.shapeLayer=L.layerGroup().addTo(E.layer);
+  drawAreaShapes(E.shapeLayer,E.draft,{color:'#e5352b',weight:2,opacity:.9,fillOpacity:.15,interactive:false});
+  if(E.polyPts.length){
+    L.polyline(E.polyPts,{color:'#e5352b',weight:2,dashArray:'4 4',interactive:false}).addTo(E.shapeLayer);
+    E.polyPts.forEach((p,i)=>L.marker(p,{interactive:false,icon:L.divIcon({className:'',iconSize:[0,0],html:`<div class="area-h dot${i?'':' move'}"></div>`})}).addTo(E.shapeLayer));
+  }
+  scheduleAreaBar();
+}
+let _areaBarRaf=0;
+function scheduleAreaBar(){ if(_areaBarRaf) return; _areaBarRaf=requestAnimationFrame(()=>{ _areaBarRaf=0; updateAreaBar(); }); }
+function drawAreaEditor(){
+  const E=areaEdit; if(!E) return; const a=E.draft;
+  E.layer.clearLayers(); E.shapeLayer=null;
+  state.stations.filter(s=>s.id!==E.stId).forEach(s=>drawAreaShapes(E.layer,stationArea(s),{color:'#8a97a8',weight:1,opacity:.6,fillOpacity:.05,dashArray:'4 4',interactive:false}));
+  redrawAreaDraft();
+  if(a.mode==='circle'){
+    const rp=()=>[a.lat, a.lng+a.r/mLng(a.lat)]; let rh;
+    areaHandle([a.lat,a.lng],'move',{onDrag:ll=>{ a.lat=ll.lat; a.lng=ll.lng; rh.setLatLng(rp()); redrawAreaDraft(); }});
+    rh=areaHandle(rp(),'',{onDrag:ll=>{ a.r=Math.max(100,distM({lat:a.lat,lng:a.lng},{lat:ll.lat,lng:ll.lng})); redrawAreaDraft(); }});
+  } else if(a.mode==='rect'){
+    const corners=()=>[[a.s,a.w],[a.s,a.e],[a.n,a.e],[a.n,a.w]], hs=[]; let mh, opp=null, start=null;
+    const sync=skip=>{ corners().forEach((c,i)=>{ if(i!==skip) hs[i].setLatLng(c); }); if(skip!=='m') mh.setLatLng([(a.s+a.n)/2,(a.w+a.e)/2]); };
+    corners().forEach((c,i)=>hs.push(areaHandle(c,'',{onStart:()=>{ opp=corners()[(i+2)%4]; },
+      onDrag:ll=>{ a.s=Math.min(opp[0],ll.lat); a.n=Math.max(opp[0],ll.lat); a.w=Math.min(opp[1],ll.lng); a.e=Math.max(opp[1],ll.lng); sync(i); redrawAreaDraft(); }})));
+    mh=areaHandle([(a.s+a.n)/2,(a.w+a.e)/2],'move',{onStart:()=>{ start={...a,c:mh.getLatLng()}; },
+      onDrag:ll=>{ const dy=ll.lat-start.c.lat, dx=ll.lng-start.c.lng; a.s=start.s+dy; a.n=start.n+dy; a.w=start.w+dx; a.e=start.e+dx; sync('m'); redrawAreaDraft(); }});
+  } else if(E.mode==='poly'){
+    a.polys.forEach(p=>{ if(p.kind!=='pts') return;
+      p.pts.forEach((pt,j)=>areaHandle(pt,'',{onDrag:ll=>{ p.pts[j]=[ll.lat,ll.lng]; redrawAreaDraft(); }})); });
+  }
+  updateAreaBar();
+}
+const AREA_HINTS={
+  circle:'Mitte ziehen zum Verschieben, Griff am Rand ändert den Radius.',
+  rect:'Ecken ziehen zum Anpassen, Mitte ziehen zum Verschieben.',
+  free:'Mit gedrückter Maustaste bzw. dem Finger ein Gebiet umfahren. Jede Zeichnung kommt als eigene Fläche dazu. Die Karte lässt sich in diesem Modus nur zoomen.',
+  poly:'Punkte per Klick setzen. Klick auf den ersten Punkt oder Doppelklick schließt die Fläche. Ecken von Polygonen lassen sich ziehen.',
+};
+function updateAreaBar(){
+  const E=areaEdit; if(!E) return; const st=stationById(E.stId), a=E.draft;
+  document.getElementById('ab-title').textContent=`Alarmierungsgebiet · ${st?st.name:''}`;
+  document.querySelectorAll('#areaBar [data-amode]').forEach(b=>b.classList.toggle('active',b.dataset.amode===E.mode));
+  document.getElementById('ab-hint').textContent=AREA_HINTS[E.mode]||'';
+  const pl=document.getElementById('ab-polys');
+  pl.innerHTML=a.mode==='poly' ? (a.polys.length ? a.polys.map((p,i)=>`<span class="ab-poly">Fläche ${i+1} · ${p.kind==='free'?'Stift':'Polygon'} · ${fmtKm2(unionKm2([{pts:p.pts}],8000))} km²<button class="btn sm ghost" data-apdel="${i}" title="Fläche löschen">×</button></span>`).join('')
+    : '<span class="ab-bad">Noch keine Fläche gezeichnet</span>') : '';
+  const own=unionKm2(areaShapes(a)), ok=own>=CONFIG.areaMinKm2 && own<=CONFIG.areaMaxKm2;
+  const total=unionKm2((st&&stationReady(st)?areaShapes(a):[]).concat(readyAreaShapes(E.stId)),20000);
+  document.getElementById('ab-info').innerHTML=
+    `<div class="${ok?'':'ab-bad'}">Diese Wache: ${fmtKm2(own)} km² (erlaubt ${CONFIG.areaMinKm2}–${CONFIG.areaMaxKm2} km²)</div>`+
+    `<div>Alle Wachen zusammen: ${fmtKm2(total)} km² · ca. ${fmtKm2(missionsPerHour(total))} Einsätze/Stunde · max. ${maxOpenMissions(total)} offen${total>CONFIG.areaCapKm2?` (Obergrenze ab ${CONFIG.areaCapKm2} km²)`:''}</div>`;
+  document.getElementById('ab-save').disabled=!ok;
+  document.getElementById('ab-polydone').classList.toggle('hidden',!(E.mode==='poly'&&E.polyPts.length>=3));
+  document.getElementById('ab-polyundo').classList.toggle('hidden',!(E.mode==='poly'&&E.polyPts.length));
+}
+function areaMapClick(e){
+  const E=areaEdit; if(!E||E.mode!=='poly') return;
+  const P=E.polyPts, pc=map.latLngToContainerPoint(e.latlng);
+  if(P.length>=3 && map.latLngToContainerPoint(P[0]).distanceTo(pc)<14){ finishAreaPoly(); return; }
+  if(P.length && map.latLngToContainerPoint(P[P.length-1]).distanceTo(pc)<5) return;   // Doppelklick: keinen doppelten Punkt
+  P.push([e.latlng.lat,e.latlng.lng]); redrawAreaDraft();
+}
+function areaMapDblClick(){ if(areaEdit && areaEdit.mode==='poly' && areaEdit.polyPts.length>=3) finishAreaPoly(); }
+function finishAreaPoly(){
+  const E=areaEdit; if(!E) return;
+  if(E.polyPts.length<3){ toast('Für eine Fläche mindestens 3 Punkte setzen','warn'); return; }
+  E.draft.polys.push({kind:'pts',pts:E.polyPts}); E.polyPts=[]; drawAreaEditor();
+}
+function areaPointerDown(e){
+  const E=areaEdit; if(!E||E.mode!=='free'||e.button>0) return;
+  if(e.target.closest('.leaflet-marker-icon,.leaflet-control')) return;
+  E.drawing=[map.mouseEventToLatLng(e)];
+  E.drawLine=L.polyline(E.drawing,{color:'#e5352b',weight:2,interactive:false}).addTo(E.layer);
+  try{ map.getContainer().setPointerCapture(e.pointerId); }catch(err){}
+  e.preventDefault();
+}
+function areaPointerMove(e){
+  const E=areaEdit; if(!E||!E.drawing) return; const ll=map.mouseEventToLatLng(e), last=E.drawing[E.drawing.length-1];
+  if(map.latLngToContainerPoint(last).distanceTo(map.latLngToContainerPoint(ll))<4) return;
+  E.drawing.push(ll); E.drawLine.addLatLng(ll);
+}
+function areaPointerUp(){
+  const E=areaEdit; if(!E||!E.drawing) return; const pts=E.drawing; E.drawing=null;
+  if(pts.length>=3){
+    const simp=L.LineUtil.simplify(pts.map(p=>map.latLngToLayerPoint(p)),2).map(p=>map.layerPointToLatLng(p));
+    if(simp.length>=3) E.draft.polys.push({kind:'free',pts:simp.map(p=>[+p.lat.toFixed(6),+p.lng.toFixed(6)])});
+  }
+  drawAreaEditor();
+}
+function saveAreaEdit(){
+  const E=areaEdit; if(!E) return; const st=stationById(E.stId); if(!st){ closeAreaEditor(); return; }
+  const a=E.draft; if(a.mode==='poly') a.polys=a.polys.filter(p=>p.pts.length>=3);
+  const km2=unionKm2(areaShapes(a));
+  if(km2<CONFIG.areaMinKm2||km2>CONFIG.areaMaxKm2){ toast(`Gebiet muss ${CONFIG.areaMinKm2}–${CONFIG.areaMaxKm2} km² groß sein`,'err'); return; }
+  st.area=JSON.parse(JSON.stringify(a)); areaRev++;
+  closeAreaEditor(); renderAreas(); saveGame(true);
+  toast(`Alarmierungsgebiet von ${st.name} gespeichert (${fmtKm2(km2)} km²)`,'ok');
+}
+
 /* ------------------------- MARKER ------------------------- */
 function addStationMarker(st){
   const icon=L.divIcon({className:'f-st',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-station${stationReady(st)?'':' building'}">${stationReady(st)?'FW':'BAU'}<span class="lvlbadge">L${st.level}</span></div>`});
   st.marker=L.marker([st.lat,st.lng],{icon}).addTo(stationLayer); st.marker.on('click',()=>openBuyModal(st.id));
+  renderAreas();
 }
 function stationReady(st){ return !st.readyAt || Date.now()>=st.readyAt; }
 function refundOpen(st){ return !!st.placedAt && Date.now()-st.placedAt < CONFIG.stationRefundMs; }
@@ -1224,15 +1485,18 @@ function checkStationsReady(){
     a._wasReady=r; });
 }
 /* Kartenfilter: ausgeblendete Ebenen als Klassen am Kartencontainer, Auswahl bleibt im Browser */
-const MAP_FILTER_KEYS=['stations','academy','hospitals','m_b','m_th','m_rd','ms_open','ms_work','v_fw','v_rd','routes'];
+const MAP_FILTER_KEYS=['stations','academy','hospitals','m_b','m_th','m_rd','ms_open','ms_work','v_fw','v_rd','routes','areas'];
 const MAP_FILTER_STORE='leitstelle_mapfilter';
-let mapHidden=(()=>{ try{ const a=JSON.parse(localStorage.getItem(MAP_FILTER_STORE)||'[]');
-  return new Set(Array.isArray(a)?a.filter(k=>MAP_FILTER_KEYS.includes(k)):[]); }catch(e){ return new Set(); } })();
+// Alarmierungsgebiete sind standardmäßig ausgeblendet (ältere Speicherstände: Liste ohne diesen Schalter)
+let mapHidden=(()=>{ try{ const raw=JSON.parse(localStorage.getItem(MAP_FILTER_STORE)||'null');
+  const arr=Array.isArray(raw)?raw.concat('areas'):(raw&&Array.isArray(raw.hidden)?raw.hidden:['areas']);
+  return new Set(arr.filter(k=>MAP_FILTER_KEYS.includes(k))); }catch(e){ return new Set(['areas']); } })();
 function applyMapFilter(){
   const el=document.getElementById('map'); if(el) MAP_FILTER_KEYS.forEach(k=>el.classList.toggle('hf-'+k,mapHidden.has(k)));
   document.querySelectorAll('#mf-panel input[data-mf]').forEach(i=>{ i.checked=!mapHidden.has(i.dataset.mf); });
-  const c=document.getElementById('mf-count'); if(c){ c.textContent=mapHidden.size; c.classList.toggle('hidden',!mapHidden.size); }
-  try{ localStorage.setItem(MAP_FILTER_STORE,JSON.stringify([...mapHidden])); }catch(e){}
+  const n=[...mapHidden].filter(k=>k!=='areas').length;
+  const c=document.getElementById('mf-count'); if(c){ c.textContent=n; c.classList.toggle('hidden',!n); }
+  try{ localStorage.setItem(MAP_FILTER_STORE,JSON.stringify({v:2,hidden:[...mapHidden]})); }catch(e){}
 }
 function refreshStationMarker(st){ if(st.marker) stationLayer.removeLayer(st.marker); addStationMarker(st); }
 function missionCls(m){ const rd=missionType(m.type)?.rd?' rd':''; return (m.status==='done'?'done':(m.status==='working'?'working':''))+rd; }
@@ -1420,8 +1684,7 @@ function spawnMission(forceType){
   const ready=state.stations.filter(stationReady); if(ready.length===0) return;
   const t=forceType?missionType(forceType):pickMissionType();
   if(!t) return;   // kein Einsatztyp definiert
-  const base=ready[Math.floor(Math.random()*ready.length)];
-  const pos=randomNear(base,CONFIG.missionRadiusM);
+  const pos=randomPointInAreas()||randomNear(ready[Math.floor(Math.random()*ready.length)],CONFIG.missionRadiusM);
   const m={ id:nid(), type:t.id, lat:pos.lat, lng:pos.lng,
     address:`${STREETS[Math.floor(Math.random()*STREETS.length)]} ${1+Math.floor(Math.random()*180)}`,
     status:'open', progress:0, assigned:[], patients:rollPatients(t) };
@@ -1677,9 +1940,10 @@ function renderMissionsThrottled(){ const n=Date.now(); if(n-_missRenderAt>800){
 
 let spawnTimer=0;
 function spawnLoop(){ spawnTimer+=CONFIG.tickMs*(state.gameSpeed||1);
-  if(spawnTimer>=CONFIG.missionIntervalMs){ spawnTimer=0;
+  const km2=totalAreaKm2();
+  if(spawnTimer>=spawnIntervalMs(km2)){ spawnTimer=0;
     const open=state.missions.filter(m=>m.status!=='done').length;
-    if(state.stations.length>0 && open<CONFIG.maxOpenMissions) spawnMission();
+    if(state.stations.length>0 && open<maxOpenMissions(km2)) spawnMission();
   } }
 
 /* ------------------------- RENDER ------------------------- */
@@ -2022,6 +2286,7 @@ function renderSvVehicles(st,vs,bays){
       <button class="btn sm" id="sv-goshop">+ Fahrzeug (Shop)</button>
       <button class="btn sm ghost" id="sv-upgrade" ${canUp?'':'disabled'}>${canUp?`Ausbau (${fmt(CONFIG.upgradeCost(st.level))} €)`:'Max. Level'}</button>
       <button class="btn sm ghost" id="sv-editstation">Wache bearbeiten</button>
+      <button class="btn sm ghost" id="sv-area">Alarmierungsgebiet</button>
       <button class="btn sm danger" id="sv-delstation" title="${refundOpen(st)?'Volle Erstattung':'25 % zurück'}: ${fmt(refund)} €">${refundOpen(st)?`Abreißen · volle Erstattung (noch ${fmtDur(st.placedAt+CONFIG.stationRefundMs-Date.now())})`:'Wache abreißen'}</button>
     </div>`;
   box.innerHTML=html;
@@ -2033,6 +2298,7 @@ function renderSvVehicles(st,vs,bays){
   const g=document.getElementById('sv-goshop'); if(g) g.onclick=()=>{ svTab='shop'; renderStationView(); };
   const up=document.getElementById('sv-upgrade'); if(up) up.onclick=()=>upgradeStation(st.id);
   const ed=document.getElementById('sv-editstation'); if(ed) ed.onclick=()=>openStationEdit(st.id);
+  const ar=document.getElementById('sv-area'); if(ar) ar.onclick=()=>openAreaEditor(st.id);
   const del=document.getElementById('sv-delstation'); if(del) del.onclick=()=>deleteStation(st.id);
 }
 function stationInvest(st){
@@ -2053,7 +2319,7 @@ function deleteStation(id){
   state.vehicles=state.vehicles.filter(v=>v.stationId!==st.id);
   academies().forEach(a=>{ a.courses=(a.courses||[]).filter(c=>c.stationId!==st.id); });   // Lehrgänge dieser Wache beenden
   if(st.marker) stationLayer.removeLayer(st.marker);
-  state.stations=state.stations.filter(s=>s.id!==st.id);
+  state.stations=state.stations.filter(s=>s.id!==st.id); renderAreas();
   state.credits+=refund; book('erstattung',`${st.name} abgerissen`,refund);
   if(svStationId===id){ hideModal('modal-stationview'); svStationId=null; }
   renderStations(); renderVehicles(); renderMissions(); renderTopbar(); saveGame(true);
@@ -2709,7 +2975,7 @@ function renderCatalog(){
 
 /* Rebuild nach Load/Import */
 function rebuildEverything(){
-  routeLayer.clearLayers(); stationLayer.clearLayers(); missionLayer.clearLayers(); vehicleLayer.clearLayers(); buildingLayer.clearLayers();
+  routeLayer.clearLayers(); stationLayer.clearLayers(); missionLayer.clearLayers(); vehicleLayer.clearLayers(); buildingLayer.clearLayers(); areaLayer.clearLayers();
   if(state.view) map.setView([state.view.lat,state.view.lng],state.view.zoom);
   state.stations.forEach(addStationMarker);
   (state.buildings||[]).forEach(b=>{ b.marker=null; addBuildingMarker(b); });
@@ -2748,6 +3014,14 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=e=>e.target.close
 document.querySelectorAll('.modal-bg').forEach(bg=>bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }));
 
 /* Suche */
+document.querySelectorAll('#areaBar [data-amode]').forEach(b=>b.addEventListener('click',()=>setAreaMode(b.dataset.amode)));
+document.getElementById('ab-cancel').addEventListener('click',closeAreaEditor);
+document.getElementById('ab-save').addEventListener('click',saveAreaEdit);
+document.getElementById('ab-polydone').addEventListener('click',finishAreaPoly);
+document.getElementById('ab-polyundo').addEventListener('click',()=>{ if(areaEdit){ areaEdit.polyPts.pop(); drawAreaEditor(); } });
+document.getElementById('ab-polys').addEventListener('click',e=>{ const i=e.target.closest('[data-apdel]')?.dataset.apdel; if(i==null||!areaEdit) return;
+  areaEdit.draft.polys.splice(+i,1); drawAreaEditor(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && areaEdit){ if(areaEdit.polyPts.length){ areaEdit.polyPts=[]; drawAreaEditor(); } else closeAreaEditor(); } });
 document.getElementById('mf-btn').addEventListener('click',()=>{
   const p=document.getElementById('mf-panel'), open=p.classList.toggle('hidden')===false;
   document.getElementById('mf-btn').setAttribute('aria-expanded',open);
