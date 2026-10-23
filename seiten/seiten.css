@@ -1,0 +1,31 @@
+/* Gemeinsames Aussehen für Impressum, Datenschutz und Socials (passend zum Spiel) */
+:root{
+  --bg:#0d1017; --panel:#151a23; --panel-2:#1a212c; --border:#253040; --border-2:#2f3c4f;
+  --text:#e6ebf2; --text-mut:#8a97a8; --text-dim:#5c6879; --fire:#e5352b;
+  --font-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-ui); line-height:1.6; }
+.wrap{ max-width:760px; margin:0 auto; padding:24px 16px 48px; }
+.top{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.brand{ display:flex; align-items:center; gap:9px; font-family:var(--font-mono); font-weight:800; letter-spacing:1px; }
+.brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--fire); box-shadow:0 0 10px var(--fire); }
+.back{ color:var(--text); text-decoration:none; border:1px solid var(--border-2); background:var(--panel-2); border-radius:8px; padding:7px 12px; font-size:14px; }
+.back:hover{ border-color:var(--fire); }
+.card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px 22px 10px; }
+h1{ font-size:26px; margin:0 0 16px; }
+h2{ font-size:17px; margin:24px 0 6px; }
+p,li{ color:#cfd6e0; font-size:15px; }
+a{ color:#ff6a5f; }
+.small{ color:var(--text-mut); font-size:13px; }
+.nav{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:22px; font-size:13px; }
+.nav a{ color:var(--text-mut); }
+.socials{ display:grid; gap:12px; margin:8px 0 16px; }
+.social{ display:flex; align-items:center; gap:14px; background:var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; text-decoration:none; color:var(--text); }
+.social:hover{ border-color:var(--fire); }
+.social .tag{ font-family:var(--font-mono); font-weight:800; font-size:12px; min-width:58px; text-align:center; padding:5px 8px; border-radius:7px; color:#fff; }
+.social .name{ font-weight:700; }
+.social .desc{ color:var(--text-mut); font-size:13px; }
+.social.off{ opacity:.55; pointer-events:none; }
+.social .soon{ margin-left:auto; font-size:12px; color:var(--text-dim); }

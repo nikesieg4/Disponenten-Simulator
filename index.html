@@ -67,6 +67,10 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
   color:var(--text); background:transparent; border:none; border-radius:8px; padding:10px 12px; cursor:pointer; }
 .dd-item:hover{ background:var(--panel-3); }
 .dd-item.danger{ color:#fca5a5; } .dd-item.danger:hover{ background:rgba(239,68,68,.12); }
+.legal-links{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; font-size:12px; }
+.legal-links a, .auth-hint a{ color:var(--text-mut); }
+.legal-links a:hover{ color:var(--text); }
+a.dd-item{ text-decoration:none; color:var(--text); }
 .dd-sep{ height:1px; background:var(--border); margin:4px 6px; }
 .btn.ghost{ background:transparent; } .btn.sm{ padding:5px 9px; font-size:12px; }
 .btn:disabled{ opacity:.45; cursor:not-allowed; }
@@ -482,6 +486,10 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
         <button class="dd-item" id="dd-save">Speichern</button>
         <button class="dd-item" id="dd-settings">Einstellungen</button>
         <div class="dd-sep"></div>
+        <a class="dd-item" href="seiten/socials.html" target="_blank" rel="noopener">Socials</a>
+        <a class="dd-item" href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a>
+        <a class="dd-item" href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a>
+        <div class="dd-sep"></div>
         <button class="dd-item danger" id="dd-logout">Abmelden</button>
       </div>
     </div>
@@ -623,6 +631,8 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5h-1.9V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22 22-9.8 22-22c0-1.5-.2-2.6-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 4.1 29.6 2 24 2 15.9 2 8.9 6.6 6.3 14.7z"/><path fill="#4CAF50" d="M24 46c5.5 0 10.5-2.1 14.3-5.6l-6.6-5.6C29.6 36.5 26.9 37.5 24 37.5c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C8.7 41.4 15.8 46 24 46z"/><path fill="#1976D2" d="M43.6 20.5H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.6 5.6C41.4 36.9 46 31 46 24c0-1.5-.2-2.6-.4-3.5z"/></svg>
       Mit Google anmelden
     </button>
+    <div class="auth-hint" style="font-size:12px">Mit der Anmeldung gilt die <a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a>.</div>
+    <div class="legal-links"><a href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a><a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a></div>
   </div>
 </div>
 
@@ -648,6 +658,7 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
       <button class="btn" onclick="location.reload()">Erneut versuchen</button>
       <button class="btn ghost" id="maint-logout">Abmelden</button>
     </div>
+    <div class="legal-links"><a href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a><a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a></div>
   </div>
 </div>
 
