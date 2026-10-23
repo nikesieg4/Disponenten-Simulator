@@ -261,6 +261,42 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
 .fms-1{ background:var(--fms-1); } .fms-2{ background:var(--fms-2); }
 .fms-3{ background:var(--fms-3); color:#231703;} .fms-4{ background:var(--fms-4); color:#04121f;}
 .fms-5{ background:var(--fms-5); color:#fff;} .fms-6{ background:var(--fms-6); color:#1c0505;} .fms-7{ background:var(--fms-7); color:#03212a;}
+/* Alarmierungsfenster im Stil von Leitstellenspiel */
+.lss-modal{ max-width:900px; }
+.lss-addr{ color:var(--text-mut); font-size:13px; display:flex; flex-wrap:wrap; gap:4px 14px; }
+.lss-alert{ border-radius:8px; padding:9px 12px; font-size:13px; border:1px solid; }
+.lss-alert.miss{ background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.45); color:#fca5a5; }
+.lss-alert.ok{ background:rgba(34,197,94,.10); border-color:rgba(34,197,94,.4); color:#86efac; }
+.lss-panel{ border:1px solid var(--border); border-radius:9px; overflow:hidden; overflow-x:auto; flex-shrink:0; }
+.lss-modal .m-content > *{ flex-shrink:0; }
+.lss-ph{ background:var(--panel-3); padding:7px 11px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+  color:var(--text-mut); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.lss-ph .cnt{ font-family:var(--font-mono); color:var(--text); }
+.lss-ph .btn{ text-transform:none; letter-spacing:0; margin-left:auto; }
+.lss-tbl{ width:100%; border-collapse:collapse; font-size:13px; }
+.lss-tbl th{ text-align:left; font-size:11px; color:var(--text-dim); font-weight:600; padding:5px 8px; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:1; }
+.lss-tbl td{ padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.lss-tbl tr:last-child td{ border-bottom:none; }
+.lss-tbl .mono{ font-family:var(--font-mono); }
+.lss-tbl .call{ font-family:var(--font-mono); font-weight:700; }
+.lss-tbl .dim{ color:var(--text-mut); }
+.lss-tbl .warnc{ color:#fbbf24; }
+.lss-tbl tr.sel td{ background:rgba(229,53,43,.13); }
+.lss-avail tbody tr{ cursor:pointer; } .lss-avail tbody tr:hover td{ background:var(--panel-3); }
+.lss-avail tbody tr.sel:hover td{ background:rgba(229,53,43,.2); }
+.lss-avail input{ width:16px; height:16px; accent-color:var(--fire); pointer-events:none; }
+.lss-scroll{ max-height:300px; overflow-y:auto; }
+.lss-empty{ padding:10px 12px; color:var(--text-dim); font-size:13px; }
+.lss-tabs{ display:flex; flex-wrap:wrap; gap:5px; padding:8px 10px; border-bottom:1px solid var(--border); background:var(--panel-2); }
+.lss-tab{ font-family:var(--font-ui); font-size:11px; font-weight:700; color:var(--text-mut); background:var(--panel); border:1px solid var(--border-2); border-radius:6px; padding:4px 9px; cursor:pointer; }
+.lss-tab.active{ background:var(--fire); border-color:var(--fire); color:#fff; }
+.lss-opt{ display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text-mut); padding:7px 11px; border-top:1px solid var(--border); background:var(--panel-2); }
+.lss-opt input{ accent-color:var(--fire); }
+.btn.lss-alarm{ background:#16a34a; border-color:#16a34a; color:#fff; font-weight:700; }
+.btn.lss-alarm-next{ background:#15803d; border-color:#15803d; color:#fff; }
+.btn.lss-alarm:disabled,.btn.lss-alarm-next:disabled{ background:var(--panel-3); border-color:var(--border-2); color:var(--text-dim); }
+@media (max-width:640px){ .lss-tbl .hide-sm{ display:none; } .lss-tbl td,.lss-tbl th{ padding:5px 5px; } .lss-tbl .call{ font-size:12px; } }
+
 /* nur das Zahlen-Quadrat (Funk) */
 .fbox{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:4px;
   font-family:var(--font-mono); font-weight:800; font-size:12px; flex:0 0 auto; vertical-align:middle; }
@@ -484,10 +520,14 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
   <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
 
-<div class="modal-bg" id="modal-mission"><div class="modal">
+<div class="modal-bg" id="modal-mission"><div class="modal wide lss-modal">
   <h3 id="mm-title">Einsatz</h3>
   <div class="m-content" id="mm-content"></div>
-  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+  <div class="m-actions">
+    <button class="btn lss-alarm" id="mm-alarm" disabled>🚨 Alarmieren</button>
+    <button class="btn lss-alarm-next" id="mm-alarm-next" disabled>Alarmieren &amp; nächster Einsatz</button>
+    <button class="btn ghost" data-close style="margin-left:auto">Schließen</button>
+  </div>
 </div></div>
 
 <div class="modal-bg" id="modal-catalog"><div class="modal">
@@ -690,7 +730,7 @@ const VEHICLE_CATEGORIES = [
   { id:'rd',     name:'Rettungsdienst' },
   { id:'log',    name:'Logistik & Versorgung' },
 ];
-const VEHICLES = {"hlf20": {"id": "hlf20", "name": "HLF 20", "abbr": "HLF", "icon": "🚒", "category": "lf", "fullname": "Hilfeleistungslöschfahrzeug 20", "crewMin": 6, "crewMax": 6, "water": 1200, "foam": 200, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 300000, "role": "hlf20", "desc": "Löschen + technische Hilfe"}, "lf20": {"id": "lf20", "name": "LF 20", "abbr": "LF", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug 20", "crewMin": 6, "crewMax": 9, "water": 2000, "foam": 160, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 350000, "role": "lf20", "desc": "Löschfahrzeug, viel Wasser"}, "dlk": {"id": "dlk", "name": "DLK 23/12", "abbr": "DLK", "icon": "🪜", "category": "sonder", "fullname": "Drehleiter mit Korb 23/11", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 700000, "role": "dlk", "desc": "Höhenrettung & Menschenrettung"}, "rw": {"id": "rw", "name": "RW", "abbr": "RW", "icon": "🛠️", "category": "sonder", "fullname": "Rüstwagen", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "rw", "desc": "Technische Hilfeleistung"}, "elw1c": {"id": "elw1c", "name": "ELW 1 C", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 1 C-Dienst", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 150000, "role": "elw1c", "desc": "Führungsfahrzeug ab mittlerer Einsatzgröße", "requiresCourse": "el-c"}, "elw1b": {"id": "elw1b", "name": "ELW 1 B", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 1 B-Dienst", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 155000, "role": "elw1b", "desc": "Führungsfahrzeug für größere Lagen", "requiresCourse": "el-b"}, "lfkats": {"id": "lfkats", "name": "LF KatS", "abbr": "LF", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug Katastrophenschutz", "crewMin": 9, "crewMax": 9, "water": 1000, "foam": 200, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 400000, "role": "lfkats", "desc": "Löschfahrzeug für Katastrophen und Großschadenslagen"}, "gw_g": {"id": "gw_g", "name": "GW-G", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Gefahrgut", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 550000, "role": "gw_g", "desc": "Säubern von gefahrenstoffen"}, "gw_mess": {"id": "gw_mess", "name": "GW-Mess", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Messtechnik", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "gw_mess", "desc": "Messen und aufspüren von Gefahrenstoffen"}, "gw_a": {"id": "gw_a", "name": "GW-A", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Atemschutz", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 500000, "role": "gw_a", "desc": "Viele Atemschutzgeräte"}, "gw_dekonp": {"id": "gw_dekonp", "name": "GW Dekon-P", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Dekontamination Personal", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "gw_dekonp", "desc": "Fahrzeug für dekontamination von einsatzkräften"}, "klef": {"id": "klef", "name": "KLEF", "abbr": "KLEF", "icon": "🚐", "category": "sonder", "fullname": "Kleineinsatzfahrzeug", "crewMin": 2, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 200000, "role": "klef", "desc": "Fahrzeug für kleine einsätze"}, "tlf": {"id": "tlf", "name": "TLF 24/50", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 24/50", "crewMin": 2, "crewMax": 3, "water": 5000, "foam": 500, "pump": 2400, "applyWater": 35, "applyFoam": 12, "cost": 400000, "role": "tlf", "desc": "Großes Tanklöschfahrzeug mit viel Wasser und Schaum"}, "elw2": {"id": "elw2", "name": "ELW 2", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 2 B/A-Dienst", "crewMin": 4, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 700000, "role": "elw2", "desc": "Führungsfahrzeug für Großschadenslagen", "requiresCourse": "el-b"}, "fmew": {"id": "fmew", "name": "FMeW", "abbr": "FMeW", "icon": "🚙", "category": "elw", "fullname": "Fernmeldewagen", "crewMin": 2, "crewMax": 4, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 170000, "role": "fmew", "desc": "Meldefahrzeug fährt immer mit elw2", "requiresCourse": "Fernmeldung"}, "lhf10": {"id": "lhf10", "name": "LHF 10/5", "abbr": "LHF", "icon": "🚒", "category": "lf", "fullname": "Lösch- und Hilfeleistungsfahrzeug 10/5", "crewMin": 1, "crewMax": 9, "water": 1000, "foam": 150, "pump": 1000, "applyWater": 35, "applyFoam": 12, "cost": 250000, "role": "lhf10", "desc": "Kleineres Lösch- und Hilfeleistungsfahrzeug (FF)"}, "lf16ts": {"id": "lf16ts", "name": "LF 16 TS", "abbr": "LF", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug 16 mit Tragkraftspritze", "crewMin": 1, "crewMax": 9, "water": 0, "foam": 150, "pump": 1600, "applyWater": 35, "applyFoam": 12, "cost": 150000, "role": "lf16ts", "desc": "Älteres KatS-Löschfahrzeug ohne Tank"}, "tlf1624": {"id": "tlf1624", "name": "TLF 16/24", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 16/24", "crewMin": 1, "crewMax": 3, "water": 2400, "foam": 150, "pump": 1600, "applyWater": 35, "applyFoam": 12, "cost": 250000, "role": "tlf1624", "desc": "Älteres Tanklöschfahrzeug (v. a. FF)"}, "tlf2024": {"id": "tlf2024", "name": "TLF 20/24 CAFS", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 20/24 mit Druckluftschaum", "crewMin": 1, "crewMax": 6, "water": 2400, "foam": 750, "pump": 1600, "applyWater": 35, "applyFoam": 12, "cost": 380000, "role": "tlf2024", "desc": "Tanklöschfahrzeug mit Druckluftschaum (CAFS)"}, "tlf3000": {"id": "tlf3000", "name": "TLF 3000", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 3000", "crewMin": 1, "crewMax": 3, "water": 3000, "foam": 150, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 330000, "role": "tlf3000", "desc": "Tanklöschfahrzeug mit 3.000 l Wasser"}, "tlf4000": {"id": "tlf4000", "name": "TLF 4000", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 4000", "crewMin": 1, "crewMax": 3, "water": 4000, "foam": 500, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 450000, "role": "tlf4000", "desc": "Tanklöschfahrzeug mit 4.000 l Wasser"}, "tlf2450cafs": {"id": "tlf2450cafs", "name": "TLF 24/50 CAFS", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 24/50 mit Druckluftschaum", "crewMin": 1, "crewMax": 3, "water": 4000, "foam": 750, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 480000, "role": "tlf2450cafs", "desc": "Großes TLF mit Druckluftschaum (CAFS)"}, "sw2000": {"id": "sw2000", "name": "SW 2000", "abbr": "SW", "icon": "🚚", "category": "sonder", "fullname": "Schlauchwagen 2000", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 250000, "role": "sw2000", "desc": "Lange Schlauchleitungen für die Wasserförderung"}, "swkats": {"id": "swkats", "name": "SW 2000 KatS", "abbr": "SW", "icon": "🚚", "category": "sonder", "fullname": "Schlauchwagen 2000 Katastrophenschutz (Bund)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 250000, "role": "swkats", "desc": "Bundes-Schlauchwagen für die Wasserförderung"}, "mtf": {"id": "mtf", "name": "MTF", "abbr": "MTF", "icon": "🚐", "category": "sonder", "fullname": "Mannschaftstransportfahrzeug", "crewMin": 1, "crewMax": 9, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 80000, "role": "mtf", "desc": "Transport von Einsatzkräften"}, "gw_hoehe": {"id": "gw_hoehe", "name": "GW Höhenrettung", "abbr": "GW-H", "icon": "🧗", "category": "sonder", "fullname": "Gerätewagen Höhenrettung", "crewMin": 1, "crewMax": 9, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 450000, "role": "gw_hoehe", "desc": "Rettung aus Höhen und Tiefen", "requiresCourse": "hoehenrettung"}, "tm50": {"id": "tm50", "name": "TM 50", "abbr": "TM", "icon": "🪜", "category": "sonder", "fullname": "Teleskopmast 50 m", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 1200000, "role": "tm50", "desc": "Hubrettungsfahrzeug für große Höhen"}, "fwk": {"id": "fwk", "name": "FwK 30", "abbr": "FwK", "icon": "🏗️", "category": "sonder", "fullname": "Feuerwehrkran 30 t", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 900000, "role": "fwk", "desc": "Heben schwerer Lasten", "requiresCourse": "kran"}, "gw_taucher": {"id": "gw_taucher", "name": "GW Wasser (Taucher)", "abbr": "GW-W", "icon": "🤿", "category": "sonder", "fullname": "Gerätewagen Wasserrettung mit Tauchgruppe", "crewMin": 2, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 350000, "role": "gw_taucher", "desc": "Feuerwehrtaucher für Rettung unter Wasser", "requiresCourse": "taucher"}, "gw_wr": {"id": "gw_wr", "name": "GW Wasserrettung", "abbr": "GW-W", "icon": "🛟", "category": "sonder", "fullname": "Gerätewagen Wasserrettung", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 300000, "role": "gw_wr", "desc": "Rettung aus Gewässern", "requiresCourse": "wasserrettung"}, "mzb": {"id": "mzb", "name": "MZB", "abbr": "MZB", "icon": "🚤", "category": "sonder", "fullname": "Mehrzweckboot", "crewMin": 1, "crewMax": 4, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 180000, "role": "mzb", "desc": "Boot für Einsätze auf Spree, Havel und Seen", "requiresCourse": "wasserrettung"}, "ab_atemschutz": {"id": "ab_atemschutz", "name": "WLF AB-Atemschutz", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Atemschutz", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 400000, "role": "ab_atemschutz", "desc": "Atemschutzgeräte und Strahlenschutz", "requiresCourse": "wechsellader"}, "ab_auffang": {"id": "ab_auffang", "name": "WLF AB-Auffangbehälter", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Auffangbehälter", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 350000, "role": "ab_auffang", "desc": "Auffangen von Öl und auslaufenden Stoffen", "requiresCourse": "wechsellader"}, "ab_gefahrgut": {"id": "ab_gefahrgut", "name": "WLF AB-Gefahrgut", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Gefahrgutbeseitigung", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 450000, "role": "ab_gefahrgut", "desc": "Gefahrgut aufnehmen und beseitigen", "requiresCourse": ["wechsellader", "gefahrgut"]}, "ab_dekon": {"id": "ab_dekon", "name": "WLF AB-Dekon V", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Dekontamination Verletzte", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 450000, "role": "ab_dekon", "desc": "Dekontamination von Personen", "requiresCourse": ["wechsellader", "dekonp"]}, "ab_schlauch": {"id": "ab_schlauch", "name": "WLF AB-Schlauch", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Schlauch", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 300000, "role": "ab_schlauch", "desc": "Schlauchmaterial für die Wasserförderung", "requiresCourse": "wechsellader"}, "ab_lueft": {"id": "ab_lueft", "name": "WLF AB-Be-/Entlüftung", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Be- und Entlüften", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 350000, "role": "ab_lueft", "desc": "Großlüfter gegen Rauch und Hitze", "requiresCourse": "wechsellader"}, "ab_tank": {"id": "ab_tank", "name": "WLF AB-Tankstelle", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Tankstelle (Kraftstoff)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 300000, "role": "ab_tank", "desc": "Betankung von Fahrzeugen und Aggregaten", "requiresCourse": "wechsellader"}, "ab_sonderl": {"id": "ab_sonderl", "name": "WLF AB-Sonderlöschmittel", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Sonderlöschmittel (Pulver/CO₂)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 10000, "pump": 0, "applyWater": 0, "applyFoam": 12, "cost": 400000, "role": "ab_sonderl", "desc": "Pulver und CO₂ für Sonderbrände", "requiresCourse": "wechsellader"}, "ab_schaum": {"id": "ab_schaum", "name": "WLF AB-Schaummittel", "abbr": "AB", "icon": "🚛", "category": "ab", "fullname": "Wechsellader mit Abrollbehälter Schaummittel/Werfer", "crewMin": 1, "crewMax": 3, "water": 3000, "foam": 5000, "pump": 0, "applyWater": 35, "applyFoam": 12, "cost": 400000, "role": "ab_schaum", "desc": "Großmengen Schaummittel mit Werfer", "requiresCourse": "wechsellader"}, "rtw": {"id": "rtw", "name": "RTW", "abbr": "RTW", "icon": "🚑", "category": "rd", "fullname": "Rettungswagen", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 180000, "role": "rtw", "desc": "Notfallrettung und Patiententransport"}, "nef": {"id": "nef", "name": "NEF", "abbr": "NEF", "icon": "🚗", "category": "rd", "fullname": "Notarzteinsatzfahrzeug", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 120000, "role": "nef", "desc": "Bringt den Notarzt zum Einsatzort", "requiresCourse": "notarzt"}, "ktw": {"id": "ktw", "name": "KTW", "abbr": "KTW", "icon": "🚑", "category": "rd", "fullname": "Krankentransportwagen", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 100000, "role": "ktw", "desc": "Krankentransport"}, "itw": {"id": "itw", "name": "ITW", "abbr": "ITW", "icon": "🚑", "category": "rd", "fullname": "Intensivtransportwagen", "crewMin": 3, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 350000, "role": "itw", "desc": "Transport intensivpflichtiger Patienten", "requiresCourse": ["intensiv", "notarzt"]}, "lkw1": {"id": "lkw1", "name": "LKW 1", "abbr": "LKW", "icon": "🚚", "category": "log", "fullname": "Lastkraftwagen 1 (Logistik)", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 120000, "role": "lkw1", "desc": "Transport von Material"}, "lkw2": {"id": "lkw2", "name": "LKW 2", "abbr": "LKW", "icon": "🚚", "category": "log", "fullname": "Lastkraftwagen 2 mit Ladebordwand", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 160000, "role": "lkw2", "desc": "Transport von schwerem Material"}, "mtf3": {"id": "mtf3", "name": "MTF 3", "abbr": "MTF", "icon": "🚌", "category": "log", "fullname": "Mannschaftstransportfahrzeug 3 (Bus)", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 150000, "role": "mtf3", "desc": "Transport größerer Mannschaften und Material"}, "fwa_notstrom": {"id": "fwa_notstrom", "name": "FwA Notstrom 60", "abbr": "NEA", "icon": "🔌", "category": "log", "fullname": "Feuerwehranhänger Notstrom 60 kVA (mit Zugfahrzeug)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 90000, "role": "fwa_notstrom", "desc": "Stromversorgung an der Einsatzstelle"}, "fwa_vent": {"id": "fwa_vent", "name": "FwA Ventilator", "abbr": "Lüfter", "icon": "🌀", "category": "log", "fullname": "Feuerwehranhänger Großventilator (mit Zugfahrzeug)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 80000, "role": "fwa_vent", "desc": "Belüftung großer Gebäude"}, "gw_betreuung": {"id": "gw_betreuung", "name": "GW Betreuung", "abbr": "GW-B", "icon": "🍲", "category": "log", "fullname": "Gerätewagen Betreuung (Bund)", "crewMin": 3, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 200000, "role": "gw_betreuung", "desc": "Versorgung der Einsatzkräfte bei langen Einsätzen", "requiresCourse": ["verpflegungseinheit", "verpflegungshelfer"]}, "fwa_fkh": {"id": "fwa_fkh", "name": "FwA FKH", "abbr": "FKH", "icon": "🍲", "category": "log", "fullname": "Feuerwehranhänger Feldkochherd (mit Zugfahrzeug)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 60000, "role": "fwa_fkh", "desc": "Warme Verpflegung an der Einsatzstelle", "requiresCourse": "verpflegungshelfer"}};
+const VEHICLES = {"hlf20": {"id": "hlf20", "name": "HLF 20", "abbr": "HLF", "icon": "🚒", "category": "lf", "fullname": "Hilfeleistungslöschfahrzeug 20", "crewMin": 6, "crewMax": 6, "water": 1200, "foam": 200, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 300000, "role": "hlf20", "desc": "Löschen + technische Hilfe"}, "lf20": {"id": "lf20", "name": "LF 20", "abbr": "LF", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug 20", "crewMin": 6, "crewMax": 9, "water": 2000, "foam": 160, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 350000, "role": "lf20", "desc": "Löschfahrzeug, viel Wasser"}, "dlk": {"id": "dlk", "name": "DLK 23/12", "abbr": "DLK", "icon": "🪜", "category": "sonder", "fullname": "Drehleiter mit Korb 23/11", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 700000, "role": "dlk", "desc": "Höhenrettung & Menschenrettung"}, "rw": {"id": "rw", "name": "RW", "abbr": "RW", "icon": "🛠️", "category": "sonder", "fullname": "Rüstwagen", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "rw", "desc": "Technische Hilfeleistung"}, "elw1c": {"id": "elw1c", "name": "ELW 1 C", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 1 C-Dienst", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 150000, "role": "elw1c", "desc": "Führungsfahrzeug ab mittlerer Einsatzgröße", "requiresCourse": "el-c"}, "elw1b": {"id": "elw1b", "name": "ELW 1 B", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 1 B-Dienst", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 155000, "role": "elw1b", "desc": "Führungsfahrzeug für größere Lagen", "requiresCourse": "el-b"}, "lfkats": {"id": "lfkats", "name": "LF KatS", "abbr": "LF", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug Katastrophenschutz", "crewMin": 9, "crewMax": 9, "water": 1000, "foam": 200, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 400000, "role": "lfkats", "desc": "Löschfahrzeug für Katastrophen und Großschadenslagen"}, "gw_g": {"id": "gw_g", "name": "GW-G", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Gefahrgut", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 550000, "role": "gw_g", "desc": "Säubern von gefahrenstoffen"}, "gw_mess": {"id": "gw_mess", "name": "GW-Mess", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Messtechnik", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "gw_mess", "desc": "Messen und aufspüren von Gefahrenstoffen"}, "gw_a": {"id": "gw_a", "name": "GW-A", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Atemschutz", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 500000, "role": "gw_a", "desc": "Viele Atemschutzgeräte"}, "gw_dekonp": {"id": "gw_dekonp", "name": "GW Dekon-P", "abbr": "GW", "icon": "🚐", "category": "sonder", "fullname": "Gerätewagen Dekontamination Personal", "crewMin": 2, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 600000, "role": "gw_dekonp", "desc": "Fahrzeug für dekontamination von einsatzkräften"}, "klef": {"id": "klef", "name": "KLEF", "abbr": "KLEF", "icon": "🚐", "category": "sonder", "fullname": "Kleineinsatzfahrzeug", "crewMin": 2, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 200000, "role": "klef", "desc": "Fahrzeug für kleine einsätze"}, "tlf": {"id": "tlf", "name": "TLF 24/50", "abbr": "TLF", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 24/50", "crewMin": 2, "crewMax": 3, "water": 5000, "foam": 500, "pump": 2400, "applyWater": 35, "applyFoam": 12, "cost": 400000, "role": "tlf", "desc": "Großes Tanklöschfahrzeug mit viel Wasser und Schaum"}, "elw2": {"id": "elw2", "name": "ELW 2", "abbr": "ELW", "icon": "🚙", "category": "elw", "fullname": "Einsatzleitwagen 2 B/A-Dienst", "crewMin": 4, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 700000, "role": "elw2", "desc": "Führungsfahrzeug für Großschadenslagen", "requiresCourse": "el-b"}, "fmew": {"id": "fmew", "name": "FMeW", "abbr": "FMeW", "icon": "🚙", "category": "elw", "fullname": "Fernmeldewagen", "crewMin": 2, "crewMax": 4, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 170000, "role": "fmew", "desc": "Meldefahrzeug fährt immer mit elw2", "requiresCourse": "Fernmeldung"}, "lhf10": {"id": "lhf10", "name": "LHF 10/5", "abbr": "LHF", "icon": "🚒", "category": "lf", "fullname": "Lösch- und Hilfeleistungsfahrzeug 10/5", "crewMin": 1, "crewMax": 9, "water": 1000, "foam": 150, "pump": 1000, "applyWater": 35, "applyFoam": 12, "cost": 250000, "role": "lhf10", "desc": "Kleineres Lösch- und Hilfeleistungsfahrzeug (FF)"}, "lf16ts": {"id": "lf16ts", "name": "LF 16 TS", "abbr": "LF16", "icon": "🚒", "category": "lf", "fullname": "Löschgruppenfahrzeug 16 mit Tragkraftspritze", "crewMin": 1, "crewMax": 9, "water": 0, "foam": 150, "pump": 1600, "applyWater": 35, "applyFoam": 12, "cost": 150000, "role": "lf16ts", "desc": "Älteres KatS-Löschfahrzeug ohne Tank"}, "tlf1624": {"id": "tlf1624", "name": "TLF 16/24", "abbr": "TLF16", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 16/24", "crewMin": 1, "crewMax": 3, "water": 2400, "foam": 150, "pump": 1600, "applyWater": 35, "applyFoam": 12, "cost": 250000, "role": "tlf1624", "desc": "Älteres Tanklöschfahrzeug (v. a. FF)"}, "tlf2024": {"id": "tlf2024", "name": "TLF 20/24 CAFS", "abbr": "TLF20", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 20/24 mit Druckluftschaum", "crewMin": 1, "crewMax": 6, "water": 2400, "foam": 750, "pump": 1600, "applyWater": 35, "applyFoam": 12, "cost": 380000, "role": "tlf2024", "desc": "Tanklöschfahrzeug mit Druckluftschaum (CAFS)"}, "tlf3000": {"id": "tlf3000", "name": "TLF 3000", "abbr": "TLF3000", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 3000", "crewMin": 1, "crewMax": 3, "water": 3000, "foam": 150, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 330000, "role": "tlf3000", "desc": "Tanklöschfahrzeug mit 3.000 l Wasser"}, "tlf4000": {"id": "tlf4000", "name": "TLF 4000", "abbr": "TLF4000", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 4000", "crewMin": 1, "crewMax": 3, "water": 4000, "foam": 500, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 450000, "role": "tlf4000", "desc": "Tanklöschfahrzeug mit 4.000 l Wasser"}, "tlf2450cafs": {"id": "tlf2450cafs", "name": "TLF 24/50 CAFS", "abbr": "TLF-CAFS", "icon": "🚒", "category": "lf", "fullname": "Tanklöschfahrzeug 24/50 mit Druckluftschaum", "crewMin": 1, "crewMax": 3, "water": 4000, "foam": 750, "pump": 2000, "applyWater": 35, "applyFoam": 12, "cost": 480000, "role": "tlf2450cafs", "desc": "Großes TLF mit Druckluftschaum (CAFS)"}, "sw2000": {"id": "sw2000", "name": "SW 2000", "abbr": "SW", "icon": "🚚", "category": "sonder", "fullname": "Schlauchwagen 2000", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 250000, "role": "sw2000", "desc": "Lange Schlauchleitungen für die Wasserförderung"}, "swkats": {"id": "swkats", "name": "SW 2000 KatS", "abbr": "SW-KatS", "icon": "🚚", "category": "sonder", "fullname": "Schlauchwagen 2000 Katastrophenschutz (Bund)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 250000, "role": "swkats", "desc": "Bundes-Schlauchwagen für die Wasserförderung"}, "mtf": {"id": "mtf", "name": "MTF", "abbr": "MTF", "icon": "🚐", "category": "sonder", "fullname": "Mannschaftstransportfahrzeug", "crewMin": 1, "crewMax": 9, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 80000, "role": "mtf", "desc": "Transport von Einsatzkräften"}, "gw_hoehe": {"id": "gw_hoehe", "name": "GW Höhenrettung", "abbr": "GW-H", "icon": "🧗", "category": "sonder", "fullname": "Gerätewagen Höhenrettung", "crewMin": 1, "crewMax": 9, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 450000, "role": "gw_hoehe", "desc": "Rettung aus Höhen und Tiefen", "requiresCourse": "hoehenrettung"}, "tm50": {"id": "tm50", "name": "TM 50", "abbr": "TM", "icon": "🪜", "category": "sonder", "fullname": "Teleskopmast 50 m", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 1200000, "role": "tm50", "desc": "Hubrettungsfahrzeug für große Höhen"}, "fwk": {"id": "fwk", "name": "FwK 30", "abbr": "FwK", "icon": "🏗️", "category": "sonder", "fullname": "Feuerwehrkran 30 t", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 900000, "role": "fwk", "desc": "Heben schwerer Lasten", "requiresCourse": "kran"}, "gw_taucher": {"id": "gw_taucher", "name": "GW Wasser (Taucher)", "abbr": "GW-T", "icon": "🤿", "category": "sonder", "fullname": "Gerätewagen Wasserrettung mit Tauchgruppe", "crewMin": 2, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 350000, "role": "gw_taucher", "desc": "Feuerwehrtaucher für Rettung unter Wasser", "requiresCourse": "taucher"}, "gw_wr": {"id": "gw_wr", "name": "GW Wasserrettung", "abbr": "GW-W", "icon": "🛟", "category": "sonder", "fullname": "Gerätewagen Wasserrettung", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 300000, "role": "gw_wr", "desc": "Rettung aus Gewässern", "requiresCourse": "wasserrettung"}, "mzb": {"id": "mzb", "name": "MZB", "abbr": "MZB", "icon": "🚤", "category": "sonder", "fullname": "Mehrzweckboot", "crewMin": 1, "crewMax": 4, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 180000, "role": "mzb", "desc": "Boot für Einsätze auf Spree, Havel und Seen", "requiresCourse": "wasserrettung"}, "wlf": {"id": "wlf", "name": "WLF", "abbr": "WLF", "icon": "🚛", "category": "ab", "fullname": "Wechselladerfahrzeug", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 250000, "role": "wlf", "desc": "Transportiert Abrollbehälter der eigenen Wache", "requiresCourse": "wechsellader"}, "ab_atemschutz": {"id": "ab_atemschutz", "name": "AB-Atemschutz", "abbr": "AB-A", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Atemschutz", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 200000, "role": "ab_atemschutz", "desc": "Atemschutzgeräte und Strahlenschutz", "isAB": true}, "ab_auffang": {"id": "ab_auffang", "name": "AB-Auffangbehälter", "abbr": "AB-Auff", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Auffangbehälter", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 150000, "role": "ab_auffang", "desc": "Auffangen von Öl und auslaufenden Stoffen", "isAB": true}, "ab_gefahrgut": {"id": "ab_gefahrgut", "name": "AB-Gefahrgut", "abbr": "AB-G", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Gefahrgutbeseitigung", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 250000, "role": "ab_gefahrgut", "desc": "Gefahrgut aufnehmen und beseitigen", "requiresCourse": "gefahrgut", "isAB": true}, "ab_dekon": {"id": "ab_dekon", "name": "AB-Dekon V", "abbr": "AB-Dekon", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Dekontamination Verletzte", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 250000, "role": "ab_dekon", "desc": "Dekontamination von Personen", "requiresCourse": "dekonp", "isAB": true}, "ab_schlauch": {"id": "ab_schlauch", "name": "AB-Schlauch", "abbr": "AB-S", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Schlauch", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 100000, "role": "ab_schlauch", "desc": "Schlauchmaterial für die Wasserförderung", "isAB": true}, "ab_lueft": {"id": "ab_lueft", "name": "AB-Be-/Entlüftung", "abbr": "AB-Lüft", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Be- und Entlüften", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 150000, "role": "ab_lueft", "desc": "Großlüfter gegen Rauch und Hitze", "isAB": true}, "ab_tank": {"id": "ab_tank", "name": "AB-Tankstelle", "abbr": "AB-T", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Tankstelle (Kraftstoff)", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 100000, "role": "ab_tank", "desc": "Betankung von Fahrzeugen und Aggregaten", "isAB": true}, "ab_sonderl": {"id": "ab_sonderl", "name": "AB-Sonderlöschmittel", "abbr": "AB-SL", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Sonderlöschmittel (Pulver/CO₂)", "crewMin": 0, "crewMax": 0, "water": 0, "foam": 10000, "pump": 0, "applyWater": 0, "applyFoam": 12, "cost": 200000, "role": "ab_sonderl", "desc": "Pulver und CO₂ für Sonderbrände", "isAB": true}, "ab_schaum": {"id": "ab_schaum", "name": "AB-Schaummittel", "abbr": "AB-Sch", "icon": "📦", "category": "ab", "fullname": "Abrollbehälter Schaummittel/Werfer", "crewMin": 0, "crewMax": 0, "water": 3000, "foam": 5000, "pump": 0, "applyWater": 35, "applyFoam": 12, "cost": 200000, "role": "ab_schaum", "desc": "Großmengen Schaummittel mit Werfer", "isAB": true}, "rtw": {"id": "rtw", "name": "RTW", "abbr": "RTW", "icon": "🚑", "category": "rd", "fullname": "Rettungswagen", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 180000, "role": "rtw", "desc": "Notfallrettung und Patiententransport"}, "nef": {"id": "nef", "name": "NEF", "abbr": "NEF", "icon": "🚗", "category": "rd", "fullname": "Notarzteinsatzfahrzeug", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 120000, "role": "nef", "desc": "Bringt den Notarzt zum Einsatzort", "requiresCourse": "notarzt"}, "ktw": {"id": "ktw", "name": "KTW", "abbr": "KTW", "icon": "🚑", "category": "rd", "fullname": "Krankentransportwagen", "crewMin": 1, "crewMax": 2, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 100000, "role": "ktw", "desc": "Krankentransport"}, "itw": {"id": "itw", "name": "ITW", "abbr": "ITW", "icon": "🚑", "category": "rd", "fullname": "Intensivtransportwagen", "crewMin": 3, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 350000, "role": "itw", "desc": "Transport intensivpflichtiger Patienten", "requiresCourse": ["intensiv", "notarzt"]}, "lkw1": {"id": "lkw1", "name": "LKW 1", "abbr": "LKW1", "icon": "🚚", "category": "log", "fullname": "Lastkraftwagen 1 (Logistik)", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 120000, "role": "lkw1", "desc": "Transport von Material"}, "lkw2": {"id": "lkw2", "name": "LKW 2", "abbr": "LKW2", "icon": "🚚", "category": "log", "fullname": "Lastkraftwagen 2 mit Ladebordwand", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 160000, "role": "lkw2", "desc": "Transport von schwerem Material"}, "mtf3": {"id": "mtf3", "name": "MTF 3", "abbr": "MTF3", "icon": "🚌", "category": "log", "fullname": "Mannschaftstransportfahrzeug 3 (Bus)", "crewMin": 1, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 150000, "role": "mtf3", "desc": "Transport größerer Mannschaften und Material"}, "fwa_notstrom": {"id": "fwa_notstrom", "name": "FwA Notstrom 60", "abbr": "NEA", "icon": "🔌", "category": "log", "fullname": "Feuerwehranhänger Notstrom 60 kVA (mit Zugfahrzeug)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 90000, "role": "fwa_notstrom", "desc": "Stromversorgung an der Einsatzstelle"}, "fwa_vent": {"id": "fwa_vent", "name": "FwA Ventilator", "abbr": "Lüfter", "icon": "🌀", "category": "log", "fullname": "Feuerwehranhänger Großventilator (mit Zugfahrzeug)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 80000, "role": "fwa_vent", "desc": "Belüftung großer Gebäude"}, "gw_betreuung": {"id": "gw_betreuung", "name": "GW Betreuung", "abbr": "GW-B", "icon": "🍲", "category": "log", "fullname": "Gerätewagen Betreuung (Bund)", "crewMin": 3, "crewMax": 6, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 200000, "role": "gw_betreuung", "desc": "Versorgung der Einsatzkräfte bei langen Einsätzen", "requiresCourse": ["verpflegungseinheit", "verpflegungshelfer"]}, "fwa_fkh": {"id": "fwa_fkh", "name": "FwA FKH", "abbr": "FKH", "icon": "🍲", "category": "log", "fullname": "Feuerwehranhänger Feldkochherd (mit Zugfahrzeug)", "crewMin": 1, "crewMax": 3, "water": 0, "foam": 0, "pump": 0, "applyWater": 0, "applyFoam": 0, "cost": 60000, "role": "fwa_fkh", "desc": "Warme Verpflegung an der Einsatzstelle", "requiresCourse": "verpflegungshelfer"}};
 
 /* -------- Einsatz-Katalog --------
    need.water/foam : benötigtes Löschmittel (foam>0 ⇒ schaumfähiges Fzg nötig)
@@ -748,7 +788,7 @@ function serializeObj(){ return {
   view:(map?{lat:map.getCenter().lat,lng:map.getCenter().lng,zoom:map.getZoom()}:state.view),
   stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt})),
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
-    targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[]})),
+    targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null})),
   buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses})),
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[]})),
 };}
@@ -1108,30 +1148,59 @@ async function routeVehicleTo(v,m,factor){
   route.coords.push({lat:m.lat,lng:m.lng});           // Teleport auf exakten Einsatzpunkt
   startDrive(v,route.coords,route.duration,factor||CONFIG.outboundFactor);
 }
+/* Besatzung für ein Fahrzeug wählen (feste zuerst, dann Springer); null + Warnung, wenn Personal fehlt */
+function pickCrew(st, v, courses, label){
+  const tr=trainingSet();
+  // Springer mit wenigen Ausbildungen zuerst, damit Spezialisten für andere Fahrzeuge frei bleiben
+  const cand=fixedPeople(st,v).filter(p=>!tr.has(p.id)).concat(poolFreePeople(st).sort((a,b)=>(a.quals||[]).length-(b.quals||[]).length));
+  const need=vStat(v,'crewMin')||0, cap=vStat(v,'crewMax')||need;
+  if(cand.length < need){ toast(`⚠️ ${label}: nicht genug Personal (${cand.length}/${need} verfügbar)`,'err'); return null; }
+  const sure=[];                                      // z. B. ELW braucht Einsatzleiter-Ausbildung
+  for(const c of courses){
+    if(sure.some(p=>hasQual(p,c))) continue;
+    const q=cand.find(p=>!sure.includes(p)&&hasQual(p,c));
+    if(!q){ toast(`⚠️ ${label}: kein verfügbares Personal mit Ausbildung „${qualLabel(c)}“`,'err'); return null; }
+    sure.push(q);
+  }
+  if(sure.length>cap){ toast(`⚠️ ${label}: zu wenig Plätze für alle benötigten Ausbildungen`,'err'); return null; }
+  return sure.concat(cand.filter(p=>!sure.includes(p))).slice(0,cap).map(p=>p.id);
+}
+/* Wechsellader: freier WLF auf der Wache (einsatzbereit, nichts aufgesattelt) */
+function freeWlfAt(st){ return st ? state.vehicles.find(x=>x.stationId===st.id && VEHICLES[x.type]?.id==='wlf' && x.status===2 && !x.abId) : null; }
+/* WLF folgt dem aufgesattelten AB; ist der AB wieder auf der Wache, wird abgesattelt */
+function syncWlfs(){
+  for(const w of state.vehicles){ if(!w.abId) continue;
+    const ab=state.vehicles.find(x=>x.id===w.abId);
+    if(!ab || ab.status===2 || ab.status===6){
+      const st=stationById(w.stationId); w.abId=null; w.status=2; if(st){ w.lat=st.lat; w.lng=st.lng; }
+      if(ab){ ab.wlfId=null; funk(ab,null,`${vehName(w)} hat abgesattelt`); }
+      renderStations(); renderVehicles(); continue; }
+    w.status=ab.status; w.lat=ab.lat; w.lng=ab.lng; w.targetMissionId=null;
+    if(w.marker){ vehicleLayer.removeLayer(w.marker); w.marker=null; }
+  }
+}
 async function dispatch(vehicleId,missionId){
   const v=state.vehicles.find(x=>x.id===vehicleId), m=missionById(missionId);
   if(!v||!m||m.status==='done') return;
   if(v.targetMissionId===m.id){ toast(`${vehName(v)} ist bereits auf Anfahrt hierher`,'warn'); return; }
   if(v.nextMissionId===m.id){ toast(`${vehName(v)} ist bereits als Folgeeinsatz eingeplant`,'warn'); return; }
 
+  if(v.abId){ const ab=state.vehicles.find(x=>x.id===v.abId); toast(`⚠️ ${vehName(v)} transportiert gerade ${ab?vehName(ab):'einen AB'}`,'warn'); return; }
   if(v.status===2){                                  // von der Wache
     const st=stationById(v.stationId); const t=VEHICLES[v.type];
-    const tr=trainingSet();
-    const fixedP=fixedPeople(st,v).filter(p=>!tr.has(p.id));
-    const freePool=poolFreePeople(st);
-    let cand=fixedP.concat(freePool);                  // Kandidaten: feste zuerst, dann Springer
-    const need=vStat(v,'crewMin')||0, cap=vStat(v,'crewMax')||need;
-    if(cand.length < need){ toast(`${vehName(v)}: nicht genug Personal (${cand.length}/${need} verfügbar)`,'err'); return; }
-    const sure=[];                                     // z. B. ELW braucht Einsatzleiter-Ausbildung
-    for(const c of vehCourses(t)){
-      if(sure.some(p=>hasQual(p,c))) continue;
-      const q=cand.find(p=>!sure.includes(p)&&hasQual(p,c));
-      if(!q){ toast(`${vehName(v)}: benötigt Personal mit Ausbildung „${qualLabel(c)}“`,'err'); return; }
-      sure.push(q);
+    if(t.isAB){                                        // Abrollbehälter: freien WLF der Wache aufsatteln
+      const wlf=freeWlfAt(st);
+      if(!wlf){ toast(`⚠️ ${vehName(v)} kann nicht ausrücken: kein freier WLF auf ${st?st.name:'der Wache'}`,'warn'); return; }
+      const crew=pickCrew(st, wlf, vehCourses(VEHICLES[wlf.type]).concat(vehCourses(t)), `${vehName(v)} (mit ${vehName(wlf)})`);
+      if(!crew) return;
+      wlf.abId=v.id; v.wlfId=wlf.id; wlf.status=v.status; wlf.crewIds=[]; wlf.crew=0;
+      v.crewIds=crew; v.crew=crew.length;
+      funk(v,null,`${vehName(wlf)} hat aufgesattelt`);
+    } else {
+      const crew=pickCrew(st, v, vehCourses(t), vehName(v));
+      if(!crew) return;
+      v.crewIds=crew; v.crew=crew.length;
     }
-    if(sure.length>cap){ toast(`${vehName(v)}: zu wenig Plätze für alle benötigten Ausbildungen`,'err'); return; }
-    cand=sure.concat(cand.filter(p=>!sure.includes(p)));   // qualifizierte Personen sicher an Bord
-    v.crewIds=cand.slice(0,cap).map(p=>p.id); v.crew=v.crewIds.length;
     if(st){ v.lat=st.lat; v.lng=st.lng; }
     await routeVehicleTo(v,m,CONFIG.outboundFactor);
     renderStations(); if(svStationId===st.id) renderStationView();
@@ -1172,6 +1241,7 @@ let lastTick=Date.now();
 function tick(){
   const now=Date.now(); const dt=Math.min(0.5,(now-lastTick)/1000); lastTick=now;   // Fahren/Einsätze in Echtzeit (Speed wirkt nur auf Spawn)
 
+  syncWlfs();
   // Fahrzeuge bewegen
   for(const v of state.vehicles){
     if(v.status===3||v.status===1){
@@ -1685,7 +1755,7 @@ function renderBuyMenu(){
         ${owned>0?`<span class="vc-owned">${owned}× im Bestand</span>`:''}
       </div>
       <div class="vc-specs">
-        <div class="vc-spec">👥 Besatzung <b>${t.crewMin}–${t.crewMax}</b></div>
+        <div class="vc-spec">${t.isAB?'🚛 wird von einem <b>WLF</b> der Wache transportiert':`👥 Besatzung <b>${t.crewMin}–${t.crewMax}</b>`}</div>
         <div class="vc-spec">🏷️ ${t.desc}</div>
         ${vehCourses(t).length?`<div class="vc-spec" style="color:#6aa8ff">🎓 benötigt: ${vehCourses(t).map(qualLabel).join(', ')}</div>`:''}
       </div>
@@ -1707,63 +1777,134 @@ function buyVehicle(typeId){ const st=stationById(buyStationId), t=VEHICLES[type
   toast(`${vehName(v)} beschafft`,'ok'); saveGame(true);
 }
 
-/* Einsatz-Modal */
-let openMissionId=null;
-function openMissionModal(id){ const m=missionById(id); if(!m) return; openMissionId=id;
+/* Einsatz-Modal (Alarmierungsfenster im Stil von Leitstellenspiel) */
+let openMissionId=null, mmSel=new Set(), mmCat='all', mmShowBusy=false;
+function openMissionModal(id){ const m=missionById(id); if(!m) return;
+  if(openMissionId!==id){ mmSel=new Set(); }
+  openMissionId=id;
   const t=missionType(m.type); document.getElementById('mm-title').textContent=`${t.code} · ${t.name}`;
   renderMissionModal(); showModal('modal-mission'); }
+/* Fahrzeuge, die zu diesem Einsatz unterwegs oder vor Ort sind */
+function missionVehicles(m){ return state.vehicles.filter(v=>v.targetMissionId===m.id && (v.status===3||v.status===4)); }
+/* Noch fehlende Fahrzeuge (vor Ort + Anfahrt zählen bereits) */
+function missingReqs(m){
+  const t=missionType(m.type); const reqs=(t&&t.req&&t.req.length)?t.req.slice().sort((a,b)=>a.types.length-b.types.length):[];
+  const veh=missionVehicles(m); const used=new Set(); const out=[];
+  for(const r of reqs){ let have=0;
+    for(const v of veh){ if(have>=r.count) break; if(used.has(v.id)) continue; if(r.types.includes(v.type)){ used.add(v.id); have++; } }
+    if(have<r.count) out.push({ r, missing:r.count-have });
+  }
+  return out;
+}
+function vehDistKm(v,m){ return distM({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng})/1000; }
+function abHint(v){ const t=VEHICLES[v.type]; if(!t||!t.isAB||v.status!==2) return '';
+  return freeWlfAt(stationById(v.stationId))?' · <span class="dim">WLF frei</span>':' · <span class="warnc">⚠️ kein WLF frei</span>'; }
+function vehTypeName(v){ const t=VEHICLES[v.type]; return t?t.name:v.type; }
 function renderMissionModal(){
   const m=missionById(openMissionId); if(!m){ hideModal('modal-mission'); return; }
   const t=missionType(m.type), box=document.getElementById('mm-content');
-  const onScene=m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id).length;
-  const enRoute=m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===3&&v.targetMissionId===m.id).length;
-  const effTotal=(m.status==='working'&&m.effMinutes)?m.effMinutes:effMissionMinutes(t, Math.max(1,onScene));
-  const rest=(m.status==='working'&&m.effMinutes)?`${mmss(m.effMinutes*(1-m.progress))} / ${mmss(m.effMinutes)}`:'—';
-  const avail=state.vehicles.filter(v=>v.status===2);
-  const busy=state.vehicles.filter(v=>[1,3,4,6].includes(v.status));
+  const keepScroll=box.scrollTop, oldList=box.querySelector('.lss-scroll'), keepList=oldList?oldList.scrollTop:0;
+  const enRoute=missionVehicles(m).filter(v=>v.status===3), onScene=missionVehicles(m).filter(v=>v.status===4);
+  const queued=state.vehicles.filter(v=>v.nextMissionId===m.id);
 
-  // Reihenfolge: einsatzbereit zuerst, dann nach geschätzter Anfahrtszeit
-  const statusRank={2:0,1:1,3:2,4:3,6:4};
-  const roster=[...avail,...busy].sort((a,b)=>{
-    const ra=statusRank[a.status]??9, rb=statusRank[b.status]??9;
-    if(ra!==rb) return ra-rb;
-    return estimateDriveSeconds({lat:a.lat,lng:a.lng},{lat:m.lat,lng:m.lng})-estimateDriveSeconds({lat:b.lat,lng:b.lng},{lat:m.lat,lng:m.lng});
-  });
-
-  let rows = roster.length?'':`<div class="empty-hint" style="padding:14px">Noch keine Fahrzeuge. Beschaffe an einer Wache ein Fahrzeug.</div>`;
-  roster.forEach(v=>{ const st=stationById(v.stationId);
-    const here = v.targetMissionId===m.id;           // fährt an / ist an DIESEM Einsatz
-    const queued = v.nextMissionId===m.id;           // als Folgeeinsatz eingeplant
-    const eta = etaText(v,m);
-    let right, act='';
-    if(here){ right=`<button class="btn sm alz-recall" data-recall="${v.id}">↩ Einrücken</button>`; }
-    else if(queued){ right=`<button class="btn sm" data-unqueue="${v.id}">Folge entfernen</button>`; }
-    else { right=`<span class="alz-eta">⏱ ${eta} min</span>`; act=`data-disp="${v.id}"`; }
-    rows+=`<div class="alz-row${(here||queued)?' assigned':''}" ${act}>
-      <span class="alz-fms">FMS<span class="fnum fnum-${v.status}">${v.status}</span></span>
-      <span class="alz-call">${vehName(v)}</span>
-      <span class="alz-station">${st?st.name:''}</span>
-      ${right}
-    </div>`; });
-
-  const foamReq=t.need.foam>0?`<span class="tag foam">🫧 ${t.need.foam} L Schaum</span>`:'';
-  const waterReq=t.need.water>0?`<span class="tag water">💧 ${t.need.water} L Wasser</span>`:'';
+  // Kopf + fehlende Fahrzeuge
+  const miss=missingReqs(m);
   const sup=missionSupply(m);
+  const alert = (t.req&&t.req.length)
+    ? (miss.length ? `<div class="lss-alert miss"><b>Zusätzlich benötigte Fahrzeuge:</b> ${miss.map(x=>`${x.missing}× ${reqLabel(x.r)}`).join(', ')}</div>`
+                   : `<div class="lss-alert ok">✔ Alle benötigten Fahrzeuge sind alarmiert oder vor Ort.</div>`) : '';
+
+  const crewOf=v=>(v.crewIds&&v.crewIds.length)||v.crew||0;
+  const wlfOf=v=>{ const w=v.wlfId&&state.vehicles.find(x=>x.id===v.wlfId); return w?` <span class="dim">(auf ${vehName(w)})</span>`:''; };
+  const sceneRows=(list,arriving)=> list.length ? `<table class="lss-tbl"><thead><tr><th>FMS</th><th>Fahrzeug</th><th class="hide-sm">Typ</th><th class="hide-sm">Besatzung</th><th class="hide-sm">Wache</th><th>${arriving?'Ankunft':''}</th><th></th></tr></thead><tbody>${
+      list.map(v=>{ const st=stationById(v.stationId);
+        const eta = arriving ? (v.path&&v.driveSeconds? mmss(Math.max(0,v.driveSeconds-v.driveElapsed)/60) : etaText(v,m)) : '';
+        return `<tr><td><span class="fnum fnum-${v.status}">${v.status}</span></td><td class="call">${vehName(v)}${wlfOf(v)}</td><td class="hide-sm dim">${vehTypeName(v)}</td>
+          <td class="mono hide-sm">${crewOf(v)}</td><td class="hide-sm dim">${st?st.name:''}</td><td class="mono">${arriving?'⏱ '+eta:''}</td>
+          <td style="text-align:right"><button class="btn sm" data-recall="${v.id}" title="Rückalarmieren">↩ Zurück</button></td></tr>`; }).join('')}</tbody></table>`
+    : `<div class="lss-empty">Keine.</div>`;
+
+  // Verfügbare Fahrzeuge
+  const statuses = mmShowBusy ? [1,2,3,4,6] : [1,2];
+  const pool=state.vehicles.filter(v=>statuses.includes(v.status) && v.targetMissionId!==m.id && v.nextMissionId!==m.id && !v.abId);
+  pool.sort((a,b)=>vehDistKm(a,m)-vehDistKm(b,m));
+  [...mmSel].forEach(id=>{ if(!pool.some(v=>v.id===id)) mmSel.delete(id); });
+  const catCount=c=>pool.filter(v=>(VEHICLES[v.type]||{}).category===c).length;
+  const tabs=[{id:'all',name:'Alle',n:pool.length}].concat(VEHICLE_CATEGORIES.map(c=>({id:c.id,name:c.name,n:catCount(c.id)})).filter(c=>c.n>0));
+  if(!tabs.some(x=>x.id===mmCat)) mmCat='all';
+  const shown=pool.filter(v=>mmCat==='all'||(VEHICLES[v.type]||{}).category===mmCat);
+  const availRows = shown.length ? shown.map(v=>{ const st=stationById(v.stationId); const sel=mmSel.has(v.id);
+      return `<tr class="${sel?'sel':''}" data-pick="${v.id}"><td><input type="checkbox" ${sel?'checked':''}></td>
+        <td><span class="fnum fnum-${v.status}">${v.status}</span></td><td class="call">${vehName(v)}</td>
+        <td class="dim">${vehTypeName(v)}${abHint(v)}</td><td class="mono">${vehDistKm(v,m).toFixed(1)} km</td>
+        <td class="mono hide-sm">⏱ ${etaText(v,m)}</td><td class="hide-sm dim">${st?st.name:''}</td></tr>`; }).join('')
+    : `<tr><td colspan="7" class="lss-empty">${state.vehicles.length?'Keine verfügbaren Fahrzeuge in dieser Kategorie.':'Noch keine Fahrzeuge. Beschaffe an einer Wache ein Fahrzeug.'}</td></tr>`;
+
   box.innerHTML=`
-    <div style="color:var(--text-mut);font-size:13px">📍 ${m.address}</div>
-    <div class="tags">
-      ${waterReq}${foamReq}
-      <span class="tag veh">🚒 ${(t.req&&t.req.length)?t.req.map(r=>r.count+'× '+reqLabel(r)).join(', '):'—'}</span>
-      <span class="tag time">⏱ ${mmss(t.minutes)} → ${mmss(effMissionMinutes(t,CONFIG.usefulVehicleCap))}</span>
-    </div>
+    <div class="lss-addr"><span>📍 ${m.address}</span><span>💰 ${fmt(missionReward(t))} €</span>
+      <span>⏱ ${mmss(t.minutes)} → ${mmss(effMissionMinutes(t,CONFIG.usefulVehicleCap))}</span>
+      ${t.need.water>0?`<span>💧 ${t.need.water} L</span>`:''}${t.need.foam>0?`<span>🫧 ${t.need.foam} L</span>`:''}
+      <span>Löschmittel-Deckung <b style="color:${sup.coverage>=1?'var(--ok)':'var(--warn)'}">${Math.round(sup.coverage*100)} %</b></span></div>
+    ${alert}
     ${missionProgressHTML(m)}
-    <div style="font-size:12px;color:var(--text-dim)">Vor Ort: <b style="color:var(--text)">${sup.onScene}</b> · Anfahrt: <b style="color:var(--text)">${enRoute}</b> · Löschmittel-Deckung <b style="color:${sup.coverage>=1?'var(--ok)':'var(--warn)'}">${Math.round(sup.coverage*100)} %</b> · Belohnung <b style="color:var(--warn)">${fmt(missionReward(t))} €</b></div>
-    <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-mut);margin-top:2px">Fahrzeug alarmieren <span style="font-weight:400;text-transform:none;color:var(--text-dim)">— Zeile antippen (belegte werden umgeleitet/als Folge eingeplant)</span></div>
-    <div class="alz-list">${rows}</div>`;
-  box.querySelectorAll('[data-disp]').forEach(b=>b.onclick=()=>{ dispatch(b.dataset.disp,m.id); setTimeout(renderMissionModal,60); });
+    <div class="lss-panel"><div class="lss-ph">Fahrzeuge auf Anfahrt <span class="cnt">${enRoute.length}</span></div>${sceneRows(enRoute,true)}</div>
+    <div class="lss-panel"><div class="lss-ph">Fahrzeuge vor Ort <span class="cnt">${onScene.length}</span></div>${sceneRows(onScene,false)}</div>
+    ${queued.length?`<div class="lss-panel"><div class="lss-ph">Als Folgeeinsatz eingeplant <span class="cnt">${queued.length}</span></div><table class="lss-tbl"><tbody>${
+      queued.map(v=>`<tr><td><span class="fnum fnum-${v.status}">${v.status}</span></td><td class="call">${vehName(v)}</td><td class="dim">${vehTypeName(v)}</td><td style="text-align:right"><button class="btn sm" data-unqueue="${v.id}">Folge entfernen</button></td></tr>`).join('')}</tbody></table></div>`:''}
+    <div class="lss-panel">
+      <div class="lss-ph">Verfügbare Fahrzeuge <span class="cnt">${pool.length}</span>
+        ${miss.length?`<button class="btn sm" id="mm-aao">⚡ Fehlende auswählen</button>`:''}
+        ${mmSel.size?`<button class="btn sm ghost" id="mm-clear" style="margin-left:${miss.length?'0':'auto'}">Auswahl leeren</button>`:''}</div>
+      <div class="lss-tabs">${tabs.map(c=>`<button class="lss-tab${c.id===mmCat?' active':''}" data-mmcat="${c.id}">${c.name} ${c.n}</button>`).join('')}</div>
+      <div class="lss-scroll"><table class="lss-tbl lss-avail"><thead><tr><th></th><th>FMS</th><th>Fahrzeug</th><th>Typ</th><th>Entfernung</th><th class="hide-sm">Anfahrt</th><th class="hide-sm">Wache</th></tr></thead><tbody>${availRows}</tbody></table></div>
+      <label class="lss-opt"><input type="checkbox" id="mm-busy" ${mmShowBusy?'checked':''}> Auch belegte Fahrzeuge anzeigen (werden umgeleitet bzw. als Folgeeinsatz eingeplant)</label>
+    </div>`;
+  box.scrollTop=keepScroll; const nl=box.querySelector('.lss-scroll'); if(nl) nl.scrollTop=keepList;
+
+  box.querySelectorAll('[data-pick]').forEach(r=>r.onclick=()=>{ const id=r.dataset.pick; mmSel.has(id)?mmSel.delete(id):mmSel.add(id); renderMissionModal(); });
+  box.querySelectorAll('[data-mmcat]').forEach(b=>b.onclick=()=>{ mmCat=b.dataset.mmcat; renderMissionModal(); });
+  const busy=document.getElementById('mm-busy'); if(busy) busy.onchange=()=>{ mmShowBusy=busy.checked; renderMissionModal(); };
+  const aao=document.getElementById('mm-aao'); if(aao) aao.onclick=()=>{ selectMissing(m,pool); renderMissionModal(); };
+  const clr=document.getElementById('mm-clear'); if(clr) clr.onclick=()=>{ mmSel.clear(); renderMissionModal(); };
   box.querySelectorAll('[data-recall]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); recallVehicle(b.dataset.recall); setTimeout(renderMissionModal,60); });
   box.querySelectorAll('[data-unqueue]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const v=state.vehicles.find(x=>x.id===b.dataset.unqueue); if(v){ v.nextMissionId=null; toast(`${vehName(v)}: Folgeeinsatz entfernt`,'ok'); renderVehicles(); renderMissions(); saveGame(true); } setTimeout(renderMissionModal,60); });
+
+  const n=mmSel.size;
+  const a=document.getElementById('mm-alarm'), an=document.getElementById('mm-alarm-next');
+  a.disabled=an.disabled=!n; a.textContent=n?`🚨 Alarmieren (${n})`:'🚨 Alarmieren';
 }
+/* „Fehlende auswählen“: je fehlendem Typ die nächstgelegenen einsatzbereiten Fahrzeuge markieren */
+function selectMissing(m,pool){
+  const free=pool.filter(v=>v.status===2||v.status===1);
+  const taken=new Set([...mmSel].map(id=>state.vehicles.find(v=>v.id===id)).filter(Boolean).map(v=>v.id));
+  let none=[];
+  for(const x of missingReqs(m)){
+    let need=x.missing;
+    for(const v of [...mmSel].map(id=>state.vehicles.find(z=>z.id===id))){ if(need<=0) break; if(v&&x.r.types.includes(v.type)&&!v._aaoUsed){ v._aaoUsed=true; need--; } }
+    for(const v of free){ if(need<=0) break; if(taken.has(v.id)||!x.r.types.includes(v.type)) continue; mmSel.add(v.id); taken.add(v.id); need--; }
+    if(need>0) none.push(`${need}× ${reqLabel(x.r)}`);
+  }
+  state.vehicles.forEach(v=>delete v._aaoUsed);
+  if(none.length) toast(`⚠️ Nicht verfügbar: ${none.join(', ')}`,'warn');
+}
+async function alarmSelected(next){
+  const m=missionById(openMissionId); if(!m||!mmSel.size) return;
+  const ids=[...mmSel]; mmSel.clear();
+  // Fahrzeuge mit Ausbildungsbedarf (inkl. AB) zuerst, damit ihnen niemand das Fachpersonal wegnimmt
+  const prio=id=>{ const t=VEHICLES[state.vehicles.find(v=>v.id===id)?.type]||{}; return (t.isAB||vehCourses(t).length)?0:1; };
+  ids.sort((a,b)=>prio(a)-prio(b));
+  ids.forEach(id=>dispatch(id,m.id));
+  saveGame(true);
+  if(next){
+    const act=state.missions.filter(x=>x.status!=='done'&&x.id!==m.id);
+    const nm=act.find(x=>missionVehicles(x).length===0&&!state.vehicles.some(v=>v.nextMissionId===x.id)) || act[0];
+    if(nm){ setTimeout(()=>{ map.panTo([nm.lat,nm.lng]); openMissionModal(nm.id); },80); return; }
+    hideModal('modal-mission'); toast('Kein weiterer offener Einsatz','ok'); return;
+  }
+  setTimeout(renderMissionModal,80);
+}
+document.getElementById('mm-alarm').onclick=()=>alarmSelected(false);
+document.getElementById('mm-alarm-next').onclick=()=>alarmSelected(true);
 
 /* Fortschritts-/Löschmittelanzeige (geliefert vs. benötigt + Zeitbalken mit Deckungs-Marke) */
 function missionProgressHTML(m){
