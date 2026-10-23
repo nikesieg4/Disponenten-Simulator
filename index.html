@@ -74,6 +74,24 @@ body{ font-family:var(--font-ui); background:var(--bg); color:var(--text); overf
 .legal-links a:hover{ color:var(--text); }
 a.dd-item{ text-decoration:none; color:var(--text); }
 .cat-search{ margin-bottom:10px; background:var(--panel-2); border:1px solid var(--border-2); border-radius:9px; color:var(--text); font-size:14px; padding:10px 12px; width:100%; }
+.bank-modal{ max-width:900px; }
+.bank-modal .m-content > *{ flex-shrink:0; }
+.bank-cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+.bank-card{ background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+.bank-card .k{ font-size:11px; color:var(--text-mut); text-transform:uppercase; letter-spacing:.5px; }
+.bank-card .v{ font-family:var(--font-mono); font-size:20px; font-weight:800; margin-top:4px; }
+.bank-card .s{ font-size:12px; color:var(--text-mut); margin-top:2px; }
+.bank-legend{ display:flex; gap:16px; font-size:12px; color:var(--text-mut); align-items:center; flex-wrap:wrap; }
+.bank-legend i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+.bank-chart{ position:relative; }
+.bank-chart svg{ display:block; width:100%; height:auto; }
+.bank-chart svg path, .bank-chart svg text, .bank-chart svg line{ pointer-events:none; }
+.bank-tip{ position:absolute; pointer-events:none; background:var(--panel-3); border:1px solid var(--border-2); border-radius:8px; padding:7px 10px; font-size:12px; white-space:nowrap; box-shadow:var(--shadow); display:none; z-index:2; }
+.bank-tip b{ font-family:var(--font-mono); }
+.bank-cols{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+.amt{ font-family:var(--font-mono); text-align:right; white-space:nowrap; }
+.amt.pos{ color:#7fb4f0; } .amt.neg{ color:#f0936a; }
+.bank-filter{ background:var(--panel-3); border:1px solid var(--border-2); border-radius:7px; color:var(--text); font-size:12px; padding:4px 8px; margin-left:auto; text-transform:none; letter-spacing:0; }
 .dd-sep{ height:1px; background:var(--border); margin:4px 6px; }
 .btn.ghost{ background:transparent; } .btn.sm{ padding:5px 9px; font-size:12px; }
 .btn:disabled{ opacity:.45; cursor:not-allowed; }
@@ -497,6 +515,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
       <button class="icon-btn" id="btn-menu" title="Menü">☰</button>
       <div class="dropdown-menu hidden" id="topbar-menu">
         <button class="dd-item" id="dd-shop">Shop</button>
+        <button class="dd-item" id="dd-bank">Bank</button>
         <button class="dd-item" id="dd-save">Speichern</button>
         <button class="dd-item" id="dd-settings">Einstellungen</button>
         <div class="dd-sep"></div>
@@ -573,6 +592,12 @@ a.dd-item{ text-decoration:none; color:var(--text); }
   <h3 id="kh-title">Krankenhaus wählen</h3>
   <div class="m-content" id="kh-content"></div>
   <div class="m-actions"><button class="btn ghost" data-close>Abbrechen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-bank"><div class="modal wide bank-modal">
+  <h3>Bank</h3>
+  <div class="m-content" id="bank-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
 
 <div class="modal-bg" id="modal-catalog"><div class="modal">
@@ -851,7 +876,7 @@ function freshState(){ return {
 
 /* ------------------------- SAVE / LOAD ------------------------- */
 function serializeObj(){ return {
-  version:CONFIG.saveVersion, autoHospital:!!state.autoHospital, credits:state.credits, createdAt:state.createdAt, gameSpeed:state.gameSpeed, earnings:state.earnings, payDayKey:state.payDayKey, savedAt:Date.now(),
+  version:CONFIG.saveVersion, autoHospital:!!state.autoHospital, ledger:state.ledger||[], daily:state.daily||{}, credits:state.credits, createdAt:state.createdAt, gameSpeed:state.gameSpeed, earnings:state.earnings, payDayKey:state.payDayKey, savedAt:Date.now(),
   view:(map?{lat:map.getCenter().lat,lng:map.getCenter().lng,zoom:map.getZoom()}:state.view),
   stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null})),
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
@@ -882,7 +907,7 @@ async function loadGame(){
 }
 function applyLoaded(data){
   state=freshState();
-  state.autoHospital=!!data.autoHospital;
+  state.autoHospital=!!data.autoHospital; state.ledger=Array.isArray(data.ledger)?data.ledger:[]; state.daily=data.daily||{};
   state.credits=data.credits??CONFIG.startCredits; state.createdAt=data.createdAt??Date.now();
   state.earnings=data.earnings||0; state.payDayKey=data.payDayKey||null;
   state.gameSpeed=CONFIG.speedSteps.includes(data.gameSpeed)?data.gameSpeed:CONFIG.defaultSpeed;
@@ -959,7 +984,7 @@ function offlineCatchUp(elapsedMs){
       const eff=effMissionMinutes(t, sup.onScene), cap=sup.coverage;
       const np=Math.min(cap, (m.progress||0)+elapsedMin/eff);
       if(np>=1){
-        state.earnings=(state.earnings||0)+missionReward(t); doneCount++;
+        state.earnings=(state.earnings||0)+missionReward(t); book(t.rd?'einsatz_rd':'einsatz_fw',`${t.code} ${t.name} (offline)`,missionReward(t)); doneCount++;
         (m.assigned||[]).forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ const st=stationById(v.stationId); v.status=2; v.crew=0; v.crewIds=[]; v.targetMissionId=null; v.nextMissionId=null; if(st){v.lat=st.lat;v.lng=st.lng;} } });
         m.status='done';
       } else { m.progress=np; m.status='working'; }
@@ -1102,7 +1127,7 @@ function onMapClick(e){
   const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
   const cost=pendingBuild.cost??b.cost;
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); setBuildMode(false); return; }
-  state.credits-=cost;
+  state.credits-=cost; book('gebaeude',`${pendingBuild.name} gebaut`,-cost);
   const now=Date.now();
   if(b.isStation){
     const first=state.stations.length===0, q=pendingBuild.quote||stationBuildQuote(1);
@@ -1288,7 +1313,7 @@ function finishHandover(v){
   const m=missionById(tr.missionId), p=m&&(m.patients||[]).find(x=>x.id===tr.patientId);
   const km=tr.km!=null?tr.km:distM({lat:tr.fromLat,lng:tr.fromLng},hospitalById(tr.khId)||v)/1000;
   const pay=Math.round((CONFIG.transportBase+CONFIG.transportPerKm*km)*(tr.na?1+CONFIG.naBonus:1));
-  state.earnings=(state.earnings||0)+pay;
+  state.earnings=(state.earnings||0)+pay; book('transport',`Patiententransport ${hospitalById(tr.khId)?.name||''}`,pay);
   if(p) p.state='done';
   toast(`Patient übergeben (+${fmt(pay)} € · Auszahlung um 0 Uhr)`,'ok');
   releaseVehicle(v); renderTopbar();
@@ -1354,7 +1379,7 @@ function missionReward(t){
 }
 function completeMission(m){
   const t=missionType(m.type); m.status='done'; m.doneAt=Date.now();
-  const pay=missionReward(t); state.earnings=(state.earnings||0)+pay;
+  const pay=missionReward(t); state.earnings=(state.earnings||0)+pay; book(t&&t.rd?'einsatz_rd':'einsatz_fw',`${t?t.code+' '+t.name:'Einsatz'}`,pay);
   try{ refreshMissionMarker(m); }catch(e){ console.error(e); }
   m.assigned.slice().forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ try{ releaseVehicle(v); }catch(e){ console.error('release',e); } } });
   try{ toast(`${t?t.name:'Einsatz'} erledigt (+${fmt(pay)} € · Auszahlung um 0 Uhr)`,'ok'); renderTopbar(); renderVehicles(); }catch(e){ console.error(e); }
@@ -1366,8 +1391,8 @@ function settlePayday(){
   if(!state) return; const d=berlinDayKey();
   if(!state.payDayKey){ state.payDayKey=d; return; }
   if(state.payDayKey!==d){
-    if(state.earnings>0){ state.credits+=state.earnings; toast(`Tageseinnahmen gutgeschrieben: +${fmt(state.earnings)} €`,'ok'); }
-    if(state.credits<0){ const z=Math.ceil(-state.credits*CONFIG.overdraftInterest); state.credits-=z; toast(`Dispo-Zinsen: −${fmt(z)} €`,'warn'); }
+    if(state.earnings>0){ state.credits+=state.earnings; book('auszahlung','Auszahlung Tageskasse',state.earnings); toast(`Tageseinnahmen gutgeschrieben: +${fmt(state.earnings)} €`,'ok'); }
+    if(state.credits<0){ const z=Math.ceil(-state.credits*CONFIG.overdraftInterest); state.credits-=z; book('zinsen','Dispo-Zinsen (1 Tag)',-z); toast(`Dispo-Zinsen: −${fmt(z)} €`,'warn'); }
     state.earnings=0; state.payDayKey=d; renderTopbar(); saveGame(true);
   }
 }
@@ -1627,6 +1652,100 @@ function etaText(v, m){
   const secs = estimateDriveSeconds({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng}, CONFIG.outboundFactor);
   return mmss(secs/60);
 }
+/* ---------- Bank-Fenster ---------- */
+let bankRange='today', bankFilter='all';
+function bankDays(range){
+  const keys=Object.keys(state.daily||{}).sort();
+  if(range==='all') return keys;
+  const today=berlinDayKey(); if(range==='today') return keys.filter(k=>k===today);
+  const from=new Date(Date.now()-6*86400000); const fk=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin'}).format(from);
+  return keys.filter(k=>k>=fk);
+}
+function bankSums(days){
+  const sum={}; days.forEach(k=>{ const d=state.daily[k]||{}; Object.keys(d).forEach(c=>{ if(c!=='_b') sum[c]=(sum[c]||0)+d[c]; }); });
+  let inn=0,out=0; Object.keys(sum).forEach(c=>{ const k=BOOK_CATS[c]?.kind; if(k==='in') inn+=sum[c]; else if(k==='out') out+=sum[c]; });
+  return { sum, inn, out };
+}
+function renderBank(){
+  const box=document.getElementById('bank-content'); if(!box) return;
+  const avail=state.credits+CONFIG.overdraftLimit, neg=state.credits<0;
+  const S=bankSums(bankDays(bankRange));
+  const eur=n=>`${n<0?'−':''}${fmt(Math.abs(n))} €`;
+  const cards=`<div class="bank-cards">
+    <div class="bank-card"><div class="k">Kontostand</div><div class="v" style="color:${neg?'var(--danger)':'var(--text)'}">${eur(state.credits)}</div><div class="s">${neg?'im Dispo':'im Plus'}</div></div>
+    <div class="bank-card"><div class="k">Dispo verfügbar</div><div class="v">${eur(avail)}</div><div class="s">Rahmen ${fmt(CONFIG.overdraftLimit)} €</div></div>
+    <div class="bank-card"><div class="k">Tageskasse</div><div class="v">${eur(state.earnings||0)}</div><div class="s">Auszahlung um 0 Uhr</div></div>
+    <div class="bank-card"><div class="k">Zinsen um 0 Uhr</div><div class="v">${eur(-Math.ceil(Math.max(0,-(state.credits+(state.earnings||0)))*CONFIG.overdraftInterest))}</div><div class="s">${CONFIG.overdraftInterest*100} % pro Tag auf das Minus</div></div>
+  </div>`;
+  const tabs=`<div class="lss-tabs" style="border:1px solid var(--border);border-radius:9px">${[['today','Heute'],['7d','7 Tage'],['all','Gesamt']].map(([k,l])=>`<button class="lss-tab${bankRange===k?' active':''}" data-brange="${k}">${l}</button>`).join('')}</div>`;
+  const rows=kind=>Object.keys(BOOK_CATS).filter(c=>BOOK_CATS[c].kind===kind).map(c=>`<tr><td>${BOOK_CATS[c].name}</td><td class="amt ${kind==='in'?'pos':'neg'}">${eur(S.sum[c]||0)}</td></tr>`).join('');
+  const stats=`<div class="bank-cols">
+    <div class="lss-panel"><div class="lss-ph">Einnahmen <span class="cnt">${eur(S.inn)}</span></div><table class="lss-tbl"><tbody>${rows('in')}</tbody></table></div>
+    <div class="lss-panel"><div class="lss-ph">Ausgaben <span class="cnt">${eur(S.out)}</span></div><table class="lss-tbl"><tbody>${rows('out')}</tbody></table></div>
+  </div>
+  <div class="lss-panel"><div class="lss-ph">Saldo im Zeitraum <span class="cnt" style="color:${S.inn+S.out<0?'#f0936a':'#7fb4f0'}">${eur(S.inn+S.out)}</span></div></div>`;
+  const opts=[['all','Alle Kategorien']].concat(Object.keys(BOOK_CATS).map(c=>[c,BOOK_CATS[c].name]));
+  const list=(state.ledger||[]).filter(e=>bankFilter==='all'||e.c===bankFilter);
+  const fmtT=new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const ledger=`<div class="lss-panel"><div class="lss-ph">Buchungen <span class="cnt">${list.length}</span>
+      <select class="bank-filter" id="bank-filter">${opts.map(([k,l])=>`<option value="${k}"${k===bankFilter?' selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="lss-scroll"><table class="lss-tbl"><thead><tr><th>Zeit</th><th>Kategorie</th><th>Buchung</th><th style="text-align:right">Betrag</th></tr></thead><tbody>${
+      list.length?list.map(e=>`<tr><td class="mono dim">${fmtT.format(new Date(e.t))}</td><td class="dim">${BOOK_CATS[e.c]?.name||e.c}</td><td>${e.x}${BOOK_CATS[e.c]?.kind==='in'&&e.c!=='erstattung'?' <span class="dim">(Tageskasse)</span>':''}</td><td class="amt ${e.a<0?'neg':'pos'}">${e.a>0?'+':''}${eur(e.a)}</td></tr>`).join('')
+      :'<tr><td colspan="4" class="lss-empty">Noch keine Buchungen. Ab jetzt wird jede Einnahme und Ausgabe hier aufgezeichnet.</td></tr>'}</tbody></table></div></div>`;
+  box.innerHTML=cards+bankChart()+tabs+stats+ledger;
+  box.querySelectorAll('[data-brange]').forEach(b=>b.onclick=()=>{ bankRange=b.dataset.brange; renderBank(); });
+  const f=document.getElementById('bank-filter'); if(f) f.onchange=()=>{ bankFilter=f.value; renderBank(); };
+  wireBankChart();
+}
+/* Einnahmen (nach oben) und Ausgaben (nach unten) je Tag, letzte 14 Tage; eine gemeinsame Achse */
+let _bankBars=[];
+function bankChart(){
+  const keys=[]; for(let i=13;i>=0;i--){ keys.push(new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin'}).format(new Date(Date.now()-i*86400000))); }
+  const data=keys.map(k=>{ const d=(state.daily||{})[k]||{}; let inn=0,out=0; Object.keys(d).forEach(c=>{ const kd=BOOK_CATS[c]?.kind; if(kd==='in') inn+=d[c]; else if(kd==='out') out+=-d[c]; }); return {k,inn,out}; });
+  const max=Math.max(1,...data.map(d=>Math.max(d.inn,d.out)));
+  const W=860,H=220,pl=64,pr=12,pt=14,pb=26, mid=pt+(H-pt-pb)/2, half=(H-pt-pb)/2, bw=(W-pl-pr)/14;
+  const y=v=>v/max*half;
+  const tick=n=>n>=1e6?(n/1e6).toFixed(n>=1e7?0:1).replace('.',',')+' Mio.':n>=1e3?Math.round(n/1e3)+' Tsd.':String(n);
+  _bankBars=data.map((d,i)=>({ ...d, x:pl+i*bw }));
+  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Einnahmen und Ausgaben pro Tag, letzte 14 Tage">`;
+  [1,.5,-.5,-1].forEach(f=>{ const yy=mid-f*half; svg+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="var(--border)" stroke-width="1"/><text x="${pl-8}" y="${yy+4}" text-anchor="end" font-size="10" fill="var(--text-mut)">${f<0?'−':''}${tick(max*Math.abs(f))}</text>`; });
+  data.forEach((d,i)=>{ const x=pl+i*bw+bw*.18, w=bw*.64;
+    if(d.inn>0){ const h=Math.max(2,y(d.inn)); svg+=`<path d="M${x},${mid-1} v${-(h-4)} q0,-4 4,-4 h${w-8} q4,0 4,4 v${h-4} z" fill="#3987e5"/>`; }
+    if(d.out>0){ const h=Math.max(2,y(d.out)); svg+=`<path d="M${x},${mid+1} v${h-4} q0,4 4,4 h${w-8} q4,0 4,-4 v${-(h-4)} z" fill="#d95926"/>`; }
+    if(i%2===1||i===13) svg+=`<text x="${pl+i*bw+bw/2}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--text-mut)">${d.k.slice(8)}.${d.k.slice(5,7)}.</text>`;
+    svg+=`<rect x="${pl+i*bw}" y="${pt}" width="${bw}" height="${H-pt-pb}" fill="transparent" data-bar="${i}"/>`; });
+  svg+=`<line x1="${pl}" x2="${W-pr}" y1="${mid}" y2="${mid}" stroke="var(--text-mut)" stroke-width="1" pointer-events="none"/></svg>`;
+  return `<div class="lss-panel"><div class="lss-ph">Einnahmen und Ausgaben je Tag <span class="bank-legend" style="margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400"><span><i style="background:#3987e5"></i>Einnahmen</span><span><i style="background:#d95926"></i>Ausgaben</span></span></div>
+    <div class="bank-chart" style="padding:8px 10px 4px">${svg}<div class="bank-tip" id="bank-tip"></div></div></div>`;
+}
+function wireBankChart(){
+  const tip=document.getElementById('bank-tip'); if(!tip) return; const wrap=tip.parentElement;
+  wrap.querySelectorAll('[data-bar]').forEach(r=>{
+    r.onmousemove=e=>{ const d=_bankBars[+r.dataset.bar]; const rc=wrap.getBoundingClientRect();
+      tip.innerHTML=`<div>${d.k.slice(8)}.${d.k.slice(5,7)}.${d.k.slice(0,4)}</div><div>Einnahmen <b>${fmt(d.inn)} €</b></div><div>Ausgaben <b>${fmt(d.out)} €</b></div>`;
+      tip.style.display='block'; tip.style.left=Math.min(rc.width-170,e.clientX-rc.left+12)+'px'; tip.style.top=(e.clientY-rc.top-10)+'px'; r.setAttribute('fill','rgba(255,255,255,.05)'); };
+    r.onmouseleave=()=>{ tip.style.display='none'; r.setAttribute('fill','transparent'); };
+  });
+}
+/* ---------- Bank: Buchungen und Tagessummen ----------
+   Einnahmen aus Einsätzen fließen in die Tageskasse (Auszahlung um 0 Uhr); die Auszahlung ist eine Umbuchung
+   und zählt nicht doppelt in der Statistik. */
+const BOOK_CATS={
+  einsatz_fw:{name:'Feuerwehr-Einsätze',kind:'in'}, einsatz_rd:{name:'Rettungsdienst-Einsätze',kind:'in'}, transport:{name:'Patiententransporte',kind:'in'},
+  erstattung:{name:'Erstattungen',kind:'in'},
+  fahrzeug:{name:'Fahrzeuge',kind:'out'}, gebaeude:{name:'Gebäude',kind:'out'}, ausbau:{name:'Ausbau',kind:'out'},
+  personal:{name:'Personal',kind:'out'}, lehrgang:{name:'Lehrgänge',kind:'out'}, zinsen:{name:'Dispo-Zinsen',kind:'out'},
+  auszahlung:{name:'Auszahlung Tageskasse',kind:'transfer'} };
+const LEDGER_MAX=500;
+function book(cat,text,amt){
+  if(!state || !amt) return;
+  const d=berlinDayKey();
+  (state.ledger=state.ledger||[]).unshift({ t:Date.now(), c:cat, x:text, a:Math.round(amt) });
+  if(state.ledger.length>LEDGER_MAX) state.ledger.length=LEDGER_MAX;
+  const day=(state.daily=state.daily||{})[d]=(state.daily[d]||{});
+  day[cat]=(day[cat]||0)+Math.round(amt); day._b=state.credits;
+  if(document.getElementById('modal-bank')?.classList.contains('show')) renderBank();
+}
 /* Dispo: Ausgaben sind erlaubt, solange das Guthaben danach nicht unter −overdraftLimit fällt */
 function canAfford(cost){ return (state.credits - (cost||0)) >= -CONFIG.overdraftLimit; }
 function renderTopbar(){
@@ -1707,7 +1826,7 @@ function renderStations(){
 }
 function upgradeStation(id){ const st=stationById(id); if(!st||st.level>=CONFIG.maxStationLevel) return;
   const cost=CONFIG.upgradeCost(st.level); if(!canAfford(cost)){ toast('Nicht genug Guthaben für den Ausbau','err'); return; }
-  state.credits-=cost; st.level++; refreshStationMarker(st); renderStations(); renderTopbar(); if(svStationId===id) renderStationView(); toast(`${st.name} auf Level ${st.level} ausgebaut`,'ok'); saveGame(true); }
+  state.credits-=cost; book('ausbau',`${st.name} auf Level ${st.level+1}`,-cost); st.level++; refreshStationMarker(st); renderStations(); renderTopbar(); if(svStationId===id) renderStationView(); toast(`${st.name} auf Level ${st.level} ausgebaut`,'ok'); saveGame(true); }
 
 /* ---------- Personal / Anwerbung ---------- */
 const FIRST_NAMES=['Rebekka','Lukas','Marie','Jonas','Lena','Felix','Hannah','Paul','Laura','Tim','Sophie','Max','Julia','Ben','Emma','Niklas','Anna','David','Clara','Finn','Mia','Leon','Sarah','Elias','Nele','Jan','Lea','Tom','Katharina','Moritz','Johanna','Erik','Pia','Simon','Greta','Noah','Ida','Fabian','Marlene','Kilian'];
@@ -1759,7 +1878,7 @@ function hireNow(id,n){
   n=Math.min(n, CONFIG.maxStaff-staffCount(st)); if(n<1){ toast(`Maximal ${CONFIG.maxStaff} Personal`,'warn'); return; }
   const cost=n*CONFIG.hireCost;
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben bzw. Dispo (${fmt(cost)} € nötig)`,'err'); return; }
-  state.credits-=cost; for(let i=0;i<n;i++) st.roster.push(makePerson());
+  state.credits-=cost; book('personal',`${n} Person(en) für ${st.name}`,-cost); for(let i=0;i<n;i++) st.roster.push(makePerson());
   renderTopbar(); renderStations(); renderStationView(); saveGame(true); toast(`${n} Person(en) angeworben (−${fmt(cost)} €)`,'ok');
 }
 function movePeople(fromId,toId,ids){
@@ -1860,7 +1979,7 @@ function deleteStation(id){
   academies().forEach(a=>{ a.courses=(a.courses||[]).filter(c=>c.stationId!==st.id); });   // Lehrgänge dieser Wache beenden
   if(st.marker) stationLayer.removeLayer(st.marker);
   state.stations=state.stations.filter(s=>s.id!==st.id);
-  state.credits+=refund;
+  state.credits+=refund; book('erstattung',`${st.name} abgerissen`,refund);
   if(svStationId===id){ hideModal('modal-stationview'); svStationId=null; }
   renderStations(); renderVehicles(); renderMissions(); renderTopbar(); saveGame(true);
   toast(`${st.name} abgerissen (+${fmt(refund)} €)`,'ok');
@@ -2030,7 +2149,7 @@ function startCourse(){
   const ids=[...avSelected]; if(!ids.length){ toast('Kein Personal gewählt','warn'); return; }
   if(ids.length>CONFIG.classroomCapacity){ toast(`Max. ${CONFIG.classroomCapacity} pro Klassenraum`,'warn'); return; }
   if(!canAfford(CONFIG.courseCost)){ toast(`Nicht genug Guthaben (${fmt(CONFIG.courseCost)} € pro Lehrgang)`,'err'); return; }
-  state.credits-=CONFIG.courseCost;
+  state.credits-=CONFIG.courseCost; book('lehrgang',`Lehrgang ${courseById(avCourseId)?.name||''}`,-CONFIG.courseCost);
   a.courses.push({ id:nid(), courseId:co.id, stationId:avStationId, personIds:ids, startedAt:Date.now(), durationMs:co.durationMs });
   avSelected=new Set();
   renderTopbar(); renderAcademyView(); renderStations(); if(svStationId) renderStationView(); saveGame(true);
@@ -2038,7 +2157,7 @@ function startCourse(){
 }
 function upgradeAcademy(id){ const a=academyById(id); if(!a||a.level>=CONFIG.maxAcademyLevel) return;
   const cost=CONFIG.academyUpgradeCost(a.level); if(!canAfford(cost)){ toast('Nicht genug Guthaben','err'); return; }
-  state.credits-=cost; a.level++; renderTopbar(); renderAcademyView(); saveGame(true); toast(`Akademie auf Level ${a.level} (${academyRooms(a)} Klassenräume)`,'ok'); }
+  state.credits-=cost; book('ausbau',`${a.name} auf Level ${a.level+1}`,-cost); a.level++; renderTopbar(); renderAcademyView(); saveGame(true); toast(`Akademie auf Level ${a.level} (${academyRooms(a)} Klassenräume)`,'ok'); }
 
 /* Wache bearbeiten (Name, Nummer, Ort) */
 let editStationId=null;
@@ -2111,7 +2230,7 @@ function buyVehicle(typeId){ const st=stationById(buyStationId), t=VEHICLES[type
   if(!stationReady(st)){ toast(`${st.name} ist noch im Bau (fertig in ${fmtDur(st.readyAt-Date.now())})`,'warn'); return; }
   if(vehiclesOfStation(st.id).length>=CONFIG.baysForLevel(st.level)){ toast('Kein freier Stellplatz','warn'); return; }
   if(!canAfford(t.cost)){ toast('Nicht genug Guthaben','err'); return; }
-  state.credits-=t.cost;
+  state.credits-=t.cost; book('fahrzeug',`${t.name} für ${st.name}`,-t.cost);
   const seq=state.vehicles.filter(x=>x.stationId===st.id && x.type===t.id).length+1;
   const v={ id:nid(), type:t.id, stationId:st.id, status:2, lat:st.lat, lng:st.lng, water:t.water, foam:t.foam,
     targetMissionId:null, nextMissionId:null, seq, assigned:0 };
@@ -2562,6 +2681,7 @@ function openShop(){ showModal('modal-shop'); }
 document.getElementById('btn-menu').onclick=(e)=>{ e.stopPropagation(); document.getElementById('topbar-menu').classList.toggle('hidden'); };
 document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-wrap'); if(w && !w.contains(e.target)) closeMenu(); });
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
+document.getElementById('dd-bank').onclick=()=>{ closeMenu(); renderBank(); showModal('modal-bank'); };
 document.getElementById('dd-save').onclick=()=>{ closeMenu(); saveGame(); };
 document.getElementById('dd-settings').onclick=()=>{ closeMenu(); openSettings(); };
 document.getElementById('dd-logout').onclick=()=>{ closeMenu(); doLogout(); };
