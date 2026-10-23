@@ -34,6 +34,7 @@ Domain — ein Wechsel des Hosters erfordert keine Code-Änderung.
 ## Rettungsdienst und Patienten
 
 - `daten/rd_codes.js`: AMPDS-Stichwörter der Berliner Feuerwehr (BF-Open-Data, CC BY 4.0) für reine RD-Einsätze
-- `daten/kliniken.js`: Berliner Notaufnahmen mit Koordinaten und (vereinfachten) Fachabteilungen
+- `daten/kliniken.js`: 38 Berliner Krankenhäuser der Notfallversorgung, Fachabteilungen aus dem Krankenhausplan 2020 (Anlage 1)
+- Sonderfahrzeuge: STEMO (Schlaganfall, ersetzt dort den Notarzt), KdoW LNA (ab 3 Patienten), GW-San/AB-MANV (ab 4 Patienten), NKTW (Patienten ohne Notarzt)
 - Ablauf: RTW versorgt vor Ort (bei Notarzt-Indikation zusätzlich NEF) → Status 5 → Krankenhaus wählen → Status 7/8 → frei
 - Einstellungen dazu stehen in `CONFIG` (rdShare, treatMinutes, handoverMinutes, transportBase, transportPerKm, naBonus)
