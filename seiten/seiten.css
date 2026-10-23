@@ -25,6 +25,7 @@ a{ color:#ff6a5f; }
 .social{ display:flex; align-items:center; gap:14px; background:var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; text-decoration:none; color:var(--text); }
 .social:hover{ border-color:var(--fire); }
 .social .tag{ font-family:var(--font-mono); font-weight:800; font-size:12px; min-width:58px; text-align:center; padding:5px 8px; border-radius:7px; color:#fff; }
+.social .tag.ico{ min-width:0; width:48px; height:48px; padding:0; border-radius:12px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .social .name{ font-weight:700; }
 .social .desc{ color:var(--text-mut); font-size:13px; }
 .social.off{ opacity:.55; pointer-events:none; }
