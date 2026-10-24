@@ -388,6 +388,8 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .vb-post-h .dim{ font-size:11px; }
 .vb-post-b{ font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
 .vb-click{ cursor:pointer; }
+.cv-row{ flex-wrap:wrap; } .cv-main{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+#codes-content a{ color:var(--text); }
 .vb-row .mono{ white-space:nowrap; }
 .vb-click:hover td, .vb-click.sel td{ background:var(--panel-3); }
 .vb-role{ display:inline-block; margin:1px 4px 1px 0; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; color:var(--rc); border:1px solid var(--rc); background:color-mix(in srgb, var(--rc) 14%, transparent); }
@@ -607,6 +609,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
         <button class="dd-item" id="dd-shop">Shop</button>
         <button class="dd-item" id="dd-bank">Bank</button>
         <button class="dd-item" id="dd-verband">Verband</button>
+        <button class="dd-item" id="dd-codes">Codes einlösen</button>
         <button class="dd-item" id="dd-save">Speichern</button>
         <button class="dd-item" id="dd-settings">Einstellungen</button>
         <div class="dd-sep"></div>
@@ -740,6 +743,12 @@ a.dd-item{ text-decoration:none; color:var(--text); }
   <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
 
+<div class="modal-bg" id="modal-codes"><div class="modal">
+  <h3>Codes einlösen</h3>
+  <div class="m-content" id="codes-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
 <div class="modal-bg" id="modal-catalog"><div class="modal">
   <h3>Einsatzarten-Übersicht</h3>
   <div class="m-content" id="catalog-list"></div>
@@ -782,6 +791,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
     <label class="fld" id="build-number-wrap"><span>Wachnummer</span><input id="build-number" type="number" min="1" /></label>
     <label class="fld" id="build-bays-wrap"><span>Stellplätze direkt bauen</span><select id="build-bays"></select></label>
     <div class="build-cost" id="build-cost"></div>
+    <label class="vb-check hidden" id="build-voucher-wrap"><input type="checkbox" id="build-voucher" checked> <span id="build-voucher-txt"></span></label>
   </div>
   <div class="m-actions">
     <button class="btn ghost" data-close>Abbrechen</button>
@@ -1052,7 +1062,7 @@ function serializeObj(){ return {
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
   buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null,allyShare:b.allyShare||null})),
-  allyCourses:state.allyCourses||[],
+  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null,
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[],patients:m.patients||[],tna:!!m.tna})),
 };}
 let saveInFlight=false;
@@ -1141,6 +1151,7 @@ function applyLoaded(data){
       nb.exts=[]; if(t.isAcademy){ for(let i=1;i<(nb.level||1);i++) nb.exts.push({key:'saal',readyAt:0}); nb.level=1; } }
     return nb; });
   state.allyCourses=Array.isArray(data.allyCourses)?data.allyCourses:[];
+  state.vouchers=data.vouchers&&typeof data.vouchers==='object'?data.vouchers:null;
   finishDueCourses(Date.now());
   pendingOfflineMs = data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0;
   idCounter=Date.now()%100000;
@@ -1322,7 +1333,14 @@ function syncBuildCost(){
     html=`Kosten: <b>${fmt(b.cost)} €</b>${b.buildMs?`<br>Bauzeit: <b>${fmtDur(b.buildMs)}</b>`:''}${b.desc?`<br>${b.desc}`:''}${lim?`<br>${lim.full?`<span class="warnc">${lim.text}</span>`:lim.text}`:''}`;
   }
   document.getElementById('build-cost').innerHTML=html;
+  const vn=vouchers().buildings[b.id]||0, vw=document.getElementById('build-voucher-wrap');
+  vw.classList.toggle('hidden',!vn);
+  document.getElementById('build-voucher-txt').textContent=`Gutschein einlösen: ${fmt(b.cost)} € gratis (${vn} übrig)`;
+  document.getElementById('build-voucher').onchange=syncBuildCost;
+  if(buildVoucherOn(b)){ const total=b.isStation?stationBuildQuote(parseInt(document.getElementById('build-bays').value)||1).total:b.cost;
+    document.getElementById('build-cost').innerHTML+=`<br>Mit Gutschein: <b>${fmt(Math.max(0,total-b.cost))} €</b>`; }
 }
+function buildVoucherOn(b){ return (vouchers().buildings[b.id]||0)>0 && document.getElementById('build-voucher')?.checked; }
 /* Gebäude mit Höchstzahl (Leitstelle: 1 + 1 je 15 Wachen) */
 function buildLimitInfo(b){
   if(!b.limit) return null;
@@ -1334,13 +1352,14 @@ function buildLimitInfo(b){
 function startBuildPlacement(){
   const b=buildingById(buildTypeId); if(!b) return;
   { const lim=buildLimitInfo(b); if(lim&&lim.full){ toast(lim.text,'warn'); return; } }
-  if(!canAfford(b.cost)){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
+  const vou=buildVoucherOn(b);
+  if(!vou && !canAfford(b.cost)){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
   const name=document.getElementById('build-name').value.trim() || b.name;
   const number=b.isStation ? (parseInt(document.getElementById('build-number').value)||nextStationNumber()) : null;
   const q=b.isStation ? stationBuildQuote(parseInt(document.getElementById('build-bays').value)||1) : null;
-  const cost=q?q.total:b.cost;
+  const cost=Math.max(0,(q?q.total:b.cost)-(vou?b.cost:0));
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); return; }
-  pendingBuild={ typeId:b.id, name, number, cost, quote:q };
+  pendingBuild={ typeId:b.id, name, number, cost, quote:q, voucher:vou };
   hideModal('modal-build'); setBuildMode(true);
 }
 
@@ -1351,7 +1370,8 @@ function onMapClick(e){
   const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
   const cost=pendingBuild.cost??b.cost;
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); setBuildMode(false); return; }
-  state.credits-=cost; book('gebaeude',`${pendingBuild.name} gebaut`,-cost);
+  if(pendingBuild.voucher){ const V=vouchers(); if(!(V.buildings[b.id]>0)){ toast('Kein Gutschein mehr vorhanden','err'); setBuildMode(false); pendingBuild=null; return; } V.buildings[b.id]--; }
+  state.credits-=cost; if(cost) book('gebaeude',`${pendingBuild.name} gebaut${pendingBuild.voucher?' (Gutschein)':''}`,-cost);
   const now=Date.now();
   if(b.isStation){
     const first=state.stations.length===0, q=pendingBuild.quote||stationBuildQuote(1);
@@ -2479,6 +2499,72 @@ function acadAllyPanel(a){
 }
 function acadExtUsed(a){ const info=(allyAssets.academies||[]).find(x=>x.mine && x.key.endsWith(':'+a.id)); return info?info.ext_used:0; }
 
+/* ---------- Codes (Belohnungen über Socials) ----------
+   Der Server prüft den Code (code_redeem) und gibt die Belohnungen zurück. Geld gibt es sofort, Personal und
+   Gebäude/Erweiterungen kommen als Gutschein in state.vouchers und werden beim Zuweisen bzw. Bauen eingelöst. */
+function vouchers(){ const v=state.vouchers=state.vouchers||{}; v.buildings=v.buildings||{}; v.ext=v.ext||{}; v.staff=v.staff||[]; return v; }
+function extDefAny(key){ for(const k of Object.keys(EXTENSIONS)){ const d=EXTENSIONS[k].find(x=>x.key===key); if(d) return { d, kind:k }; } return null; }
+const EXT_KIND_NAME={ fire:'Feuerwache', academy:'Akademie', leitstelle:'Leitstelle' };
+function rewardText(r){
+  if(r.type==='money') return `${fmt(r.amount)} €`;
+  if(r.type==='staff') return `${r.count} Person${r.count>1?'en':''}${r.qual?` mit Ausbildung „${qualLabel(r.qual)}“`:''}`;
+  if(r.type==='building') return `${r.count>1?r.count+'× ':''}Gutschein ${buildingById(r.building)?.name||r.building}`;
+  if(r.type==='extension') return `${r.count>1?r.count+'× ':''}Gutschein Erweiterung ${extDefAny(r.ext)?.d.name||r.ext}`;
+  return '';
+}
+function openCodes(){ renderCodes(); showModal('modal-codes'); setTimeout(()=>document.getElementById('code-in')?.focus(),50); }
+function renderCodes(){
+  const V=vouchers(), box=document.getElementById('codes-content');
+  const bl=Object.entries(V.buildings).filter(([,n])=>n>0), el=Object.entries(V.ext).filter(([,n])=>n>0);
+  const stOpts=state.stations.map(s=>`<option value="${s.id}">${esc(s.name)} (${staffCount(s)}/${CONFIG.maxStaff})</option>`).join('');
+  box.innerHTML=`<div class="vb-sec"><div class="vb-form"><label class="fld sm" style="flex:1"><span>Code</span><input id="code-in" class="vb-in" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="z. B. SOMMER25" style="text-transform:uppercase"></label>
+      <button class="btn primary" id="code-go">Einlösen</button></div>
+      <div class="pers-hint">Codes gibt es auf unseren <a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a>. Jeder Code lässt sich einmal pro Konto einlösen.</div></div>
+    ${V.staff.length||bl.length||el.length?`<div class="vb-sec"><h4>Deine Gutscheine</h4>
+      ${V.staff.map(s=>`<div class="vb-row cv-row"><div class="cv-main"><b>${s.count} Person${s.count>1?'en':''}</b><span class="pat-dept">${s.qual?`mit Ausbildung „${esc(qualLabel(s.qual))}“`:'ohne Ausbildung'}</span></div><span class="vb-sp"></span>
+        ${state.stations.length?`<select class="vb-sel" data-vst="${s.id}">${stOpts}</select><button class="btn sm primary" data-vstaff="${s.id}">Zuweisen</button>`:'<span class="dim">Erst eine Wache bauen</span>'}</div>`).join('')}
+      ${bl.map(([id,n])=>`<div class="vb-row cv-row"><div class="cv-main"><b>${n}× ${esc(buildingById(id)?.name||id)}</b><span class="pat-dept">Grundpreis gratis · einlösen im Menü „Gebäude bauen“</span></div></div>`).join('')}
+      ${el.map(([k,n])=>{ const x=extDefAny(k); return `<div class="vb-row cv-row"><div class="cv-main"><b>${n}× ${esc(x?x.d.name:k)}</b><span class="pat-dept">Erweiterung gratis · einlösen bei ${x?EXT_KIND_NAME[x.kind]:''} → Reiter „Erweiterungen“</span></div></div>`; }).join('')}</div>`:''}`;
+  const go=async()=>{ const code=document.getElementById('code-in').value.trim(); if(!code) return; await redeemCode(code); };
+  document.getElementById('code-go').onclick=go;
+  document.getElementById('code-in').onkeydown=e=>{ if(e.key==='Enter') go(); };
+  box.querySelectorAll('[data-vstaff]').forEach(b=>b.onclick=()=>assignStaffVoucher(b.dataset.vstaff, box.querySelector(`[data-vst="${b.dataset.vstaff}"]`).value));
+}
+async function redeemCode(code){
+  if(!sb||!AUTH.token){ toast('Codes gehen nur mit Anmeldung','warn'); return; }
+  await saveGame(true);                                   // Server braucht einen gespeicherten Spielstand
+  let r; try{ r=await rpc('code_redeem',{p_token:AUTH.token,p_code:code}); }catch(e){ toast('Code: '+errMsg(e),'err'); return; }
+  if(!r||r.error){ toast(r?.error||'Code ungültig','err'); return; }
+  const V=vouchers();
+  for(const w of (r.rewards||[])){
+    if(w.type==='money'){ state.credits+=w.amount; book('code',`Code ${r.code}`,w.amount); }
+    else if(w.type==='staff') V.staff.push({ id:nid(), count:w.count, qual:w.qual||null, code:r.code });
+    else if(w.type==='building') V.buildings[w.building]=(V.buildings[w.building]||0)+w.count;
+    else if(w.type==='extension') V.ext[w.ext]=(V.ext[w.ext]||0)+w.count;
+  }
+  renderTopbar(); saveGame(true);
+  toast(`Code ${r.code} eingelöst: ${(r.rewards||[]).map(rewardText).join(', ')}`,'ok');
+  renderCodes();
+}
+function assignStaffVoucher(id,stationId){
+  const V=vouchers(), s=V.staff.find(x=>x.id===id), st=stationById(stationId); if(!s||!st) return;
+  const n=Math.min(s.count, CONFIG.maxStaff-staffCount(st)); if(n<1){ toast(`${st.name} hat schon ${CONFIG.maxStaff} Personal`,'warn'); return; }
+  const q=s.qual && courseById(s.qual) ? s.qual : null;
+  for(let i=0;i<n;i++){ const p=makePerson(); if(q) p.quals=[q]; st.roster.push(p); }
+  s.count-=n; if(s.count<=0) V.staff=V.staff.filter(x=>x!==s);
+  renderStations(); renderCodes(); saveGame(true);
+  toast(`${n} Person${n>1?'en':''} für ${st.name}${s.count>0?` · ${s.count} noch übrig`:''}`,'ok');
+}
+/* Erweiterung per Gutschein (gleiche Bauzeit wie gekauft) */
+function useExtVoucher(o,key){
+  const d=extDef(o,key), V=vouchers(); if(!o||!d||!(V.ext[key]>0)) return;
+  if(!stationReady(o)){ toast(`${o.name} ist noch im Bau`,'warn'); return; }
+  if(extList(o).filter(e=>e.key===key).length>=(d.max||1)){ toast(`${d.name}: Höchstzahl erreicht`,'warn'); return; }
+  V.ext[key]--; (o.exts=o.exts||[]).push({ key, readyAt:Date.now()+CONFIG.extBuildMs, pending:true });
+  renderStations(); renderOpenBuildingViews(); saveGame(true);
+  toast(`${d.name} für ${o.name} per Gutschein beauftragt — fertig in ${fmtDur(CONFIG.extBuildMs)}`,'ok');
+}
+
 /* ------------------------- FUNK ------------------------- */
 let funkLog=[];
 function vehAbbr(v){ const t=VEHICLES[v.type]; return (t&&t.abbr)||(t&&t.name.split(' ')[0])||v.type; }
@@ -2845,7 +2931,7 @@ const BOOK_CATS={
   fahrzeug:{name:'Fahrzeuge',kind:'out'}, gebaeude:{name:'Gebäude',kind:'out'}, ausbau:{name:'Ausbau',kind:'out'},
   personal:{name:'Personal',kind:'out'}, lehrgang:{name:'Lehrgänge',kind:'out'}, zinsen:{name:'Dispo-Zinsen',kind:'out'},
   korrektur:{name:'Korrektur (Server)',kind:'out'}, erweiterung:{name:'Erweiterungen',kind:'out'},
-  verband:{name:'Verband (Einzahlungen)',kind:'out'}, verband_in:{name:'Verband (Auszahlungen)',kind:'in'},
+  verband:{name:'Verband (Einzahlungen)',kind:'out'}, verband_in:{name:'Verband (Auszahlungen)',kind:'in'}, code:{name:'Codes',kind:'in'},
   auszahlung:{name:'Auszahlung Tageskasse',kind:'transfer'} };
 const LEDGER_MAX=500;
 function book(cat,text,amt){
@@ -3231,8 +3317,10 @@ function renderExtTab(box,o,rerender){
       const unl=d.unlock?`<div class="ext-desc">Fahrzeuge: ${d.unlock.map(id=>VEHICLES[id]?.name||id).join(', ')}</div>`:'';
       return `<div class="ext-card${done?' have':''}"><div class="ext-head"><span class="ext-name">${d.name}</span>${max>1?`<span class="ext-count">${(d.included||0)+done}${building.length?` (+${building.length})`:''} / ${(d.included||0)+max}</span>`:''}</div>
         <div class="ext-desc">${d.desc}</div>${unl}${state_}
-        ${full?'':`<button class="btn sm ${canAfford(cost)&&stationReady(o)?'primary':''}" data-extbuy="${d.key}" ${canAfford(cost)&&stationReady(o)?'':'disabled'}>Kaufen · ${fmt(cost)} € · ${fmtDur(CONFIG.extBuildMs)}</button>`}</div>`; }).join('')}</div>`).join('');
+        ${full?'':`<button class="btn sm ${canAfford(cost)&&stationReady(o)?'primary':''}" data-extbuy="${d.key}" ${canAfford(cost)&&stationReady(o)?'':'disabled'}>Kaufen · ${fmt(cost)} € · ${fmtDur(CONFIG.extBuildMs)}</button>`}
+        ${!full&&vouchers().ext[d.key]>0?`<button class="btn sm" data-extvou="${d.key}" ${stationReady(o)?'':'disabled'}>Gutschein einlösen (${vouchers().ext[d.key]})</button>`:''}</div>`; }).join('')}</div>`).join('');
   box.querySelectorAll('[data-extbuy]').forEach(b=>b.onclick=()=>{ buyExtension(o,b.dataset.extbuy); rerender(); });
+  box.querySelectorAll('[data-extvou]').forEach(b=>b.onclick=()=>{ useExtVoucher(o,b.dataset.extvou); rerender(); });
 }
 /* Übungsplatz: Anteil der Fahrzeuge vor Ort aus Wachen mit Übungsplatz → bis zu 10 % schneller */
 function uebungFactor(m){
@@ -3974,6 +4062,7 @@ document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-w
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
 document.getElementById('dd-bank').onclick=()=>{ closeMenu(); renderBank(); showModal('modal-bank'); };
 document.getElementById('dd-verband').onclick=()=>{ closeMenu(); openVerband(); };
+document.getElementById('dd-codes').onclick=()=>{ closeMenu(); openCodes(); };
 document.getElementById('btn-funk-ally').onclick=toggleAllyRadio; document.getElementById('btn-funk-ally').classList.toggle('on',allyRadioOn);
 document.getElementById('dd-save').onclick=()=>{ closeMenu(); saveGame(); };
 document.getElementById('dd-settings').onclick=()=>{ closeMenu(); openSettings(); };
