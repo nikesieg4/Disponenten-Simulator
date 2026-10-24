@@ -911,7 +911,8 @@ const CONFIG = {
   maxStaff:200,
 
   academyBuildCost:12000000, maxAcademyLevel:5,
-  leitstelleBuildCost:10000000, leitstelleBuildMs:3*24*60*60*1000,   // Leitstelle (genau eine)
+  leitstelleBuildCost:10000000, leitstelleBuildMs:3*24*60*60*1000,   // Leitstelle: eine, jede weitere ab je 15 Wachen
+  stationsPerLeitstelle:15,
   extBuildMs:24*60*60*1000,            // Bauzeit jeder Erweiterung
   calltakerIncluded:2, calltakerOpen:3, // Calltaker-Plätze: 2 inklusive, je Platz +3 offene Einsätze
   tnaTreatFactor:0.8,                  // Behandlung mit Telenotarzt dauert 25 % länger
@@ -1195,7 +1196,7 @@ const BUILDINGS=[
   { id:'fire',    name:'Feuerwache',         icon:'FW', isStation:true,  cost:CONFIG.stationBuildCost },
   { id:'academy', name:'Feuerwehr-Akademie', icon:'AK', isStation:false, isAcademy:true, cost:CONFIG.academyBuildCost, buildMs:CONFIG.academyBuildMs,
     desc:'Personal in Klassenräumen zu Lehrgängen schicken.' },
-  { id:'leitstelle', name:'Leitstelle', icon:'LS', isStation:false, isLeitstelle:true, unique:true, cost:CONFIG.leitstelleBuildCost, buildMs:CONFIG.leitstelleBuildMs,
+  { id:'leitstelle', name:'Leitstelle', icon:'LS', isStation:false, isLeitstelle:true, limit:()=>1+Math.floor(state.stations.length/CONFIG.stationsPerLeitstelle), cost:CONFIG.leitstelleBuildCost, buildMs:CONFIG.leitstelleBuildMs,
     desc:'Calltaker nehmen mehr Notrufe an (mehr offene Einsätze), Telenotärzte unterstützen den Rettungsdienst.' },
   // weitere Gebäudetypen hier ergänzen …
 ];
@@ -1227,7 +1228,8 @@ function syncBuildMenu(){
   const b=buildingById(buildTypeId);
   document.querySelectorAll('#build-types [data-btype]').forEach(x=>x.classList.toggle('active',x.dataset.btype===buildTypeId));
   const num=nextStationNumber();
-  document.getElementById('build-name').value = b.isStation ? `Feuerwache ${num}` : b.name;
+  const same=(state.buildings||[]).filter(x=>x.typeId===b.id).length;
+  document.getElementById('build-name').value = b.isStation ? `Feuerwache ${num}` : (b.limit&&same ? `${b.name} ${same+1}` : b.name);
   document.getElementById('build-number-wrap').classList.toggle('hidden', !b.isStation);
   document.getElementById('build-number').value = num;
   document.getElementById('build-bays-wrap').classList.toggle('hidden', !b.isStation);
@@ -1249,14 +1251,22 @@ function syncBuildCost(){
     if(q.extra) html+=`<br>Wache ${fmt(CONFIG.stationBuildCost)} € + ${q.extra} Ausbaustufe${q.extra>1?'n':''} ${fmt(q.up)} € − ${Math.round(q.disc*100)} % Rabatt (${fmt(q.up-q.upPaid)} € gespart)`;
     html+=`<br>Bauzeit: <b>${first?'sofort einsatzbereit (erste Wache)':fmtDur(q.buildMs)}</b>`;
   } else {
-    const dup=b.unique && (state.buildings||[]).some(x=>x.typeId===b.id);
-    html=`Kosten: <b>${fmt(b.cost)} €</b>${b.buildMs?`<br>Bauzeit: <b>${fmtDur(b.buildMs)}</b>`:''}${b.desc?`<br>${b.desc}`:''}${dup?`<br><span class="warnc">Es gibt bereits eine ${b.name}.</span>`:''}`;
+    const lim=buildLimitInfo(b);
+    html=`Kosten: <b>${fmt(b.cost)} €</b>${b.buildMs?`<br>Bauzeit: <b>${fmtDur(b.buildMs)}</b>`:''}${b.desc?`<br>${b.desc}`:''}${lim?`<br>${lim.full?`<span class="warnc">${lim.text}</span>`:lim.text}`:''}`;
   }
   document.getElementById('build-cost').innerHTML=html;
 }
+/* Gebäude mit Höchstzahl (Leitstelle: 1 + 1 je 15 Wachen) */
+function buildLimitInfo(b){
+  if(!b.limit) return null;
+  const have=(state.buildings||[]).filter(x=>x.typeId===b.id).length, max=b.limit(), full=have>=max;
+  const next=max*CONFIG.stationsPerLeitstelle;
+  return { full, text: full ? `${have} von ${max} ${b.name}n gebaut. Die nächste ist ab ${next} Wachen möglich (aktuell ${state.stations.length}).`
+                            : `${have} von ${max} möglichen ${b.name}n gebaut (1 + 1 je ${CONFIG.stationsPerLeitstelle} Wachen).` };
+}
 function startBuildPlacement(){
   const b=buildingById(buildTypeId); if(!b) return;
-  if(b.unique && (state.buildings||[]).some(x=>x.typeId===b.id)){ toast(`Es gibt bereits eine ${b.name}`,'warn'); return; }
+  { const lim=buildLimitInfo(b); if(lim&&lim.full){ toast(lim.text,'warn'); return; } }
   if(!canAfford(b.cost)){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
   const name=document.getElementById('build-name').value.trim() || b.name;
   const number=b.isStation ? (parseInt(document.getElementById('build-number').value)||nextStationNumber()) : null;
@@ -2227,7 +2237,7 @@ function renderStations(){ if(simulating) return;
     const hdr=document.createElement('div'); hdr.className='vgroup-head'; hdr.textContent='Gebäude'; list.appendChild(hdr);
     acs.forEach(a=>{ const el=document.createElement('div'); el.className='station';
       const t=buildingById(a.typeId)||{}, used=(a.courses||[]).length;
-      const sub=t.isAcademy?`Akademie · Lehrsäle ${used}/${academyRooms(a)} belegt`:t.isLeitstelle?`Leitstelle · ${calltakers()} Calltaker · ${tnaSlots()} Telenotarzt-Plätze`:t.name;
+      const sub=t.isAcademy?`Akademie · Lehrsäle ${used}/${academyRooms(a)} belegt`:t.isLeitstelle?`Leitstelle · ${lsCalltakers(a)} Calltaker · ${lsTna(a)} Telenotarzt-Plätze`:t.name;
       el.innerHTML=`<div class="s-top s-open" data-openac="${a.id}"><div class="s-ico" style="background:var(--fms-4)">${t.icon||''}</div>
         <div class="s-name">${a.name}<span class="s-sub">${sub}</span></div>
         <span class="s-chev">›</span></div>${stationReady(a)?'':`<div class="s-build">Im Bau — fertig in ${fmtDur(a.readyAt-Date.now())}</div>`}`;
@@ -2542,9 +2552,13 @@ function uebungFactor(m){
 
 /* ---------- Leitstelle: Calltaker und Telenotarzt ---------- */
 let lsId=null, lsTab='info';
-function leitstelle(){ return (state.buildings||[]).find(b=>b.typeId==='leitstelle'); }
-function calltakers(){ const l=leitstelle(); return l&&stationReady(l) ? CONFIG.calltakerIncluded+extCount(l,'ct') : 0; }
-function tnaSlots(){ const l=leitstelle(); return l&&stationReady(l) ? extCount(l,'tna') : 0; }
+function leitstellen(){ return (state.buildings||[]).filter(b=>b.typeId==='leitstelle'); }
+function leitstelle(){ return leitstellen()[0]; }
+function lsCalltakers(l){ return l&&stationReady(l) ? CONFIG.calltakerIncluded+extCount(l,'ct') : 0; }
+function lsTna(l){ return l&&stationReady(l) ? extCount(l,'tna') : 0; }
+// Mehrere Leitstellen: Plätze werden zusammengezählt
+function calltakers(){ return leitstellen().reduce((n,l)=>n+lsCalltakers(l),0); }
+function tnaSlots(){ return leitstellen().reduce((n,l)=>n+lsTna(l),0); }
 function tnaUsed(){ let n=0; for(const m of state.missions) for(const p of (m.patients||[])) if(p.nefId==='tna') n++; return n; }
 function tnaFree(){ return tnaSlots()-tnaUsed(); }
 /* Telenotarzt erlaubt: RD-Einsatz mit einem Patienten, keine Reanimation, kein Brand/TH */
@@ -2569,8 +2583,8 @@ function renderLeitstelleView(){
   document.querySelectorAll('#modal-leitstelle [data-lstab]').forEach(b=>{ b.classList.toggle('active',b.dataset.lstab===lsTab); b.onclick=()=>{ lsTab=b.dataset.lstab; renderLeitstelleView(); }; });
   const box=document.getElementById('ls-content');
   if(lsTab==='ext'){ renderExtTab(box,l,renderLeitstelleView); return; }
-  const km2=totalAreaKm2(), open=state.missions.filter(m=>m.status!=='done').length;
-  box.innerHTML=`<div class="ls-stats">
+  const km2=totalAreaKm2(), open=state.missions.filter(m=>m.status!=='done').length, multi=leitstellen().length>1;
+  box.innerHTML=`${multi?`<div class="pers-hint">Diese Leitstelle: ${lsCalltakers(l)} Calltaker, ${lsTna(l)} Telenotarzt-Plätze. Werte unten: alle ${leitstellen().length} Leitstellen zusammen.</div>`:''}<div class="ls-stats">
       <div class="ls-stat"><b>${calltakers()}</b><span>Calltaker-Plätze</span></div>
       <div class="ls-stat"><b>+${CONFIG.calltakerOpen*calltakers()}</b><span>zusätzliche offene Einsätze</span></div>
       <div class="ls-stat"><b>${open} / ${maxOpenMissions(km2)}</b><span>offene Einsätze / Grenze</span></div>
