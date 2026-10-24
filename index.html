@@ -1130,10 +1130,19 @@ async function catchUp(ms){
 }
 
 /* ------------------------- MAP ------------------------- */
+const WORLD_BOUNDS=[[-85.05,-180],[85.05,180]];
+/* Gespeicherte Ansicht auf die echte Erde zurückholen (alte Stände konnten in einer Welt-Kopie liegen) */
+function clampView(v){ return [Math.max(-85,Math.min(85,v.lat)), ((v.lng+180)%360+360)%360-180]; }
+/* Kleinster Zoom, bei dem die Welt die Karte noch ganz ausfüllt (sonst grauer Rand / Kopien) */
+function fitMinZoom(){ if(!map) return; const s=map.getSize(), z=Math.ceil(Math.log2(Math.max(s.x,s.y)/256));
+  map.setMinZoom(Math.max(1,z)); if(map.getZoom()<map.getMinZoom()) map.setZoom(map.getMinZoom()); }
 let map, stationLayer, missionLayer, vehicleLayer, routeLayer, buildingLayer, areaLayer;
 function initMap(){
-  map=L.map('map',{zoomControl:true,attributionControl:true}).setView([state.view.lat,state.view.lng],state.view.zoom);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  // Nur eine Erde: keine Welt-Kopien links/rechts, Rand fest, nicht weiter herauszoomen als die Welt breit ist
+  map=L.map('map',{zoomControl:true,attributionControl:true, maxBounds:WORLD_BOUNDS, maxBoundsViscosity:1, worldCopyJump:false})
+    .setView(clampView(state.view),state.view.zoom);
+  fitMinZoom(); map.on('resize',fitMinZoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ noWrap:true, bounds:WORLD_BOUNDS,
     subdomains:'abc', maxZoom:19,
     attribution:'&copy; OpenStreetMap contributors',
     errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
@@ -3194,7 +3203,7 @@ function renderCatalog(){
 /* Rebuild nach Load/Import */
 function rebuildEverything(){
   routeLayer.clearLayers(); stationLayer.clearLayers(); missionLayer.clearLayers(); vehicleLayer.clearLayers(); buildingLayer.clearLayers(); areaLayer.clearLayers();
-  if(state.view) map.setView([state.view.lat,state.view.lng],state.view.zoom);
+  if(state.view) map.setView(clampView(state.view),state.view.zoom);
   state.stations.forEach(addStationMarker);
   (state.buildings||[]).forEach(b=>{ b.marker=null; addBuildingMarker(b); });
   state.missions.forEach(m=>{ if(m.status!=='done') addMissionMarker(m); });
