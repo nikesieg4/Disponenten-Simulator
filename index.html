@@ -419,7 +419,11 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .ext-count{ margin-left:auto; font-family:var(--font-mono); font-size:12px; color:var(--text-mut); }
 .ext-desc{ font-size:12px; color:var(--text-mut); line-height:1.45; }
 .ext-state{ font-size:12px; font-family:var(--font-mono); }
-.ext-state.ok{ color:var(--ok); } .ext-state.build{ color:#fbbf24; }
+.ext-state.ok{ color:var(--ok); } .ext-state.build{ color:#fbbf24; } .ext-state.wait{ color:var(--text-mut); }
+.ext-queue{ display:flex; flex-direction:column; gap:6px; margin-bottom:6px; }
+.ext-qrow{ display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.ext-qrow .ext-state{ margin-left:auto; }
+.ext-qn{ font-family:var(--font-mono); font-size:11px; color:var(--text-mut); min-width:14px; }
 .ext-sec{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); margin:12px 0 6px; }
 .ext-sec:first-child{ margin-top:0; }
 .ls-stats{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; margin-bottom:12px; }
@@ -2562,9 +2566,9 @@ function useExtVoucher(o,key){
   const d=extDef(o,key), V=vouchers(); if(!o||!d||!(V.ext[key]>0)) return;
   if(!stationReady(o)){ toast(`${o.name} ist noch im Bau`,'warn'); return; }
   if(extList(o).filter(e=>e.key===key).length>=(d.max||1)){ toast(`${d.name}: Höchstzahl erreicht`,'warn'); return; }
-  V.ext[key]--; (o.exts=o.exts||[]).push({ key, readyAt:Date.now()+CONFIG.extBuildMs, pending:true });
+  V.ext[key]--; const e=queueExt(o,key,0,true);
   renderStations(); renderOpenBuildingViews(); saveGame(true);
-  toast(`${d.name} für ${o.name} per Gutschein beauftragt — fertig in ${fmtDur(CONFIG.extBuildMs)}`,'ok');
+  toast(`${d.name} für ${o.name} per Gutschein beauftragt — fertig in ${fmtDur(e.readyAt-Date.now())}`,'ok');
 }
 
 /* ------------------------- FUNK ------------------------- */
@@ -3293,6 +3297,26 @@ function extList(o){ return o && Array.isArray(o.exts) ? o.exts : []; }
 function extCount(o,key){ const now=Date.now(); return extList(o).filter(e=>e.key===key && (!e.readyAt || now>=e.readyAt)).length; }
 function extCost(o,d){ return typeof d.cost==='function' ? d.cost(o) : d.cost; }
 function vehicleLockedAt(st,typeId){ const k=VEH_UNLOCK[typeId]; return k && !extCount(st,k) ? k : null; }
+/* Bauschlange je Gebäude: Erweiterungen werden nacheinander gebaut. Ein neuer Auftrag beginnt, wenn der letzte fertig ist. */
+function extQueueEnd(o){ const now=Date.now(); return Math.max(now, ...extList(o).filter(e=>e.readyAt&&e.readyAt>now).map(e=>e.readyAt)); }
+function queueExt(o,key,paid,voucher){
+  const start=extQueueEnd(o), e={ key, startAt:start, readyAt:start+CONFIG.extBuildMs, pending:true, q:1, paid:paid||0, voucher:!!voucher };
+  (o.exts=o.exts||[]).push(e); return e;
+}
+/* Stornieren (auch die laufende): volle Erstattung bzw. Gutschein zurück, die dahinter rücken nach */
+function cancelExt(o,e){
+  const d=extDef(o,e.key), now=Date.now(); if(!e.q || !(e.readyAt>now)) return;
+  if(!confirm(`${d?d.name:e.key} stornieren? ${e.voucher?'Der Gutschein kommt zurück.':`Du bekommst ${fmt(e.paid||0)} € zurück.`}`)) return;
+  o.exts=extList(o).filter(x=>x!==e);
+  if(e.voucher){ const V=vouchers(); V.ext[e.key]=(V.ext[e.key]||0)+1; }
+  else if(e.paid){ state.credits+=e.paid; book('erweiterung',`Storno ${d?d.name:e.key} · ${o.name}`,e.paid); }
+  // nachrücken: Altbestand (ohne Warteschlange) bleibt, laufender Auftrag bleibt, wartende schließen lückenlos an
+  const open=o.exts.filter(x=>x.readyAt&&x.readyAt>now);
+  let cursor=Math.max(now, ...open.filter(x=>!x.q || x.startAt<=now).map(x=>x.readyAt));
+  open.filter(x=>x.q && x.startAt>now).sort((a,b)=>a.startAt-b.startAt).forEach(x=>{ const dur=x.readyAt-x.startAt; x.startAt=cursor; x.readyAt=cursor+dur; cursor=x.readyAt; });
+  renderTopbar(); renderStations(); renderOpenBuildingViews(); saveGame(true);
+  toast(`${d?d.name:e.key} storniert`,'ok');
+}
 function buyExtension(o,key){
   const d=extDef(o,key); if(!o||!d) return;
   if(!stationReady(o)){ toast(`${o.name} ist noch im Bau`,'warn'); return; }
@@ -3300,9 +3324,9 @@ function buyExtension(o,key){
   if(n>=(d.max||1)){ toast(`${d.name}: Höchstzahl erreicht`,'warn'); return; }
   const cost=extCost(o,d); if(!canAfford(cost)){ toast('Nicht genug Guthaben','err'); return; }
   state.credits-=cost; book('erweiterung',`${d.name} · ${o.name}`,-cost);
-  (o.exts=o.exts||[]).push({ key, readyAt:Date.now()+CONFIG.extBuildMs, pending:true });
+  const e=queueExt(o,key,cost,false);
   renderTopbar(); renderStations(); renderOpenBuildingViews(); saveGame(true);
-  toast(`${d.name} für ${o.name} beauftragt — fertig in ${fmtDur(CONFIG.extBuildMs)}`,'ok');
+  toast(`${d.name} für ${o.name} beauftragt — ${e.startAt>Date.now()?'in der Warteschlange, ':''}fertig in ${fmtDur(e.readyAt-Date.now())}`,'ok');
 }
 function renderOpenBuildingViews(){
   if(document.getElementById('modal-stationview').classList.contains('show')) renderStationView();
@@ -3311,18 +3335,23 @@ function renderOpenBuildingViews(){
 }
 function renderExtTab(box,o,rerender){
   const now=Date.now(), defs=EXTENSIONS[extKind(o)], groups=[...new Set(defs.map(d=>d.group))];
-  box.innerHTML=(stationReady(o)?'':`<div class="s-build">Gebäude im Bau — Erweiterungen sind erst danach möglich.</div>`)+groups.map(g=>`<div class="ext-sec">${g}</div><div class="ext-grid">${
+  const open=extList(o).filter(e=>e.readyAt&&e.readyAt>now).sort((a,b)=>a.readyAt-b.readyAt), endIn=extQueueEnd(o)+CONFIG.extBuildMs-now;
+  const queue=open.length?`<div class="ext-sec">Bauschlange</div><div class="ext-queue">${open.map((e,i)=>{ const d=extDef(o,e.key), run=!e.q||e.startAt<=now;
+      return `<div class="ext-qrow"><span class="ext-qn">${i+1}</span><span class="ext-name">${d?d.name:e.key}</span><span class="ext-state ${run?'build':'wait'}">${run?'im Bau':'wartet'} · fertig in ${fmtDur(e.readyAt-now)}</span>
+        ${e.q?`<button class="btn sm ghost" data-extcancel="${extList(o).indexOf(e)}">Stornieren</button>`:''}</div>`; }).join('')}</div>`:'';
+  box.innerHTML=(stationReady(o)?'':`<div class="s-build">Gebäude im Bau — Erweiterungen sind erst danach möglich.</div>`)+queue+groups.map(g=>`<div class="ext-sec">${g}</div><div class="ext-grid">${
     defs.filter(d=>d.group===g).map(d=>{
       const all=extList(o).filter(e=>e.key===d.key), done=all.filter(e=>!e.readyAt||now>=e.readyAt).length, building=all.filter(e=>e.readyAt&&now<e.readyAt);
       const max=d.max||1, full=all.length>=max, cost=extCost(o,d);
-      const state_=done&&max===1?'<span class="ext-state ok">Vorhanden</span>':building.length?`<span class="ext-state build">Im Bau — fertig in ${fmtDur(Math.min(...building.map(e=>e.readyAt))-now)}</span>`:'';
+      const state_=done&&max===1?'<span class="ext-state ok">Vorhanden</span>':building.length?`<span class="ext-state build">${building.length>1?building.length+'× ':''}in der Bauschlange — fertig in ${fmtDur(Math.max(...building.map(e=>e.readyAt))-now)}</span>`:'';
       const unl=d.unlock?`<div class="ext-desc">Fahrzeuge: ${d.unlock.map(id=>VEHICLES[id]?.name||id).join(', ')}</div>`:'';
       return `<div class="ext-card${done?' have':''}"><div class="ext-head"><span class="ext-name">${d.name}</span>${max>1?`<span class="ext-count">${(d.included||0)+done}${building.length?` (+${building.length})`:''} / ${(d.included||0)+max}</span>`:''}</div>
         <div class="ext-desc">${d.desc}</div>${unl}${state_}
-        ${full?'':`<button class="btn sm ${canAfford(cost)&&stationReady(o)?'primary':''}" data-extbuy="${d.key}" ${canAfford(cost)&&stationReady(o)?'':'disabled'}>Kaufen · ${fmt(cost)} € · ${fmtDur(CONFIG.extBuildMs)}</button>`}
+        ${full?'':`<button class="btn sm ${canAfford(cost)&&stationReady(o)?'primary':''}" data-extbuy="${d.key}" ${canAfford(cost)&&stationReady(o)?'':'disabled'}>Kaufen · ${fmt(cost)} € · fertig in ${fmtDur(endIn)}</button>`}
         ${!full&&vouchers().ext[d.key]>0?`<button class="btn sm" data-extvou="${d.key}" ${stationReady(o)?'':'disabled'}>Gutschein einlösen (${vouchers().ext[d.key]})</button>`:''}</div>`; }).join('')}</div>`).join('');
   box.querySelectorAll('[data-extbuy]').forEach(b=>b.onclick=()=>{ buyExtension(o,b.dataset.extbuy); rerender(); });
   box.querySelectorAll('[data-extvou]').forEach(b=>b.onclick=()=>{ useExtVoucher(o,b.dataset.extvou); rerender(); });
+  box.querySelectorAll('[data-extcancel]').forEach(b=>b.onclick=()=>{ const e=extList(o)[Number(b.dataset.extcancel)]; if(e) cancelExt(o,e); rerender(); });
 }
 /* Übungsplatz: Anteil der Fahrzeuge vor Ort aus Wachen mit Übungsplatz → bis zu 10 % schneller */
 function uebungFactor(m){

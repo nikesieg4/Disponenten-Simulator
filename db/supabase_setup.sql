@@ -268,7 +268,11 @@ create or replace function _assets(d jsonb) returns numeric language sql stable 
   select
     coalesce((select sum(p.price) from jsonb_array_elements(_jarr(d,'vehicles')) v join app_prices p on p.kind='vehicle' and p.id=v->>'type'),0)
   + coalesce((select sum(p.price) from jsonb_array_elements(_jarr(d,'stations')) st join app_prices p on p.kind='station' and p.id='L'||_jlevel(st,6)),0)
-  + coalesce((select sum(p.price) from jsonb_array_elements(_jarr(d,'buildings')) b join app_prices p on p.kind='academy' and p.id='L'||_jlevel(b,5) where b->>'typeId'='academy'),0); $$;
+  + coalesce((select sum(p.price) from jsonb_array_elements(_jarr(d,'buildings')) b join app_prices p on p.kind='academy' and p.id='L'||_jlevel(b,5) where b->>'typeId'='academy'),0)
+  -- bezahlte, noch nicht fertige Erweiterungen (stornierbar, volle Erstattung)
+  + coalesce((select sum(least(10000000, greatest(0, _jnum(e,'paid')))) from (select st from jsonb_array_elements(_jarr(d,'stations')) st
+      union all select b from jsonb_array_elements(_jarr(d,'buildings')) b) o(x), jsonb_array_elements(_jarr(o.x,'exts')) e
+      where _jnum(e,'readyAt') > extract(epoch from now())*1000),0); $$;
 create or replace function _vehicle_count(d jsonb) returns int language sql stable security definer set search_path=public, extensions as $$
   select count(*)::int from jsonb_array_elements(_jarr(d,'vehicles')) v join app_prices p on p.kind='vehicle' and p.id=v->>'type'; $$;
 
