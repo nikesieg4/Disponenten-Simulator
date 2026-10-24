@@ -1236,11 +1236,173 @@ begin
   return json_build_object('ok',true,'id',v_id,'duration_ms',v_ms,'paid',v_cost,'cost_factor',a.cost);
 end; $$;
 
+/* ---------- Codes (Belohnungen über Socials) ----------
+   Spieler lösen Codes einmalig ein (code_redeem). Belohnungen: money, staff (mit optionaler Ausbildung),
+   building (Gutschein für Feuerwache/Akademie/Leitstelle), extension (Gutschein für eine Erweiterung).
+   Geld und der Wert gratis gebauter Wachen/Akademien werden dem Anti-Cheat als erlaubter Zuwachs gutgeschrieben.
+   Admin: eigenes Passwort (nur bcrypt-Hash in der DB). Setzen NUR im Supabase-SQL-Editor:
+     select admin_set_password('ein langes Passwort');
+   Die Funktion ist für die Website (anon) gesperrt. Login: 5 Fehlversuche je IP bzw. 20 insgesamt in 15 min sperren,
+   Admin-Sitzung gilt 2 Stunden. */
+create table if not exists app_admin ( id int primary key check (id=1), pw_hash text not null, updated_at timestamptz not null default now() );
+create table if not exists app_admin_sessions ( token_hash text primary key, expires_at timestamptz not null, ip text, created_at timestamptz not null default now() );
+create table if not exists app_admin_attempts ( id bigserial primary key, ip text, ok boolean not null, at timestamptz not null default now() );
+create table if not exists app_codes (
+  code text primary key, rewards jsonb not null default '[]', note text not null default '',
+  expires_at timestamptz, max_uses int, new_days int, active boolean not null default true,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now() );
+create table if not exists app_code_redemptions (
+  code text not null references app_codes(code) on delete cascade, user_id uuid not null references app_users(id) on delete cascade,
+  at timestamptz not null default now(), primary key (code, user_id) );
+create table if not exists app_code_attempts ( user_id uuid not null references app_users(id) on delete cascade, at timestamptz not null default now() );
+create index if not exists app_code_attempts_u on app_code_attempts(user_id, at);
+alter table app_admin enable row level security; alter table app_admin_sessions enable row level security; alter table app_admin_attempts enable row level security;
+alter table app_codes enable row level security; alter table app_code_redemptions enable row level security; alter table app_code_attempts enable row level security;
+revoke all on app_admin, app_admin_sessions, app_admin_attempts, app_codes, app_code_redemptions, app_code_attempts from anon, authenticated;
+
+create or replace function admin_set_password(p_password text) returns text language plpgsql security definer set search_path=public, extensions as $$
+begin
+  if length(coalesce(p_password,'')) < 12 then raise exception 'Passwort muss mindestens 12 Zeichen haben'; end if;
+  insert into app_admin(id, pw_hash) values (1, crypt(p_password, gen_salt('bf', 10)))
+    on conflict (id) do update set pw_hash=excluded.pw_hash, updated_at=now();
+  delete from app_admin_sessions;                                      -- alle Admin-Sitzungen beenden
+  return 'Admin-Passwort gesetzt';
+end; $$;
+
+create or replace function _admin_ok(p_token uuid) returns boolean language sql security definer set search_path=public, extensions as $$
+  select p_token is not null and exists(select 1 from app_admin_sessions where token_hash=_token_hash(p_token) and expires_at > now()); $$;
+
+create or replace function admin_login(p_password text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_ip text := coalesce(_client_ip(),'?'); v_hash text; v_tok uuid;
+begin
+  delete from app_admin_attempts where at < now()-interval '1 day';
+  delete from app_admin_sessions where expires_at < now();
+  if (select count(*) from app_admin_attempts where not ok and ip=v_ip and at > now()-interval '15 minutes') >= 5
+     or (select count(*) from app_admin_attempts where not ok and at > now()-interval '15 minutes') >= 20 then
+    return json_build_object('error','Zu viele Fehlversuche. Bitte 15 Minuten warten.'); end if;
+  select pw_hash into v_hash from app_admin where id=1;
+  if v_hash is null or p_password is null or crypt(p_password, v_hash) <> v_hash then
+    perform pg_sleep(0.5);
+    insert into app_admin_attempts(ip, ok) values (v_ip, false);
+    return json_build_object('error','Falsches Passwort'); end if;
+  insert into app_admin_attempts(ip, ok) values (v_ip, true);
+  v_tok := gen_random_uuid();
+  insert into app_admin_sessions(token_hash, expires_at, ip) values (_token_hash(v_tok), now()+interval '2 hours', v_ip);
+  return json_build_object('ok',true,'token',v_tok,'expires_at',now()+interval '2 hours');
+end; $$;
+create or replace function admin_logout(p_token uuid) returns json language sql security definer set search_path=public, extensions as $$
+  delete from app_admin_sessions where token_hash=_token_hash(p_token); select json_build_object('ok',true); $$;
+
+-- Belohnungen prüfen und vereinheitlichen
+create or replace function _code_rewards(p jsonb) returns jsonb language plpgsql immutable set search_path=public, extensions as $$
+declare r jsonb; out jsonb := '[]'; n int;
+begin
+  if jsonb_typeof(p) <> 'array' or jsonb_array_length(p)=0 then raise exception 'Mindestens eine Belohnung'; end if;
+  if jsonb_array_length(p) > 10 then raise exception 'Höchstens 10 Belohnungen je Code'; end if;
+  for r in select value from jsonb_array_elements(p) loop
+    case r->>'type'
+      when 'money' then n := (r->>'amount')::int;
+        if n is null or n < 1 or n > 100000000 then raise exception 'Geld: 1 bis 100.000.000 €'; end if;
+        out := out || jsonb_build_array(jsonb_build_object('type','money','amount',n));
+      when 'staff' then n := (r->>'count')::int;
+        if n is null or n < 1 or n > 50 then raise exception 'Personal: 1 bis 50 Personen'; end if;
+        if coalesce(r->>'qual','') !~ '^[A-Za-z0-9_-]{0,40}$' then raise exception 'Ungültige Ausbildung'; end if;
+        out := out || jsonb_build_array(jsonb_build_object('type','staff','count',n,'qual',nullif(r->>'qual','')));
+      when 'building' then n := coalesce((r->>'count')::int,1);
+        if r->>'building' not in ('fire','academy','leitstelle') then raise exception 'Unbekanntes Gebäude'; end if;
+        if n < 1 or n > 5 then raise exception 'Gebäude: 1 bis 5'; end if;
+        out := out || jsonb_build_array(jsonb_build_object('type','building','building',r->>'building','count',n));
+      when 'extension' then n := coalesce((r->>'count')::int,1);
+        if coalesce(r->>'ext','') !~ '^[a-z]{1,20}$' then raise exception 'Unbekannte Erweiterung'; end if;
+        if n < 1 or n > 10 then raise exception 'Erweiterung: 1 bis 10'; end if;
+        out := out || jsonb_build_array(jsonb_build_object('type','extension','ext',r->>'ext','count',n));
+      else raise exception 'Unbekannte Belohnung: %', r->>'type';
+    end case;
+  end loop;
+  return out;
+end; $$;
+
+create or replace function admin_codes(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  return json_build_object('ok',true,'codes',coalesce((select json_agg(json_build_object('code',c.code,'rewards',c.rewards,'note',c.note,'expires_at',c.expires_at,
+      'max_uses',c.max_uses,'new_days',c.new_days,'active',c.active,'created_at',c.created_at,
+      'uses',(select count(*) from app_code_redemptions r where r.code=c.code)) order by c.created_at desc) from app_codes c),'[]'::json));
+end; $$;
+-- Anlegen oder ändern: p {code, rewards, note, expires_at, max_uses, new_days, active}
+create or replace function admin_code_save(p_token uuid, p jsonb)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_code text := upper(btrim(coalesce(p->>'code',''))); v_rw jsonb;
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  if v_code !~ '^[A-Z0-9_-]{3,32}$' then return json_build_object('error','Code: 3–32 Zeichen, nur A–Z, 0–9, - und _'); end if;
+  begin v_rw := _code_rewards(p->'rewards'); exception when others then return json_build_object('error',sqlerrm); end;
+  insert into app_codes(code, rewards, note, expires_at, max_uses, new_days, active)
+    values (v_code, v_rw, left(coalesce(p->>'note',''),200), nullif(p->>'expires_at','')::timestamptz,
+      nullif(greatest(0,coalesce((p->>'max_uses')::int,0)),0), nullif(greatest(0,coalesce((p->>'new_days')::int,0)),0), coalesce((p->>'active')::boolean,true))
+    on conflict (code) do update set rewards=excluded.rewards, note=excluded.note, expires_at=excluded.expires_at, max_uses=excluded.max_uses,
+      new_days=excluded.new_days, active=excluded.active, updated_at=now();
+  return json_build_object('ok',true,'code',v_code);
+end; $$;
+create or replace function admin_code_active(p_token uuid, p_code text, p_active boolean)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  update app_codes set active=p_active, updated_at=now() where code=upper(p_code);
+  return json_build_object('ok',found);
+end; $$;
+create or replace function admin_code_delete(p_token uuid, p_code text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  delete from app_codes where code=upper(p_code);
+  return json_build_object('ok',found);
+end; $$;
+create or replace function admin_code_redemptions(p_token uuid, p_code text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  return json_build_object('ok',true,'list',coalesce((select json_agg(json_build_object('name',u.username,'at',r.at) order by r.at desc)
+    from app_code_redemptions r join app_users u on u.id=r.user_id where r.code=upper(p_code)),'[]'::json));
+end; $$;
+
+-- Einlösen (Spieler): Geld + Wert gratis gebauter Wachen/Akademien gehen als erlaubter Zuwachs an den Anti-Cheat
+create or replace function code_redeem(p_token uuid, p_code text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); c app_codes; v_created timestamptz; v_value numeric := 0; r jsonb;
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  delete from app_code_attempts where at < now()-interval '1 hour';
+  if (select count(*) from app_code_attempts where user_id=v_uid and at > now()-interval '10 minutes') >= 10 then
+    return json_build_object('error','Zu viele ungültige Codes. Bitte 10 Minuten warten.'); end if;
+  select * into c from app_codes where code=upper(btrim(coalesce(p_code,''))) for update;
+  if c.code is null or not c.active then insert into app_code_attempts(user_id) values (v_uid); return json_build_object('error','Code ungültig'); end if;
+  if c.expires_at is not null and c.expires_at < now() then return json_build_object('error','Code ist abgelaufen'); end if;
+  if exists(select 1 from app_code_redemptions where code=c.code and user_id=v_uid) then return json_build_object('error','Code bereits eingelöst'); end if;
+  if c.max_uses is not null and (select count(*) from app_code_redemptions where code=c.code) >= c.max_uses then return json_build_object('error','Code ist bereits vergeben'); end if;
+  if c.new_days is not null then
+    select created_at into v_created from app_users where id=v_uid;
+    if v_created < now() - make_interval(days=>c.new_days) then return json_build_object('error','Code gilt nur für neue Spieler (Konto jünger als '||c.new_days||' Tage)'); end if; end if;
+  for r in select value from jsonb_array_elements(c.rewards) loop
+    if r->>'type'='money' then v_value := v_value + (r->>'amount')::numeric;
+    elsif r->>'type'='building' and r->>'building'='fire' then v_value := v_value + coalesce((select price from app_prices where kind='station' and id='L1'),0)*(r->>'count')::int;
+    elsif r->>'type'='building' and r->>'building'='academy' then v_value := v_value + coalesce((select price from app_prices where kind='academy' and id='L1'),0)*(r->>'count')::int;
+    end if;
+  end loop;
+  update app_saves set econ_adjust=coalesce(econ_adjust,0)+v_value where user_id=v_uid and jsonb_typeof(data)='object';
+  if not found then return json_build_object('error','Spielstand noch nicht gespeichert – bitte kurz warten und erneut versuchen'); end if;
+  insert into app_code_redemptions(code, user_id) values (c.code, v_uid);
+  return json_build_object('ok',true,'code',c.code,'rewards',c.rewards);
+end; $$;
+
 grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
 revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]),
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
   _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
-  _ally_banned(uuid,uuid), _sm_tick(uuid), _ally_muted(uuid,uuid), _ally_academies(uuid) from public, anon, authenticated;
+  _ally_banned(uuid,uuid), _sm_tick(uuid), _ally_muted(uuid,uuid), _ally_academies(uuid),
+  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
