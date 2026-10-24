@@ -592,7 +592,7 @@ begin
   v_rank := _ally_rank(v_uid);
   for r in select * from jsonb_array_elements(coalesce(p_roles,'[]'::jsonb)) loop
     v_pos := greatest(1, least(999, coalesce((r->>'position')::int, 100)));
-    select array_agg(p) into v_perms from jsonb_array_elements_text(coalesce(r->'perms','[]'::jsonb)) p where p in ('members','roles','finance','moderate','kick','ban','timeout');
+    select array_agg(p) into v_perms from jsonb_array_elements_text(coalesce(r->'perms','[]'::jsonb)) p where p in ('members','roles','finance','moderate','kick','ban','timeout','courses');
     if r ? 'id' and (r->>'id') <> '' then
       select position into v_old from app_alliance_roles where id=(r->>'id')::uuid and alliance_id=v_aid;
       if v_old is null then continue; end if;
@@ -1144,8 +1144,9 @@ begin
   select kasse into v_kasse from app_alliances where id=v_aid for update;
   if v_kasse < v_cost then return json_build_object('error','Zu wenig in der Verbandskasse ('||v_cost||' € nötig)'); end if;
   update app_alliances set kasse=kasse-v_cost where id=v_aid;
-  insert into app_alliance_buildings(alliance_id, type, name, lat, lng)
-    values (v_aid, p_type, left(coalesce(nullif(btrim(p_name),''), case p_type when 'kh' then 'Verbandskrankenhaus' else 'Verbandsakademie' end),60), p_lat, p_lng);
+  insert into app_alliance_buildings(alliance_id, type, name, lat, lng, depts)
+    values (v_aid, p_type, left(coalesce(nullif(btrim(p_name),''), case p_type when 'kh' then 'Verbandskrankenhaus' else 'Verbandsakademie' end),60), p_lat, p_lng,
+      case when p_type='kh' then '[]'::jsonb end);
   insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'gebaeude', -v_cost,
     case p_type when 'kh' then 'Verbandskrankenhaus' else 'Verbandsakademie' end||' gebaut: '||left(coalesce(p_name,''),60));
   return json_build_object('ok',true,'cost',v_cost);
@@ -1176,6 +1177,22 @@ begin
   return json_build_object('ok',true);
 end; $$;
 
+-- Verbandslehrgänge (Teil 4): die Lehrgangsleitung schreibt einen Lehrgang in einer Verbandsakademie aus (Kasse zahlt 150.000 €),
+-- Mitglieder melden bis zum Start eigenes Personal an (Plätze je Mitglied und Gebühr je Person legt die Lehrgangsleitung fest)
+create table if not exists app_ally_courses (
+  id uuid primary key default gen_random_uuid(), alliance_id uuid not null references app_alliances(id) on delete cascade,
+  building_id uuid not null references app_alliance_buildings(id) on delete cascade, course text not null,
+  created_by uuid references app_users(id) on delete set null, per_member int not null, fee bigint not null default 0,
+  capacity int not null default 10, starts_at timestamptz not null, ends_at timestamptz not null, created_at timestamptz not null default now() );
+create index if not exists app_ally_courses_a on app_ally_courses(alliance_id, ends_at);
+create table if not exists app_ally_course_seats (
+  course_id uuid not null references app_ally_courses(id) on delete cascade, user_id uuid not null references app_users(id) on delete cascade,
+  persons int not null, at timestamptz not null default now(), primary key (course_id, user_id) );
+alter table app_ally_courses enable row level security; alter table app_ally_course_seats enable row level security;
+revoke all on app_ally_courses, app_ally_course_seats from anon, authenticated;
+-- Verbandskrankenhaus: Fachabteilungen als Erweiterungen [{dept, ready_at}], Innere Medizin ist immer dabei (null = Altbestand: alle)
+alter table app_alliance_buildings add column if not exists depts jsonb;
+
 -- Akademien im Verband: freigegebene Akademien der Mitglieder (aus dem Spielstand) und Verbandsakademien
 create or replace function _ally_academies(p_aid uuid) returns table(akey text, kind text, owner uuid, owner_name text, name text, lat double precision, lng double precision,
   rooms int, own_used int, ext_used int, lim int, dur numeric, cost numeric)
@@ -1193,7 +1210,7 @@ language sql stable security definer set search_path=public, extensions as $$
     and coalesce((b->>'readyAt')::numeric,0) <= (select t from now_ms)
   union all
   select 'a:'||ab.id, 'alliance', null, null, ab.name, ab.lat, ab.lng, ab.rooms, 0,
-    (select count(*)::int from app_academy_bookings k where k.akey='a:'||ab.id and k.ends_at > now()), al.academy_limit, 1, 1
+    (select count(*)::int from app_ally_courses c where c.building_id=ab.id and c.ends_at > now()), 10, 1, 1
   from app_alliance_buildings ab join app_alliances al on al.id=ab.alliance_id where ab.alliance_id=p_aid and ab.type='akademie'; $$;
 
 -- Gebäude und Akademien des Verbands (Karte, Krankenhausliste, Reiter Akademien/Gebäude)
@@ -1203,7 +1220,11 @@ declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
 begin
   if v_aid is null then return json_build_object('buildings','[]'::json,'academies','[]'::json); end if;
   return json_build_object('can_build',_ally_perm(v_uid,'finance'),'kasse',(select kasse from app_alliances where id=v_aid),'academy_limit',(select academy_limit from app_alliances where id=v_aid),
-    'buildings',coalesce((select json_agg(json_build_object('id',id,'type',type,'name',name,'lat',lat,'lng',lng,'rooms',rooms) order by created_at) from app_alliance_buildings where alliance_id=v_aid),'[]'::json),
+    'buildings',coalesce((select json_agg(json_build_object('id',id,'type',type,'name',name,'lat',lat,'lng',lng,'rooms',rooms,
+        'depts',case when type<>'kh' then null when depts is null then '["inn","unf","kar","str","geb","kin","psy","bra"]'::jsonb
+          else '["inn"]'::jsonb || coalesce((select jsonb_agg(d->'dept') from jsonb_array_elements(depts) d where (d->>'ready_at')::timestamptz <= now()),'[]') end,
+        'building',case when type='kh' and depts is not null then (select jsonb_agg(jsonb_build_object('dept',d->'dept','ready_at',d->'ready_at')) from jsonb_array_elements(depts) d where (d->>'ready_at')::timestamptz > now()) end)
+      order by created_at) from app_alliance_buildings where alliance_id=v_aid),'[]'::json),
     'academies',coalesce((select json_agg(json_build_object('key',a.akey,'kind',a.kind,'owner',a.owner_name,'mine',a.owner=v_uid,'name',a.name,'lat',a.lat,'lng',a.lng,
         'rooms',a.rooms,'used',a.own_used+a.ext_used,'ext_used',a.ext_used,'limit',a.lim,'dur',a.dur,'cost',a.cost,
         'my_persons',(select coalesce(sum(persons),0) from app_academy_bookings k where k.akey=a.akey and k.user_id=v_uid and k.ends_at > now()),
@@ -1226,12 +1247,7 @@ begin
   select coalesce(sum(persons),0) into v_mine from app_academy_bookings where akey=p_key and user_id=v_uid and ends_at > now();
   if v_mine + p_persons > a.lim then return json_build_object('error','Limit: höchstens '||a.lim||' Personen gleichzeitig (noch '||greatest(0,a.lim-v_mine)||')'); end if;
   v_ms := round(greatest(259200000, least(604800000, coalesce(p_duration,604800000))) * a.dur);
-  if a.kind='alliance' then
-    v_cost := 150000;
-    if not _take_credits(v_uid, v_cost) then return json_build_object('error','Nicht genug Guthaben (150.000 €)'); end if;
-    update app_alliances set kasse=kasse+v_cost where id=v_aid;
-    insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'lehrgang', v_cost, 'Lehrgang '||left(coalesce(p_course,''),40)||' in '||a.name);
-  end if;
+  if a.kind='alliance' then return json_build_object('error','In der Verbandsakademie schreibt die Lehrgangsleitung Lehrgänge aus – dort anmelden'); end if;
   insert into app_academy_bookings(akey, user_id, course, persons, ends_at) values (p_key, v_uid, left(coalesce(p_course,''),40), p_persons, now()+make_interval(secs=>v_ms/1000.0))
     returning id into v_id;
   return json_build_object('ok',true,'id',v_id,'duration_ms',v_ms,'paid',v_cost,'cost_factor',a.cost);
@@ -1396,6 +1412,107 @@ begin
   if not found then return json_build_object('error','Spielstand noch nicht gespeichert – bitte kurz warten und erneut versuchen'); end if;
   insert into app_code_redemptions(code, user_id) values (c.code, v_uid);
   return json_build_object('ok',true,'code',c.code,'rewards',c.rewards);
+end; $$;
+
+/* ---------- Verbände Teil 4: Verbandslehrgänge, Fachabteilungen im Verbandskrankenhaus ---------- */
+create or replace function ally_courses(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  return json_build_object('can_create',_ally_perm(v_uid,'courses'),'kasse',(select kasse from app_alliances where id=v_aid),
+    'courses',coalesce((select json_agg(json_build_object('id',c.id,'building',c.building_id,'academy',b.name,'course',c.course,'by',u.username,
+      'per_member',c.per_member,'fee',c.fee,'capacity',c.capacity,'starts_at',c.starts_at,'ends_at',c.ends_at,
+      'seats',(select coalesce(sum(persons),0) from app_ally_course_seats s where s.course_id=c.id),
+      'mine',(select coalesce(sum(persons),0) from app_ally_course_seats s where s.course_id=c.id and s.user_id=v_uid),
+      'members',(select coalesce(json_agg(json_build_object('name',su.username,'persons',s.persons) order by s.at),'[]'::json) from app_ally_course_seats s join app_users su on su.id=s.user_id where s.course_id=c.id))
+      order by c.starts_at) from app_ally_courses c join app_alliance_buildings b on b.id=c.building_id left join app_users u on u.id=c.created_by
+      where c.alliance_id=v_aid and c.ends_at > now()),'[]'::json));
+end; $$;
+-- Ausschreiben: Kasse zahlt 150.000 €, belegt einen Lehrsaal bis zum Ende; Start in 1/3/6/12/24 h; Dauer 3–7 Tage
+create or replace function ally_course_create(p_token uuid, p_building uuid, p_course text, p_duration bigint, p_start_h int, p_per_member int, p_fee bigint)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); b app_alliance_buildings; v_start timestamptz; v_id uuid; v_kasse bigint;
+begin
+  if v_aid is null or not _ally_perm(v_uid,'courses') then return json_build_object('error','Keine Berechtigung (Lehrgangsleitung)'); end if;
+  select * into b from app_alliance_buildings where id=p_building and alliance_id=v_aid and type='akademie';
+  if b.id is null then return json_build_object('error','Verbandsakademie nicht gefunden'); end if;
+  if coalesce(p_course,'') !~ '^[A-Za-z0-9_-]{1,40}$' then return json_build_object('error','Ungültiger Lehrgang'); end if;
+  if p_start_h not in (1,3,6,12,24) then return json_build_object('error','Start in 1, 3, 6, 12 oder 24 Stunden'); end if;
+  if coalesce(p_per_member,0) < 1 or p_per_member > 10 then return json_build_object('error','Plätze je Mitglied: 1 bis 10'); end if;
+  if coalesce(p_fee,0) < 0 or p_fee > 100000 then return json_build_object('error','Gebühr je Person: 0 bis 100.000 €'); end if;
+  perform pg_advisory_xact_lock(hashtext('a:'||b.id));
+  if (select count(*) from app_ally_courses where building_id=b.id and ends_at > now()) >= b.rooms then return json_build_object('error','Alle Lehrsäle belegt'); end if;
+  select kasse into v_kasse from app_alliances where id=v_aid for update;
+  if v_kasse < 150000 then return json_build_object('error','Zu wenig in der Verbandskasse (150.000 € nötig)'); end if;
+  update app_alliances set kasse=kasse-150000 where id=v_aid;
+  v_start := now() + make_interval(hours=>p_start_h);
+  insert into app_ally_courses(alliance_id, building_id, course, created_by, per_member, fee, starts_at, ends_at)
+    values (v_aid, b.id, p_course, v_uid, p_per_member, p_fee, v_start, v_start + make_interval(secs=>greatest(259200000, least(604800000, coalesce(p_duration,604800000)))/1000.0))
+    returning id into v_id;
+  insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'lehrgang', -150000, 'Lehrgang '||p_course||' in '||b.name||' ausgeschrieben');
+  insert into app_alliance_radio(alliance_id, user_id, vehicle, status, note) values (v_aid, v_uid, 'Verbandsakademie', null, 'Lehrgang ausgeschrieben: '||p_course||' in '||b.name);
+  return json_build_object('ok',true,'id',v_id);
+end; $$;
+-- Anmelden bis zum Start; Gebühr je Person geht vom gespeicherten Guthaben in die Kasse
+create or replace function ally_course_join(p_token uuid, p_course uuid, p_persons int)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); c app_ally_courses; v_mine int; v_all int; v_fee bigint;
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  select * into c from app_ally_courses where id=p_course and alliance_id=v_aid for update;
+  if c.id is null then return json_build_object('error','Lehrgang nicht gefunden'); end if;
+  if c.starts_at <= now() then return json_build_object('error','Anmeldung geschlossen – der Lehrgang läuft schon'); end if;
+  if coalesce(p_persons,0) < 1 then return json_build_object('error','Mindestens eine Person'); end if;
+  select coalesce(sum(persons),0) into v_all from app_ally_course_seats where course_id=c.id;
+  select coalesce(sum(persons),0) into v_mine from app_ally_course_seats where course_id=c.id and user_id=v_uid;
+  if v_mine + p_persons > c.per_member then return json_build_object('error','Höchstens '||c.per_member||' Personen je Mitglied (noch '||greatest(0,c.per_member-v_mine)||')'); end if;
+  if v_all + p_persons > c.capacity then return json_build_object('error','Nur noch '||greatest(0,c.capacity-v_all)||' Plätze frei'); end if;
+  v_fee := c.fee * p_persons;
+  if v_fee > 0 then
+    if not _take_credits(v_uid, v_fee) then return json_build_object('error','Nicht genug Guthaben ('||v_fee||' €)'); end if;
+    update app_alliances set kasse=kasse+v_fee where id=v_aid;
+    insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'lehrgang', v_fee, 'Anmeldung '||c.course||' ('||p_persons||' Pers.)');
+  end if;
+  insert into app_ally_course_seats(course_id, user_id, persons) values (c.id, v_uid, p_persons)
+    on conflict (course_id, user_id) do update set persons=app_ally_course_seats.persons+excluded.persons;
+  return json_build_object('ok',true,'starts_at',c.starts_at,'ends_at',c.ends_at,'fee',v_fee);
+end; $$;
+-- Absagen vor dem Start, nur ohne Anmeldungen: 150.000 € zurück in die Kasse
+create or replace function ally_course_cancel(p_token uuid, p_course uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); c app_ally_courses;
+begin
+  if v_aid is null or not _ally_perm(v_uid,'courses') then return json_build_object('error','Keine Berechtigung (Lehrgangsleitung)'); end if;
+  select * into c from app_ally_courses where id=p_course and alliance_id=v_aid for update;
+  if c.id is null then return json_build_object('error','Lehrgang nicht gefunden'); end if;
+  if c.starts_at <= now() then return json_build_object('error','Der Lehrgang läuft schon'); end if;
+  if exists(select 1 from app_ally_course_seats where course_id=c.id) then return json_build_object('error','Es sind schon Mitglieder angemeldet'); end if;
+  delete from app_ally_courses where id=c.id;
+  update app_alliances set kasse=kasse+150000 where id=v_aid;
+  insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'lehrgang', 150000, 'Lehrgang '||c.course||' abgesagt');
+  return json_build_object('ok',true);
+end; $$;
+-- Fachabteilung im Verbandskrankenhaus bauen (Recht Finanzen): 500.000 € bzw. 2 Mio. € (Herzkatheter, Stroke Unit, Brandverletzte),
+-- Bauzeit 1 Tag, Abteilungen eines Hauses nacheinander (Bauschlange)
+create or replace function ally_kh_dept(p_token uuid, p_id uuid, p_dept text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); b app_alliance_buildings; v_cost bigint; v_kasse bigint; v_start timestamptz;
+begin
+  if v_aid is null or not _ally_perm(v_uid,'finance') then return json_build_object('error','Keine Berechtigung'); end if;
+  select * into b from app_alliance_buildings where id=p_id and alliance_id=v_aid and type='kh' for update;
+  if b.id is null then return json_build_object('error','Verbandskrankenhaus nicht gefunden'); end if;
+  if b.depts is null then return json_build_object('error','Dieses Krankenhaus hat bereits alle Fachabteilungen'); end if;
+  v_cost := case when p_dept in ('kar','str','bra') then 2000000 when p_dept in ('unf','geb','kin','psy') then 500000 end;
+  if v_cost is null then return json_build_object('error','Unbekannte Fachabteilung'); end if;
+  if exists(select 1 from jsonb_array_elements(b.depts) d where d->>'dept'=p_dept) then return json_build_object('error','Abteilung schon vorhanden oder im Bau'); end if;
+  select kasse into v_kasse from app_alliances where id=v_aid for update;
+  if v_kasse < v_cost then return json_build_object('error','Zu wenig in der Verbandskasse ('||v_cost||' € nötig)'); end if;
+  select greatest(now(), coalesce(max((d->>'ready_at')::timestamptz), now())) into v_start from jsonb_array_elements(b.depts) d;
+  update app_alliances set kasse=kasse-v_cost where id=v_aid;
+  update app_alliance_buildings set depts=depts || jsonb_build_array(jsonb_build_object('dept',p_dept,'ready_at',coalesce(v_start,now())+interval '1 day')) where id=b.id;
+  insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'gebaeude', -v_cost, 'Fachabteilung '||p_dept||' für '||b.name);
+  return json_build_object('ok',true,'ready_at',coalesce(v_start,now())+interval '1 day');
 end; $$;
 
 grant execute on all functions in schema public to anon, authenticated;
