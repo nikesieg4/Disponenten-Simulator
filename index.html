@@ -372,6 +372,18 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .search-wrap{ position:absolute; top:12px; left:12px; z-index:1050; width:300px; max-width:45vw; }
 .search-wrap input{ width:100%; padding:10px 14px; border-radius:30px; border:1px solid var(--border); background:var(--panel); color:var(--text); font-family:var(--font-ui); font-size:13px; box-shadow:var(--shadow); }
 .search-wrap input::placeholder{ color:var(--text-dim); }
+/* Verband */
+.vb-sec{ display:flex; flex-direction:column; gap:8px; }
+.vb-sec h4{ margin:6px 0 0; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); }
+.vb-form{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+.vb-row{ display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.vb-sp{ flex:1; }
+.vb-role{ display:inline-block; margin:1px 4px 1px 0; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; color:var(--rc); border:1px solid var(--rc); background:color-mix(in srgb, var(--rc) 14%, transparent); }
+.vb-check{ display:inline-flex; align-items:center; gap:6px; font-size:13px; }
+.vb-det summary{ cursor:pointer; font-size:12px; color:var(--text-mut); margin-top:4px; }
+.vb-det{ display:flex; flex-direction:column; gap:3px; }
+.vb-ta, .vb-in, .vb-sel{ background:var(--panel-3); border:1px solid var(--border-2); border-radius:8px; color:var(--text); padding:7px 9px; font:inherit; font-size:13px; }
+.vb-ta{ width:100%; box-sizing:border-box; resize:vertical; }
 /* Erweiterungen */
 .ext-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; }
 .ext-card{ border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:6px; background:var(--panel-2); }
@@ -401,7 +413,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .mapfilter-panel input{ accent-color:var(--fire); width:15px; height:15px; margin:0; }
 .mapfilter-actions{ display:flex; gap:6px; margin-top:10px; }
 .mapfilter-actions .btn{ flex:1; }
-#map.hf-stations .f-st, #map.hf-academy .f-ac, #map.hf-hospitals .f-kh,
+#map.hf-stations .f-st, #map.hf-academy .f-ac, #map.hf-hospitals .f-kh, #map.hf-alliance .f-ally,
 #map.hf-m_b .f-m-b, #map.hf-m_th .f-m-th, #map.hf-m_rd .f-m-rd,
 #map.hf-ms_open .f-ms-open, #map.hf-ms_work .f-ms-work,
 #map.hf-v_fw .f-v-fw, #map.hf-v_rd .f-v-rd, #map.hf-routes .f-route,
@@ -572,6 +584,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
       <div class="dropdown-menu hidden" id="topbar-menu">
         <button class="dd-item" id="dd-shop">Shop</button>
         <button class="dd-item" id="dd-bank">Bank</button>
+        <button class="dd-item" id="dd-verband">Verband</button>
         <button class="dd-item" id="dd-save">Speichern</button>
         <button class="dd-item" id="dd-settings">Einstellungen</button>
         <div class="dd-sep"></div>
@@ -597,6 +610,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
         <label><input type="checkbox" data-mf="stations">Feuerwachen</label>
         <label><input type="checkbox" data-mf="academy">Akademie / Leitstelle</label>
         <label><input type="checkbox" data-mf="hospitals">Krankenhäuser</label>
+        <label><input type="checkbox" data-mf="alliance">Verband (andere Mitglieder)</label>
         <h4>Einsätze</h4>
         <label><input type="checkbox" data-mf="m_b">Brand</label>
         <label><input type="checkbox" data-mf="m_th">Technische Hilfe</label>
@@ -693,6 +707,13 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 <div class="modal-bg" id="modal-bank"><div class="modal wide bank-modal">
   <h3>Bank</h3>
   <div class="m-content" id="bank-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
+<div class="modal-bg" id="modal-verband"><div class="modal wide bank-modal">
+  <h3 id="vb-title">Verband</h3>
+  <div class="tabs sv-tabs" id="vb-tabs"></div>
+  <div class="m-content" id="vb-content"></div>
   <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
 
@@ -1148,7 +1169,7 @@ function initMap(){
     attribution:'&copy; OpenStreetMap contributors',
     errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
   }).addTo(map);
-  areaLayer=L.layerGroup().addTo(map);
+  areaLayer=L.layerGroup().addTo(map); allyLayer=L.layerGroup().addTo(map);
   routeLayer=L.layerGroup().addTo(map); stationLayer=L.layerGroup().addTo(map);
   buildingLayer=L.layerGroup().addTo(map);
   missionLayer=L.layerGroup().addTo(map); vehicleLayer=L.layerGroup().addTo(map);
@@ -1587,7 +1608,7 @@ function checkStationsReady(){
   }));
 }
 /* Kartenfilter: ausgeblendete Ebenen als Klassen am Kartencontainer, Auswahl bleibt im Browser */
-const MAP_FILTER_KEYS=['stations','academy','hospitals','m_b','m_th','m_rd','ms_open','ms_work','v_fw','v_rd','routes','areas'];
+const MAP_FILTER_KEYS=['stations','academy','hospitals','alliance','m_b','m_th','m_rd','ms_open','ms_work','v_fw','v_rd','routes','areas'];
 const MAP_FILTER_STORE='leitstelle_mapfilter';
 // Alarmierungsgebiete sind standardmäßig ausgeblendet (ältere Speicherstände: Liste ohne diesen Schalter)
 let mapHidden=(()=>{ try{ const raw=JSON.parse(localStorage.getItem(MAP_FILTER_STORE)||'null');
@@ -1819,10 +1840,210 @@ function settlePayday(){
   if(!state) return; const d=berlinDayKey();
   if(!state.payDayKey){ state.payDayKey=d; return; }
   if(state.payDayKey!==d){
+    const earned=state.earnings;
     if(state.earnings>0){ state.credits+=state.earnings; book('auszahlung','Auszahlung Tageskasse',state.earnings); toast(`Tageseinnahmen gutgeschrieben: +${fmt(state.earnings)} €`,'ok'); }
+    setTimeout(()=>allyAutoDeposit(earned),1500);        // Verband: automatischer Anteil (nach dem Speichern)
     if(state.credits<0){ const z=Math.ceil(-state.credits*CONFIG.overdraftInterest); state.credits-=z; book('zinsen','Dispo-Zinsen (1 Tag)',-z); toast(`Dispo-Zinsen: −${fmt(z)} €`,'warn'); }
     state.earnings=0; state.payDayKey=d; renderTopbar(); saveGame(true);
   }
+}
+
+/* ------------------------- VERBAND ------------------------- */
+// Server hält den Verband; der Browser fragt alle 10 s nach (Gutschriften) und lädt die Karte der Mitglieder alle 60 s
+const ALLY_COLOR='#a78bfa';
+const ALLY_PERMS=[['members','Mitglieder verwalten'],['roles','Rollen verwalten'],['finance','Finanzen'],['moderate','News/Forum/Regeln']];
+let allyInfo={ id:null, autoPct:0 }, allyData=null, allyTab='overview', allySearch='', allyList=[], allyLayer=null, allyMapAt=0;
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+function fmtDate(t){ return new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(t)); }
+async function allyCall(fn,args,okMsg){
+  try{ const r=await rpc(fn,{p_token:AUTH.token,...args}); if(r&&r.error){ toast(r.error,'err'); return null; } if(okMsg) toast(okMsg,'ok'); return r||{}; }
+  catch(e){ toast('Verband: '+errMsg(e),'err'); return null; }
+}
+async function allyPoll(){
+  if(!sb||!AUTH.token||!state||simulating) return;
+  try{
+    const r=await rpc('ally_poll',{p_token:AUTH.token}); if(!r||r.error) return;
+    const changed=(r.alliance||null)!==allyInfo.id; allyInfo.id=r.alliance||null; allyInfo.autoPct=Number(r.auto_pct||0);
+    let got=0; (r.grants||[]).forEach(g=>{ const a=Math.round(g.amount||0); if(a>0){ got+=a; state.credits+=a; book('verband_in',g.note||'Gutschrift',a); } });
+    if(got){ renderTopbar(); toast(`Gutschrift: +${fmt(got)} €`,'ok'); saveGame(true); }
+    if(changed || Date.now()-allyMapAt>60000) allyLoadMap();
+  }catch(e){ /* offline: nächster Versuch in 10 s */ }
+}
+async function allyLoadMap(){
+  if(!allyLayer) return; allyMapAt=Date.now();
+  if(!allyInfo.id){ allyLayer.clearLayers(); return; }
+  let data=null; try{ data=await rpc('ally_map',{p_token:AUTH.token}); }catch(e){ return; }
+  allyLayer.clearLayers(); if(!Array.isArray(data)) return;
+  data.forEach(m=>{
+    (m.stations||[]).forEach(st=>{ if(st.lat==null) return;
+      L.marker([st.lat,st.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[48,52],iconAnchor:[20,48],tooltipAnchor:[0,-44],html:allyStationPin(st)})})
+        .bindTooltip(`${esc(st.name)} · ${esc(m.owner)}${st.ready?'':' (im Bau)'}`,{direction:'top'}).addTo(allyLayer); });
+    (m.buildings||[]).forEach(b=>{ const t=buildingById(b.typeId); if(!t||b.lat==null) return;
+      L.marker([b.lat,b.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:allyBuildingPin(b,t)})})
+        .bindTooltip(`${esc(b.name)} · ${esc(m.owner)}${b.ready?'':' (im Bau)'}`,{direction:'top'}).addTo(allyLayer); });
+  });
+}
+function allyStationPin(st){ const c=st.ready?ALLY_COLOR:'#6b7280';
+  return `<svg viewBox="0 0 48 52" width="48" height="52" aria-hidden="true"><path d="${PIN_PATH}" fill="#151a23" stroke="${c}" stroke-width="2"${st.ready?'':' stroke-dasharray="4 3"'}/><g transform="translate(8 11)"><path d="M3 21V10L12 4.5L21 10V21Z" fill="${c}"/><rect x="7" y="13" width="10" height="8" fill="#151a23"/><path d="M7 15.6H17M7 18.3H17" stroke="${c}" stroke-width="1.3"/></g><rect x="28" y="1" width="18" height="12" rx="4" fill="#0d1017" stroke="#3a4250" stroke-width="1"/><text x="37" y="10" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="#e6ebf2">L${Number(st.level)||1}</text></svg>`; }
+function allyBuildingPin(b,t){ const c=b.ready?ALLY_COLOR:'#6b7280', icon=PIN_ICONS[t.id];
+  return `<svg viewBox="0 0 40 48" width="40" height="48" aria-hidden="true"><path d="M8 2H32A6 6 0 0 1 38 8V30A6 6 0 0 1 32 36H25L20 44L15 36H8A6 6 0 0 1 2 30V8A6 6 0 0 1 8 2Z" fill="#151a23" stroke="${c}" stroke-width="2"${b.ready?'':' stroke-dasharray="4 3"'}/>${icon?`<g transform="translate(8 7)">${icon(c)}</g>`:''}</svg>`; }
+/* Automatischer Anteil der Tageseinnahmen (bei der Auszahlung um 0 Uhr) */
+async function allyAutoDeposit(earned){
+  const pct=allyInfo.id?allyInfo.autoPct:0; if(!(pct>0)||!(earned>0)) return;
+  const amt=Math.floor(earned*pct/100); if(amt<1) return;
+  const r=await allyCall('ally_deposit',{p_amount:amt,p_auto:true});
+  if(r){ state.credits-=amt; book('verband',`Verbandskasse: ${pct} % der Tageseinnahmen`,-amt); renderTopbar(); saveGame(true); }
+}
+
+async function openVerband(){ showModal('modal-verband'); document.getElementById('vb-content').innerHTML='<div class="empty-hint">Lade Verband …</div>'; await allyRefresh(); }
+async function allyRefresh(){
+  const r=await allyCall('ally_overview',{}); if(!r) return;
+  allyData=r; allyInfo.id=r.member?r.alliance.id:null;
+  if(!r.member){ const l=await allyCall('ally_list',{p_search:allySearch}); allyList=Array.isArray(l)?l:[]; }
+  else { const me=r.members.find(m=>m.id===r.me); if(me) allyInfo.autoPct=Number(me.auto_pct||0); }
+  renderVerband(); allyLoadMap();
+}
+function roleChips(ids){ const roles=allyData.roles||[]; return (ids||[]).map(id=>roles.find(r=>r.id===id)).filter(Boolean).sort((a,b)=>a.position-b.position)
+  .map(r=>`<span class="vb-role" style="--rc:${esc(r.color)}">${esc(r.name)}</span>`).join(''); }
+function renderVerband(){
+  const box=document.getElementById('vb-content'), tabs=document.getElementById('vb-tabs'), d=allyData; if(!d) return;
+  document.getElementById('vb-title').textContent=d.member?`${d.alliance.name} [${d.alliance.tag}]`:'Verband';
+  if(!d.member){ tabs.innerHTML=''; box.innerHTML=allyNoMemberHtml(); allyBindNoMember(); return; }
+  const P=d.perms, req=(d.requests||[]).filter(x=>x.kind==='apply').length;
+  const T=[['overview','Übersicht'],['members',`Mitglieder ${d.members.length}`],['roles','Rollen'],['kasse','Kasse'],['stats','Statistik']].concat(P.members?[['requests',`Anfragen${req?' '+req:''}`]]:[]);
+  if(!T.some(t=>t[0]===allyTab)) allyTab='overview';
+  tabs.innerHTML=T.map(([k,n])=>`<button class="tab${k===allyTab?' active':''}" data-vbtab="${k}">${n}</button>`).join('');
+  tabs.querySelectorAll('[data-vbtab]').forEach(b=>b.onclick=()=>{ allyTab=b.dataset.vbtab; renderVerband(); });
+  box.innerHTML=({overview:allyOverviewHtml,members:allyMembersHtml,roles:allyRolesHtml,kasse:allyKasseHtml,stats:allyStatsHtml,requests:allyRequestsHtml}[allyTab])();
+  allyBind();
+}
+function allyNoMemberHtml(){
+  const d=allyData, inv=d.invites||[];
+  return `${inv.length?`<div class="vb-sec"><h4>Einladungen</h4>${inv.map(i=>`<div class="vb-row"><b>${esc(i.name)}</b> <span class="dim">[${esc(i.tag)}]</span>
+      <span class="vb-sp"></span><button class="btn sm primary" data-vbinv="${i.alliance_id}" data-acc="1">Annehmen</button><button class="btn sm ghost" data-vbinv="${i.alliance_id}" data-acc="0">Ablehnen</button></div>`).join('')}</div>`:''}
+    <div class="vb-sec"><h4>Verband gründen</h4>
+      <div class="vb-form"><label class="fld sm"><span>Name</span><input id="vb-new-name" type="text" maxlength="40" placeholder="z. B. Berliner Brandschützer"></label>
+      <label class="fld sm" style="max-width:120px"><span>Kürzel</span><input id="vb-new-tag" type="text" maxlength="5" placeholder="BBS"></label>
+      <button class="btn primary" id="vb-create" ${canAfford(1000000)?'':'disabled'}>Gründen · 1.000.000 €</button></div>
+      <div class="pers-hint">Du kannst in höchstens einem Verband sein. Ein Verband hat bis zu 100 Mitglieder.</div></div>
+    <div class="vb-sec"><h4>Verbände</h4>
+      <div class="vb-form"><label class="fld sm"><span>Suchen</span><input id="vb-search" type="text" value="${esc(allySearch)}" placeholder="Name oder Kürzel (Enter)"></label></div>
+      ${allyList.length?`<table class="lss-tbl"><thead><tr><th>Verband</th><th>Mitglieder</th><th>Beitritt</th><th></th></tr></thead><tbody>${allyList.map(a=>`<tr><td><b>${esc(a.name)}</b> <span class="dim">[${esc(a.tag)}]</span>${a.description?`<div class="pat-dept">${esc(a.description)}</div>`:''}</td>
+        <td class="mono">${a.members}/100</td><td>${a.open?'offen':'Bewerbung'}</td>
+        <td style="text-align:right">${a.applied?'<span class="dim">beworben</span>':`<button class="btn sm" data-vbapply="${a.id}">${a.open?'Beitreten':'Bewerben'}</button>`}</td></tr>`).join('')}</tbody></table>`:'<div class="empty-hint">Keine Verbände gefunden.</div>'}</div>`;
+}
+function allyBindNoMember(){
+  const box=document.getElementById('vb-content');
+  box.querySelectorAll('[data-vbinv]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_request_answer',{p_aid:b.dataset.vbinv,p_user:null,p_accept:b.dataset.acc==='1'},b.dataset.acc==='1'?'Willkommen im Verband':'Einladung abgelehnt')) allyRefresh(); });
+  const c=document.getElementById('vb-create'); if(c) c.onclick=async()=>{
+    const name=document.getElementById('vb-new-name').value.trim(), tag=document.getElementById('vb-new-tag').value.trim();
+    if(!canAfford(1000000)){ toast('Nicht genug Guthaben','err'); return; }
+    await saveGame(true);                                  // Server prüft das gespeicherte Guthaben
+    const r=await allyCall('ally_create',{p_name:name,p_tag:tag},'Verband gegründet');
+    if(r){ state.credits-=r.cost||1000000; book('verband',`Verband „${name}“ gegründet`,-(r.cost||1000000)); renderTopbar(); saveGame(true); allyTab='overview'; allyRefresh(); } };
+  const s=document.getElementById('vb-search'); if(s) s.onkeydown=e=>{ if(e.key==='Enter'){ allySearch=s.value.trim(); allyRefresh(); } };
+  box.querySelectorAll('[data-vbapply]').forEach(b=>b.onclick=async()=>{ const r=await allyCall('ally_apply',{p_aid:b.dataset.vbapply}); if(r){ toast(r.joined?'Willkommen im Verband':'Bewerbung gesendet','ok'); allyRefresh(); } });
+}
+function allyOverviewHtml(){
+  const d=allyData, a=d.alliance, P=d.perms, me=d.members.find(m=>m.id===d.me)||{}, others=d.members.filter(m=>m.id!==d.me);
+  return `<div class="bank-cards">
+      <div class="bank-card"><div class="k">Verbandskasse</div><div class="v">${fmt(a.kasse)} €</div></div>
+      <div class="bank-card"><div class="k">Mitglieder</div><div class="v">${d.members.length}/100</div><div class="s">${a.open?'offen für alle':'Beitritt per Bewerbung'}</div></div>
+      <div class="bank-card"><div class="k">Meine Einzahlungen</div><div class="v">${fmt(me.total||0)} €</div><div class="s">heute ${fmt(me.today||0)} € · 30 Tage ${fmt(me.month||0)} €</div></div>
+    </div>
+    <div class="vb-sec"><h4>Beschreibung</h4>${P.members?`<textarea id="vb-desc" maxlength="500" rows="3" class="vb-ta">${esc(a.description)}</textarea>
+      <div class="vb-form"><label class="vb-check"><input type="checkbox" id="vb-open" ${a.open?'checked':''}> Offen: Spieler treten ohne Bewerbung bei</label><span class="vb-sp"></span><button class="btn sm" id="vb-save-info">Speichern</button></div>`
+      :`<div class="pers-hint">${esc(a.description)||'Keine Beschreibung.'}</div>`}</div>
+    <div class="vb-sec"><h4>Einzahlen</h4>
+      <div class="vb-form"><label class="fld sm"><span>Betrag (€)</span><input id="vb-dep" type="number" min="1" step="10000" placeholder="100000"></label><button class="btn primary" id="vb-dep-btn">Einzahlen</button>
+      <label class="fld sm" style="max-width:220px"><span>Automatisch von den Tageseinnahmen (%)</span><input id="vb-auto" type="number" min="0" max="10" step="0.5" value="${Number(me.auto_pct||0)}"></label><button class="btn" id="vb-auto-btn">Übernehmen</button></div>
+      <div class="pers-hint">Der automatische Anteil wird bei der Auszahlung der Tageskasse um 0 Uhr eingezahlt (0–10 %).</div></div>
+    <div class="vb-sec"><h4>Mitgliedschaft</h4><div class="vb-form">${P.owner?`
+      <label class="fld sm"><span>Leitung übertragen an</span><select id="vb-transfer" class="vb-sel">${others.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label>
+      <button class="btn" id="vb-transfer-btn" ${others.length?'':'disabled'}>Übertragen</button><button class="btn danger" id="vb-dissolve">Verband auflösen</button>`
+      :`<button class="btn danger" id="vb-leave">Verband verlassen</button>`}</div></div>`;
+}
+function allyMembersHtml(){
+  const d=allyData, P=d.perms, canEdit=m=>m.id!==d.me&&(P.owner||m.rank>P.rank);
+  const roles=(d.roles||[]).filter(r=>P.owner||r.position>P.rank);
+  return `${P.members?`<div class="vb-form"><label class="fld sm"><span>Spieler einladen</span><input id="vb-inv-name" type="text" placeholder="Benutzername"></label><button class="btn" id="vb-inv-btn">Einladen</button></div>`:''}
+    <div class="lss-scroll"><table class="lss-tbl"><thead><tr><th>Mitglied</th><th>Rollen</th><th>Heute</th><th>30 Tage</th><th>Gesamt</th><th></th></tr></thead><tbody>${d.members.map(m=>`<tr>
+      <td><b>${esc(m.name)}</b>${m.id===d.alliance.owner?' <span class="vb-role" style="--rc:#f59e0b">Gründer</span>':''}<div class="pat-dept">seit ${fmtDate(m.joined_at)}</div></td>
+      <td>${roleChips(m.roles)||'<span class="dim">—</span>'}${P.roles&&canEdit(m)?`<details class="vb-det"><summary>Rollen ändern</summary>${roles.map(r=>`<label class="vb-check"><input type="checkbox" data-mr="${m.id}" value="${r.id}" ${m.roles.includes(r.id)?'checked':''}> ${esc(r.name)}</label>`).join('')}<button class="btn sm" data-mrsave="${m.id}">Speichern</button></details>`:''}</td>
+      <td class="mono">${fmt(m.today)} €</td><td class="mono">${fmt(m.month)} €</td><td class="mono">${fmt(m.total)} €</td>
+      <td style="text-align:right">${P.members&&canEdit(m)?`<button class="btn sm danger" data-kick="${m.id}">Entfernen</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function allyRolesHtml(){
+  const d=allyData, P=d.perms, mine=r=>P.owner||r.position>P.rank;
+  if(!P.roles) return `<div class="lss-scroll"><table class="lss-tbl"><thead><tr><th>Rolle</th><th>Rechte</th></tr></thead><tbody>${d.roles.map(r=>`<tr><td><span class="vb-role" style="--rc:${esc(r.color)}">${esc(r.name)}</span></td><td class="dim">${r.perms.map(p=>ALLY_PERMS.find(x=>x[0]===p)?.[1]).filter(Boolean).join(', ')||'—'}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="pers-hint">Kleinere Position = höher. Du kannst nur Rollen unterhalb deiner eigenen höchsten Rolle bearbeiten und vergeben (wie bei Discord).</div>
+    <div class="lss-scroll"><table class="lss-tbl"><thead><tr><th>Name</th><th>Farbe</th><th>Position</th>${ALLY_PERMS.map(p=>`<th>${p[1]}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${d.roles.map(r=>{ const e=mine(r); return `<tr data-role="${r.id}"><td><input class="vb-in" data-k="name" value="${esc(r.name)}" maxlength="30" ${e?'':'disabled'}></td>
+      <td><input type="color" data-k="color" value="${esc(r.color)}" ${e?'':'disabled'}></td><td><input class="vb-in" style="width:64px" type="number" min="1" max="999" data-k="position" value="${r.position}" ${e?'':'disabled'}></td>
+      ${ALLY_PERMS.map(p=>`<td><input type="checkbox" data-perm="${p[0]}" ${r.perms.includes(p[0])?'checked':''} ${e?'':'disabled'}></td>`).join('')}
+      <td>${e?`<label class="vb-check"><input type="checkbox" data-k="delete"> löschen</label>`:''}</td></tr>`; }).join('')}
+    <tr data-role=""><td><input class="vb-in" data-k="name" placeholder="Neue Rolle" maxlength="30"></td><td><input type="color" data-k="color" value="#a78bfa"></td>
+      <td><input class="vb-in" style="width:64px" type="number" min="1" max="999" data-k="position" value="${Math.max(P.rank+1,50)}"></td>${ALLY_PERMS.map(p=>`<td><input type="checkbox" data-perm="${p[0]}"></td>`).join('')}<td></td></tr>
+    </tbody></table></div><div class="vb-form"><span class="vb-sp"></span><button class="btn primary" id="vb-roles-save">Rollen speichern</button></div>`;
+}
+const ALLY_KIND={einzahlung:'Einzahlung',auto:'Automatisch',auszahlung:'Auszahlung',gruendung:'Gründung',beitritt:'Beitritt',austritt:'Austritt'};
+function allyKasseHtml(){
+  const d=allyData, P=d.perms, a=d.alliance, lim=Math.min(a.payout_limit,2000000);
+  const eligible=d.members.filter(m=>Date.now()-new Date(m.joined_at).getTime()>=3*86400000);
+  return `<div class="bank-cards"><div class="bank-card"><div class="k">Kassenstand</div><div class="v">${fmt(a.kasse)} €</div></div>
+      <div class="bank-card"><div class="k">Auszahlungslimit</div><div class="v">${fmt(lim)} €</div><div class="s">je Mitglied in 7 Tagen, ab 3 Tagen Mitgliedschaft</div></div></div>
+    ${P.finance?`<div class="vb-sec"><h4>Auszahlung an ein Mitglied</h4><div class="vb-form">
+      <label class="fld sm"><span>Mitglied</span><select id="vb-pay-to" class="vb-sel">${eligible.map(m=>`<option value="${m.id}">${esc(m.name)} (noch ${fmt(Math.max(0,lim-m.paid_week))} €)</option>`).join('')}</select></label>
+      <label class="fld sm"><span>Betrag (€)</span><input id="vb-pay-amt" type="number" min="1" step="10000"></label>
+      <label class="fld sm"><span>Notiz</span><input id="vb-pay-note" type="text" maxlength="100" placeholder="z. B. Starthilfe"></label>
+      <button class="btn primary" id="vb-pay-btn" ${eligible.length?'':'disabled'}>Auszahlen</button></div>
+      <div class="vb-form"><label class="fld sm" style="max-width:240px"><span>Limit je Mitglied/Woche (max. 2 Mio. €)</span><input id="vb-lim" type="number" min="0" max="2000000" step="50000" value="${a.payout_limit}"></label>
+      <label class="vb-check"><input type="checkbox" id="vb-rank" ${a.ranking_public?'checked':''}> Rangliste für alle sichtbar</label><span class="vb-sp"></span><button class="btn sm" id="vb-fin-save">Speichern</button></div></div>`:''}
+    <div class="vb-sec"><h4>Kassenbuch</h4><div class="lss-scroll"><table class="lss-tbl"><thead><tr><th>Zeit</th><th>Art</th><th>Mitglied</th><th>Betrag</th><th>Notiz</th></tr></thead><tbody>
+      ${(d.ledger||[]).map(l=>`<tr><td class="mono">${fmtDate(l.created_at)}</td><td>${ALLY_KIND[l.kind]||esc(l.kind)}</td><td>${esc(l.name||'—')}</td>
+        <td class="mono" style="color:${l.amount>0?'var(--ok)':l.amount<0?'#f87171':'inherit'}">${l.amount?(l.amount>0?'+':'−')+fmt(Math.abs(l.amount))+' €':''}</td><td class="dim">${esc(l.note)}</td></tr>`).join('')||'<tr><td colspan="5" class="lss-empty">Noch keine Buchungen.</td></tr>'}
+    </tbody></table></div></div>`;
+}
+function allyStatsHtml(){
+  const d=allyData, s=d.stats, rank=d.members.slice().sort((a,b)=>b.total-a.total);
+  return `<div class="bank-cards"><div class="bank-card"><div class="k">Eingezahlt heute</div><div class="v">${fmt(s.in_today)} €</div></div>
+      <div class="bank-card"><div class="k">Letzte 30 Tage</div><div class="v">${fmt(s.in_month)} €</div></div>
+      <div class="bank-card"><div class="k">Insgesamt</div><div class="v">${fmt(s.in_total)} €</div></div>
+      <div class="bank-card"><div class="k">Ausgezahlt</div><div class="v">${fmt(s.out_total)} €</div></div></div>
+    <div class="vb-sec"><h4>Rangliste der Einzahlungen</h4>${d.ranking_visible?`${d.alliance.ranking_public?'':'<div class="pers-hint">Nur für die Finanz-Leitung sichtbar.</div>'}
+      <table class="lss-tbl"><thead><tr><th>#</th><th>Mitglied</th><th>Heute</th><th>30 Tage</th><th>Gesamt</th></tr></thead><tbody>${rank.map((m,i)=>`<tr><td class="mono">${i+1}</td><td>${esc(m.name)}</td><td class="mono">${fmt(m.today)} €</td><td class="mono">${fmt(m.month)} €</td><td class="mono">${fmt(m.total)} €</td></tr>`).join('')}</tbody></table>`
+      :'<div class="pers-hint">Die Leitung hat die Rangliste ausgeblendet.</div>'}</div>`;
+}
+function allyRequestsHtml(){
+  const r=allyData.requests||[], ap=r.filter(x=>x.kind==='apply'), iv=r.filter(x=>x.kind==='invite');
+  return `<div class="vb-sec"><h4>Bewerbungen</h4>${ap.length?ap.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span><span class="vb-sp"></span>
+      <button class="btn sm primary" data-req="${x.user_id}" data-acc="1">Annehmen</button><button class="btn sm ghost" data-req="${x.user_id}" data-acc="0">Ablehnen</button></div>`).join(''):'<div class="pers-hint">Keine offenen Bewerbungen.</div>'}</div>
+    <div class="vb-sec"><h4>Offene Einladungen</h4>${iv.length?iv.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span></div>`).join(''):'<div class="pers-hint">Keine.</div>'}</div>`;
+}
+function allyBind(){
+  const box=document.getElementById('vb-content'), q=id=>document.getElementById(id), val=id=>q(id)?.value;
+  const on=(id,fn)=>{ const e=q(id); if(e) e.onclick=fn; };
+  on('vb-save-info',async()=>{ if(await allyCall('ally_settings',{p_settings:{description:val('vb-desc'),open:q('vb-open').checked}},'Gespeichert')) allyRefresh(); });
+  on('vb-dep-btn',async()=>{ const amt=Math.floor(Number(val('vb-dep'))); if(!(amt>0)){ toast('Betrag eingeben','warn'); return; }
+    if(amt>state.credits){ toast('Nicht genug Guthaben','err'); return; }
+    await saveGame(true); const r=await allyCall('ally_deposit',{p_amount:amt,p_auto:false},`${fmt(amt)} € eingezahlt`);
+    if(r){ state.credits-=amt; book('verband','Einzahlung Verbandskasse',-amt); renderTopbar(); saveGame(true); allyRefresh(); } });
+  on('vb-auto-btn',async()=>{ const p=Math.max(0,Math.min(10,Number(val('vb-auto'))||0)); if(await allyCall('ally_auto_pct',{p_pct:p},`Automatischer Anteil: ${p} %`)){ allyInfo.autoPct=p; allyRefresh(); } });
+  on('vb-leave',async()=>{ if(!confirm('Verband wirklich verlassen?')) return; if(await allyCall('ally_leave',{},'Verband verlassen')){ allyInfo.id=null; allyRefresh(); } });
+  on('vb-transfer-btn',async()=>{ const o=q('vb-transfer'); if(!o||!confirm(`Leitung an ${o.selectedOptions[0].text} übertragen?`)) return; if(await allyCall('ally_transfer',{p_user:o.value},'Leitung übertragen')) allyRefresh(); });
+  on('vb-dissolve',async()=>{ if(!confirm('Verband auflösen? Die Kasse geht verloren.')) return; if(await allyCall('ally_dissolve',{},'Verband aufgelöst')){ allyInfo.id=null; allyRefresh(); } });
+  on('vb-inv-btn',async()=>{ const n=(val('vb-inv-name')||'').trim(); if(n && await allyCall('ally_invite',{p_username:n},`${n} eingeladen`)) allyRefresh(); });
+  box.querySelectorAll('[data-kick]').forEach(b=>b.onclick=async()=>{ if(!confirm('Mitglied entfernen?')) return; if(await allyCall('ally_kick',{p_user:b.dataset.kick},'Mitglied entfernt')) allyRefresh(); });
+  box.querySelectorAll('[data-mrsave]').forEach(b=>b.onclick=async()=>{ const uid=b.dataset.mrsave, ids=[...box.querySelectorAll(`[data-mr="${uid}"]:checked`)].map(x=>x.value);
+    if(await allyCall('ally_member_roles',{p_user:uid,p_role_ids:ids},'Rollen gespeichert')) allyRefresh(); });
+  on('vb-roles-save',async()=>{ const roles=[...box.querySelectorAll('[data-role]')].map(tr=>{ const g=k=>tr.querySelector(`[data-k="${k}"]`);
+      return { id:tr.dataset.role, name:g('name').value.trim(), color:g('color').value, position:Number(g('position').value)||100,
+        perms:[...tr.querySelectorAll('[data-perm]:checked')].map(x=>x.dataset.perm), delete:!!g('delete')?.checked }; }).filter(r=>r.id||r.name);
+    if(await allyCall('ally_roles_save',{p_roles:roles},'Rollen gespeichert')) allyRefresh(); });
+  on('vb-pay-btn',async()=>{ const amt=Math.floor(Number(val('vb-pay-amt'))); if(!(amt>0)){ toast('Betrag eingeben','warn'); return; }
+    if(await allyCall('ally_payout',{p_user:val('vb-pay-to'),p_amount:amt,p_note:val('vb-pay-note')||''},`${fmt(amt)} € ausgezahlt`)) allyRefresh(); });
+  on('vb-fin-save',async()=>{ if(await allyCall('ally_settings',{p_settings:{payout_limit:Math.floor(Number(val('vb-lim'))||0),ranking_public:q('vb-rank').checked}},'Gespeichert')) allyRefresh(); });
+  box.querySelectorAll('[data-req]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_request_answer',{p_aid:allyData.alliance.id,p_user:b.dataset.req,p_accept:b.dataset.acc==='1'},b.dataset.acc==='1'?'Aufgenommen':'Abgelehnt')) allyRefresh(); });
 }
 
 /* ------------------------- FUNK ------------------------- */
@@ -2188,6 +2409,7 @@ const BOOK_CATS={
   fahrzeug:{name:'Fahrzeuge',kind:'out'}, gebaeude:{name:'Gebäude',kind:'out'}, ausbau:{name:'Ausbau',kind:'out'},
   personal:{name:'Personal',kind:'out'}, lehrgang:{name:'Lehrgänge',kind:'out'}, zinsen:{name:'Dispo-Zinsen',kind:'out'},
   korrektur:{name:'Korrektur (Server)',kind:'out'}, erweiterung:{name:'Erweiterungen',kind:'out'},
+  verband:{name:'Verband (Einzahlungen)',kind:'out'}, verband_in:{name:'Verband (Auszahlungen)',kind:'in'},
   auszahlung:{name:'Auszahlung Tageskasse',kind:'transfer'} };
 const LEDGER_MAX=500;
 function book(cat,text,amt){
@@ -3298,6 +3520,7 @@ document.getElementById('btn-menu').onclick=(e)=>{ e.stopPropagation(); document
 document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-wrap'); if(w && !w.contains(e.target)) closeMenu(); });
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
 document.getElementById('dd-bank').onclick=()=>{ closeMenu(); renderBank(); showModal('modal-bank'); };
+document.getElementById('dd-verband').onclick=()=>{ closeMenu(); openVerband(); };
 document.getElementById('dd-save').onclick=()=>{ closeMenu(); saveGame(); };
 document.getElementById('dd-settings').onclick=()=>{ closeMenu(); openSettings(); };
 document.getElementById('dd-logout').onclick=()=>{ closeMenu(); doLogout(); };
@@ -3398,6 +3621,7 @@ async function startGame(){
     window.addEventListener('beforeunload',()=>saveGame(true));
     document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });   // zurück im Tab: sofort nachholen
     setInterval(liveMissionModal,500);
+    setInterval(allyPoll,10000); setTimeout(allyPoll,2000);
     gameStarted=true;
   } else { rebuildEverything(); }
   const off=pendingOfflineMs; pendingOfflineMs=0; lastTick=Date.now();
