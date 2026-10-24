@@ -382,6 +382,14 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .vb-form{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
 .vb-row{ display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
 .vb-sp{ flex:1; }
+.vb-post{ display:flex; flex-direction:column; gap:4px; padding:9px 11px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.vb-post.me{ border-color:color-mix(in srgb, #a78bfa 45%, var(--border)); }
+.vb-post-h{ display:flex; align-items:baseline; gap:8px; font-size:13px; }
+.vb-post-h .dim{ font-size:11px; }
+.vb-post-b{ font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+.vb-click{ cursor:pointer; }
+.vb-row .mono{ white-space:nowrap; }
+.vb-click:hover td, .vb-click.sel td{ background:var(--panel-3); }
 .vb-role{ display:inline-block; margin:1px 4px 1px 0; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; color:var(--rc); border:1px solid var(--rc); background:color-mix(in srgb, var(--rc) 14%, transparent); }
 .vb-check{ display:inline-flex; align-items:center; gap:6px; font-size:13px; }
 .vb-det summary{ cursor:pointer; font-size:12px; color:var(--text-mut); margin-top:4px; }
@@ -1043,7 +1051,8 @@ function serializeObj(){ return {
   stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null,turnout:s.turnout||0,area:s.area||null,exts:s.exts||[]})),
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
-  buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null})),
+  buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null,allyShare:b.allyShare||null})),
+  allyCourses:state.allyCourses||[],
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[],patients:m.patients||[],tna:!!m.tna})),
 };}
 let saveInFlight=false;
@@ -1131,6 +1140,7 @@ function applyLoaded(data){
     if(!Array.isArray(nb.exts)){                    // Umstieg: Akademie-Level wird zu Lehrsälen (Erweiterung)
       nb.exts=[]; if(t.isAcademy){ for(let i=1;i<(nb.level||1);i++) nb.exts.push({key:'saal',readyAt:0}); nb.level=1; } }
     return nb; });
+  state.allyCourses=Array.isArray(data.allyCourses)?data.allyCourses:[];
   finishDueCourses(Date.now());
   pendingOfflineMs = data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0;
   idCounter=Date.now()%100000;
@@ -1336,6 +1346,7 @@ function startBuildPlacement(){
 
 function onMapClick(e){
   if(areaEdit) return;
+  if(allyPlace){ allyPlaceAt(e.latlng); return; }
   if(!buildMode || !pendingBuild) return;
   const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
   const cost=pendingBuild.cost??b.cost;
@@ -1710,9 +1721,12 @@ function rollPatients(t){
   return Array.from({length:n},()=>mk(Math.random()<f[2], f[3]));
 }
 function patientsOpen(m){ return (m.patients||[]).filter(p=>p.state!=='done'); }
-function hospitalById(id){ return HOSPITALS.find(h=>h.id===id); }
+let allyHospitals=[];                                    // Verbandskrankenhäuser (ally_assets)
+function hospitalById(id){ return HOSPITALS.find(h=>h.id===id) || allyHospitals.find(h=>h.id===id) || khSnapshot(id); }
+/* Verbandskrankenhaus nach Austritt/Abriss: Ziel aus dem laufenden Transport */
+function khSnapshot(id){ const v=state.vehicles.find(x=>x.transport && x.transport.khId===id && x.transport.kh); return v ? { id, ...v.transport.kh, dept:[] } : undefined; }
 function hospitalsFor(p, from){
-  return HOSPITALS.map(h=>({ h, km:distM(from,h)/1000, ok:h.dept.includes(p.dept) })).sort((a,b)=>(b.ok-a.ok)||(a.km-b.km));
+  return HOSPITALS.concat(allyHospitals).map(h=>({ h, km:distM(from,h)/1000, ok:h.dept.includes(p.dept) })).sort((a,b)=>(b.ok-a.ok)||(a.km-b.km));
 }
 /* Versorgung am Einsatzort, Status 5 bei Transportbereitschaft */
 function tickPatients(gm){
@@ -1767,7 +1781,7 @@ async function startTransport(m,p,khId){
   p.state='transport'; p.khId=khId;
   const nef=p.nefId&&state.vehicles.find(x=>x.id===p.nefId);
   m.assigned=m.assigned.filter(id=>id!==v.id);
-  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId, na:!!(p.na||p.stemo), fromLat:m.lat, fromLng:m.lng };
+  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId, na:!!(p.na||p.stemo), fromLat:m.lat, fromLng:m.lng, kh:h.ally?{name:h.name,lat:h.lat,lng:h.lng}:null };
   funk(v,7,`Transport → ${h.name}${p.na?' (mit Notarzt)':''}`);
   if(nef){ m.assigned=m.assigned.filter(id=>id!==nef.id); if(!patientsOpen(m).some(q=>q!==p && q.nefId===nef.id)) releaseVehicle(nef); }
   refreshVehicleMarker(v); renderVehicles(); renderMissionsThrottled();
@@ -1900,16 +1914,18 @@ async function allyPoll(){
 }
 async function allyLoadMap(){
   if(!allyLayer) return; allyMapAt=Date.now();
-  if(!allyInfo.id){ allyLayer.clearLayers(); return; }
+  if(!allyInfo.id){ allyLayer.clearLayers(); allyAssets={ buildings:[], academies:[] }; allyHospitals=[]; return; }
   let data=null; try{ data=await rpc('ally_map',{p_token:AUTH.token}); }catch(e){ return; }
-  allyLayer.clearLayers(); if(!Array.isArray(data)) return;
+  await allyLoadAssets();
+  allyLayer.clearLayers(); allyDrawBuildings(); if(!Array.isArray(data)) return;
   data.forEach(m=>{
     (m.stations||[]).forEach(st=>{ if(st.lat==null) return;
       L.marker([st.lat,st.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[48,52],iconAnchor:[20,48],tooltipAnchor:[0,-44],html:allyStationPin(st)})})
         .bindTooltip(`${esc(st.name)} · ${esc(m.owner)}${st.ready?'':' (im Bau)'}`,{direction:'top'}).addTo(allyLayer); });
     (m.buildings||[]).forEach(b=>{ const t=buildingById(b.typeId); if(!t||b.lat==null) return;
       L.marker([b.lat,b.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:allyBuildingPin(b,t)})})
-        .bindTooltip(`${esc(b.name)} · ${esc(m.owner)}${b.ready?'':' (im Bau)'}`,{direction:'top'}).addTo(allyLayer); });
+        .bindTooltip(`${esc(b.name)} · ${esc(m.owner)}${b.ready?'':' (im Bau)'}${b.shared?' · für den Verband freigegeben':''}`,{direction:'top'}).addTo(allyLayer)
+        .on('click',()=>{ if(b.shared){ allyTab='academies'; openVerband(); } }); });
   });
 }
 function allyStationPin(st){ const c=st.ready?ALLY_COLOR:'#6b7280';
@@ -1944,7 +1960,7 @@ async function allyAutoDeposit(earned){
   if(r){ state.credits-=amt; book('verband',`Verbandskasse: ${pct} % der Tageseinnahmen`,-amt); renderTopbar(); saveGame(true); }
 }
 
-async function openVerband(){ showModal('modal-verband'); document.getElementById('vb-content').innerHTML='<div class="empty-hint">Lade Verband …</div>'; await allyRefresh(); }
+async function openVerband(){ showModal('modal-verband'); document.getElementById('vb-content').innerHTML='<div class="empty-hint">Lade Verband …</div>'; await allyRefresh(); allyTabLoad(); }
 async function allyRefresh(){
   const r=await allyCall('ally_overview',{}); if(!r) return;
   allyData=r; allyInfo.id=r.member?r.alliance.id:null;
@@ -1961,13 +1977,14 @@ function renderVerband(){
   const P=d.perms, req=(d.requests||[]).filter(x=>x.kind==='apply').length;
   if(allyTab==='chat') allyChatSeen=allyChatAfter;
   const un=allyUnread();
-  const T=[['overview','Übersicht'],['chat',`Chat${un?' '+un:''}`],['members',`Mitglieder ${d.members.length}`],['roles','Rollen'],['kasse','Kasse'],['stats','Statistik']].concat(P.members||P.ban?[['requests',`Anfragen${req?' '+req:''}`]]:[]);
+  const T=[['overview','Übersicht'],['news','News'],['chat',`Chat${un?' '+un:''}`],['forum','Forum'],['rules','Regeln'],['members',`Mitglieder ${d.members.length}`],['roles','Rollen'],['kasse','Kasse'],['stats','Statistik'],['academies','Akademien'],['buildings','Gebäude']].concat(P.members||P.ban?[['requests',`Anfragen${req?' '+req:''}`]]:[]);
   if(allyTab==='chat'){ allyChatSeen=allyChatAfter; allyUnreadBadge(); }
   if(!T.some(t=>t[0]===allyTab)) allyTab='overview';
   tabs.innerHTML=T.map(([k,n])=>`<button class="tab${k===allyTab?' active':''}" data-vbtab="${k}">${n}</button>`).join('');
-  tabs.querySelectorAll('[data-vbtab]').forEach(b=>b.onclick=()=>{ allyTab=b.dataset.vbtab; renderVerband(); });
-  box.innerHTML=({overview:allyOverviewHtml,chat:allyChatHtml,members:allyMembersHtml,roles:allyRolesHtml,kasse:allyKasseHtml,stats:allyStatsHtml,requests:allyRequestsHtml}[allyTab])();
-  allyBind();
+  tabs.querySelectorAll('[data-vbtab]').forEach(b=>b.onclick=()=>{ if(b.dataset.vbtab==='forum'&&allyTab==='forum'){ allyThreadId=null; allyThread=null; } allyTab=b.dataset.vbtab; renderVerband(); allyTabLoad(); });
+  box.innerHTML=({overview:allyOverviewHtml,news:allyNewsHtml,chat:allyChatHtml,forum:allyForumHtml,rules:allyRulesHtml,members:allyMembersHtml,roles:allyRolesHtml,kasse:allyKasseHtml,stats:allyStatsHtml,
+    academies:allyAcademiesHtml,buildings:allyBuildingsHtml,requests:allyRequestsHtml}[allyTab])();
+  allyBind(); allyBind3();
 }
 function allyNoMemberHtml(){
   const d=allyData, inv=d.invites||[];
@@ -2058,7 +2075,7 @@ function allyRolesHtml(){
       <td><input class="vb-in" style="width:64px" type="number" min="1" max="999" data-k="position" value="${Math.max(P.rank+1,50)}"></td>${ALLY_PERMS.map(p=>`<td><input type="checkbox" data-perm="${p[0]}"></td>`).join('')}<td></td></tr>
     </tbody></table></div><div class="vb-form"><span class="vb-sp"></span><button class="btn primary" id="vb-roles-save">Rollen speichern</button></div>`;
 }
-const ALLY_KIND={einzahlung:'Einzahlung',auto:'Automatisch',auszahlung:'Auszahlung',gruendung:'Gründung',beitritt:'Beitritt',austritt:'Austritt',bann:'Bann'};
+const ALLY_KIND={einzahlung:'Einzahlung',auto:'Automatisch',auszahlung:'Auszahlung',gruendung:'Gründung',beitritt:'Beitritt',austritt:'Austritt',bann:'Bann',gebaeude:'Gebäude',lehrgang:'Lehrgang'};
 function allyKasseHtml(){
   const d=allyData, P=d.perms, a=d.alliance, lim=Math.min(a.payout_limit,2000000);
   const eligible=d.members.filter(m=>Date.now()-new Date(m.joined_at).getTime()>=3*86400000);
@@ -2222,7 +2239,7 @@ async function smTransport(m,p,v){
   const list=hospitalsFor(p,m), best=list.find(x=>x.ok)||list[0]; if(!best) return;
   const h=best.h; p.state='transport'; p.khId=h.id; smPatientEvent(m.id,p.id,'transport');
   m.assigned=m.assigned.filter(id=>id!==v.id);
-  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId:h.id, na:!!p.na, fromLat:m.lat, fromLng:m.lng };
+  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId:h.id, na:!!p.na, fromLat:m.lat, fromLng:m.lng, kh:h.ally?{name:h.name,lat:h.lat,lng:h.lng}:null };
   funk(v,7,`Transport → ${h.name}${p.na?' (mit Notarzt)':''} · Verbandseinsatz`);
   refreshVehicleMarker(v); renderVehicles();
   const route=await getRoute({lat:v.lat,lng:v.lng},{lat:h.lat,lng:h.lng});
@@ -2293,6 +2310,174 @@ async function shareMission(m){
   openMissionId=id; renderMissions(); renderMissionModal(); saveGame(true);
   smSync();
 }
+
+/* ---------- Verbände Teil 3: News, Regeln, Forum, Akademien im Verband, Verbandsgebäude ---------- */
+const VB_BUILD={ kh:{ name:'Verbandskrankenhaus', cost:3000000, desc:'Alle Fachabteilungen. Alle Mitglieder können Patienten hierher fahren.' },
+  akademie:{ name:'Verbandsakademie', cost:2500000, roomCost:1000000, maxRooms:4, desc:'Lehrgänge für alle Mitglieder. Jeder Lehrgang kostet 150.000 €, das Geld fließt in die Verbandskasse.' } };
+const VB_COURSE_FEE=150000;
+let allyAssets={ buildings:[], academies:[] }, allyBoard=null, allyForum=null, allyThread=null, allyThreadId=null, allyPlace=null;
+let acadSel={ key:null, station:null, course:null, people:new Set() };
+async function allyLoadAssets(){
+  if(!allyInfo.id){ allyAssets={ buildings:[], academies:[] }; allyHospitals=[]; return; }
+  try{ const r=await rpc('ally_assets',{p_token:AUTH.token}); if(r && !r.error){ allyAssets=r;
+    allyHospitals=(r.buildings||[]).filter(b=>b.type==='kh').map(b=>({ id:'ah:'+b.id, name:b.name, lat:b.lat, lng:b.lng, dept:Object.keys(DEPTS), ally:true })); } }catch(e){}
+}
+function allyVbPin(type){ const icon=type==='kh'
+    ? c=>`<rect x="4" y="5" width="16" height="16" rx="1.5" fill="${c}"/><path d="M12 7.5V14.5M8.5 11H15.5" stroke="#151a23" stroke-width="2.6"/>` : PIN_ICONS.academy;
+  return `<svg viewBox="0 0 40 48" width="40" height="48" aria-hidden="true"><path d="M8 2H32A6 6 0 0 1 38 8V30A6 6 0 0 1 32 36H25L20 44L15 36H8A6 6 0 0 1 2 30V8A6 6 0 0 1 8 2Z" fill="#2a2140" stroke="${ALLY_COLOR}" stroke-width="2.5"/><g transform="translate(8 7)">${icon(ALLY_COLOR)}</g></svg>`; }
+function allyDrawBuildings(){
+  (allyAssets.buildings||[]).forEach(b=>{
+    const m=L.marker([b.lat,b.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:allyVbPin(b.type)})})
+      .bindTooltip(`${esc(b.name)} · ${VB_BUILD[b.type]?.name||''}${b.type==='akademie'?` · ${b.rooms} Lehrsaal${b.rooms>1?'e':''}`:''}`,{direction:'top'}).addTo(allyLayer);
+    m.on('click',()=>{ if(b.type==='akademie'){ acadSel.key='a:'+b.id; allyTab='academies'; } else allyTab='buildings'; openVerband(); });
+  });
+}
+/* Bau eines Verbandsgebäudes: Ort per Klick auf die Karte */
+function allyStartPlace(type,name){
+  allyPlace={ type, name }; hideModal('modal-verband');
+  const sp=document.querySelector('#buildBanner span'); if(sp){ sp.dataset.orig=sp.dataset.orig||sp.textContent; sp.textContent=`Klicke auf die Karte, um das ${VB_BUILD[type].name} zu platzieren`; }
+  setBuildMode(true);
+}
+function allyEndPlace(){ allyPlace=null; setBuildMode(false); const sp=document.querySelector('#buildBanner span'); if(sp&&sp.dataset.orig) sp.textContent=sp.dataset.orig; }
+async function allyPlaceAt(ll){
+  const p=allyPlace; allyEndPlace(); if(!p) return;
+  const r=await allyCall('ally_building_build',{p_type:p.type,p_name:p.name,p_lat:ll.lat,p_lng:ll.lng},`${VB_BUILD[p.type].name} gebaut`);
+  if(r){ await allyLoadMap(); allyTab='buildings'; openVerband(); }
+}
+/* Daten für den gewählten Reiter nachladen */
+async function allyTabLoad(){
+  const tab=allyTab; let r=null;
+  if(tab==='news'||tab==='rules'){ r=await allyCall('ally_board',{}); if(r) allyBoard=r; }
+  else if(tab==='forum'){
+    if(allyThreadId){ r=await allyCall('ally_forum_thread',{p_id:allyThreadId}); if(r) allyThread=r; else allyThreadId=null; }
+    if(!allyThreadId){ r=await allyCall('ally_forum',{}); if(r) allyForum=r; } }
+  else if(tab==='academies'||tab==='buildings') await allyLoadAssets();
+  else return;
+  if(allyTab===tab && document.getElementById('modal-verband').classList.contains('show')) renderVerband();
+}
+const vbText=s=>esc(s).replace(/\n/g,'<br>');
+function allyNewsHtml(){
+  const b=allyBoard; if(!b) return '<div class="empty-hint">Lade …</div>';
+  return `${b.can_mod?`<div class="vb-sec"><h4>News schreiben</h4><input id="vb-news-title" class="vb-in" maxlength="120" placeholder="Überschrift">
+      <textarea id="vb-news-body" class="vb-ta" rows="3" maxlength="5000" placeholder="Text"></textarea><div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-news-post">Veröffentlichen</button></div></div>`:''}
+    <div class="vb-sec"><h4>Neuigkeiten</h4>${(b.news||[]).length?b.news.map(n=>`<div class="vb-post"><div class="vb-post-h"><b>${esc(n.title)}</b><span class="dim">${esc(n.name||'')} · ${fmtDate(n.at)}</span>
+      ${b.can_mod?`<button class="vb-x" data-newsdel="${n.id}" title="Löschen" aria-label="News löschen">×</button>`:''}</div>${n.body?`<div class="vb-post-b">${vbText(n.body)}</div>`:''}</div>`).join(''):'<div class="empty-hint">Noch keine News.</div>'}</div>`;
+}
+function allyRulesHtml(){
+  const b=allyBoard; if(!b) return '<div class="empty-hint">Lade …</div>';
+  return `<div class="vb-sec"><h4>Regeln des Verbands</h4>${b.can_mod?`<textarea id="vb-rules" class="vb-ta" rows="12" maxlength="10000" placeholder="z. B. 1. Geteilte Einsätze nicht abbrechen …">${esc(b.rules||'')}</textarea>
+      <div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-rules-save">Speichern</button></div>`
+    :`<div class="vb-post"><div class="vb-post-b">${b.rules?vbText(b.rules):'<span class="dim">Noch keine Regeln festgelegt.</span>'}</div></div>`}</div>`;
+}
+function allyForumHtml(){
+  if(allyThreadId){ const t=allyThread; if(!t) return '<div class="empty-hint">Lade …</div>';
+    const mod=allyForum?.can_mod, muted=allyForum?.muted_until&&new Date(allyForum.muted_until).getTime()>Date.now();
+    return `<div class="vb-form"><button class="btn sm ghost" id="vb-forum-back">← Alle Themen</button><span class="vb-sp"></span>
+        ${mod?`<button class="btn sm" data-fmod="${t.thread.pinned?'unpin':'pin'}">${t.thread.pinned?'Lösen':'Anheften'}</button><button class="btn sm" data-fmod="${t.thread.locked?'unlock':'lock'}">${t.thread.locked?'Öffnen':'Schließen'}</button><button class="btn sm danger" data-fmod="delete">Thema löschen</button>`:''}</div>
+      <div class="vb-sec"><h4>${t.thread.pinned?'📌 ':''}${esc(t.thread.title)}${t.thread.locked?' · geschlossen':''}</h4>
+      ${t.posts.map(p=>`<div class="vb-post${p.mine?' me':''}"><div class="vb-post-h"><b>${esc(p.name||'gelöscht')}</b><span class="dim">${fmtDate(p.at)}</span>
+        ${!p.deleted&&(p.mine||mod)?`<button class="vb-x" data-postdel="${p.id}" title="Löschen" aria-label="Beitrag löschen">×</button>`:''}</div>
+        <div class="vb-post-b${p.deleted?' dim':''}">${p.deleted?'Beitrag gelöscht':vbText(p.body)}</div></div>`).join('')}</div>
+      ${t.thread.locked&&!mod?'<div class="pers-hint">Das Thema ist geschlossen.</div>':muted?'<div class="pers-hint" style="color:#fbbf24">Du bist stummgeschaltet.</div>'
+        :`<div class="vb-sec"><textarea id="vb-reply" class="vb-ta" rows="3" maxlength="5000" placeholder="Antwort schreiben"></textarea><div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-reply-send">Antworten</button></div></div>`}`; }
+  const f=allyForum; if(!f) return '<div class="empty-hint">Lade …</div>';
+  const muted=f.muted_until&&new Date(f.muted_until).getTime()>Date.now();
+  return `<div class="vb-sec"><h4>Themen</h4>${f.threads.length?`<table class="lss-tbl"><thead><tr><th>Thema</th><th>Beiträge</th><th class="hide-sm">Letzter Beitrag</th></tr></thead><tbody>${f.threads.map(t=>`<tr class="vb-click" data-thread="${t.id}">
+      <td>${t.pinned?'📌 ':''}<b>${esc(t.title)}</b>${t.locked?' <span class="dim">· geschlossen</span>':''}<div class="pat-dept">von ${esc(t.name||'?')}</div></td><td class="mono">${t.posts}</td>
+      <td class="hide-sm dim">${esc(t.last_name||'')} · ${fmtDate(t.last_at)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty-hint">Noch keine Themen.</div>'}</div>
+    ${muted?'<div class="pers-hint" style="color:#fbbf24">Du bist stummgeschaltet und kannst nichts schreiben.</div>':`<div class="vb-sec"><h4>Neues Thema</h4><input id="vb-th-title" class="vb-in" maxlength="120" placeholder="Titel">
+      <textarea id="vb-th-body" class="vb-ta" rows="3" maxlength="5000" placeholder="Erster Beitrag"></textarea><div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-th-send">Thema erstellen</button></div></div>`}`;
+}
+/* Akademien im Verband: freigegebene der Mitglieder und Verbandsakademien */
+function allyAcademiesHtml(){
+  const list=(allyAssets.academies||[]).filter(a=>!a.mine);
+  const mine=(state.allyCourses||[]);
+  const running=mine.length?`<div class="vb-sec"><h4>Meine Lehrgänge im Verband</h4>${mine.map(c=>{ const co=courseById(c.courseId), rem=Math.max(0,c.durationMs-(Date.now()-c.startedAt));
+      return `<div class="vb-row"><b>${esc(co?co.name:c.courseId)}</b><span class="dim">${esc(c.name)}</span><span class="vb-sp"></span><span class="dim">${(c.personIds||[]).length} Pers.</span><span class="mono">${fmtDur(rem)}</span></div>`; }).join('')}</div>`:'';
+  if(!list.length) return running+`<div class="empty-hint">Keine Akademien im Verband freigegeben.<br>Besitzer geben ihre Akademie im Akademie-Fenster frei. Mit dem Recht „Finanzen“ lässt sich unter „Gebäude“ eine Verbandsakademie bauen.</div>`;
+  if(!list.some(a=>a.key===acadSel.key)) acadSel.key=list[0].key;
+  const a=list.find(x=>x.key===acadSel.key), free=Math.max(0,a.rooms-a.used), left=Math.max(0,a.limit-a.my_persons);
+  if(!stationById(acadSel.station)) acadSel.station=state.stations[0]?.id||null;
+  if(!courseById(acadSel.course)) acadSel.course=COURSES[0]?.id||null;
+  const st=stationById(acadSel.station), co=courseById(acadSel.course);
+  const avail=st?stationAvailablePeople(st).filter(p=>co&&!hasQual(p,co.id)&&(!co.requiresCourse||hasQual(p,co.requiresCourse))):[];
+  [...acadSel.people].forEach(id=>{ if(!avail.some(p=>p.id===id)) acadSel.people.delete(id); });
+  const cost=a.kind==='alliance'?VB_COURSE_FEE:Math.round(CONFIG.courseCost*a.cost), max=Math.min(CONFIG.classroomCapacity,left);
+  const can=free>0 && acadSel.people.size>0 && acadSel.people.size<=max && canAfford(cost);
+  return running+`<div class="vb-sec"><h4>Akademien</h4><table class="lss-tbl"><thead><tr><th>Akademie</th><th>Lehrsäle frei</th><th class="hide-sm">Limit je Mitglied</th><th class="hide-sm">Lehrgänge</th></tr></thead><tbody>${list.map(x=>`<tr class="vb-click${x.key===a.key?' sel':''}" data-acad="${esc(x.key)}">
+      <td><b>${esc(x.name)}</b><div class="pat-dept">${x.kind==='alliance'?'Verbandsakademie':'von '+esc(x.owner)}</div></td><td class="mono">${Math.max(0,x.rooms-x.used)}/${x.rooms}</td>
+      <td class="hide-sm mono">${x.my_persons}/${x.limit} Pers.</td><td class="hide-sm dim">${x.dur<1?'25 % kürzer':''}${x.kind==='alliance'?'150.000 € in die Kasse':x.cost<1?' · 30 % günstiger':''}</td></tr>`).join('')}</tbody></table></div>
+    <div class="vb-sec"><h4>Lehrgang in ${esc(a.name)} starten</h4>
+      <div class="vb-form"><label class="fld sm"><span>Wache</span><select id="vb-ac-st" class="vb-sel">${state.stations.map(s=>`<option value="${s.id}"${s.id===acadSel.station?' selected':''}>${esc(s.name)}</option>`).join('')}</select></label>
+      <label class="fld sm"><span>Lehrgang</span><select id="vb-ac-co" class="vb-sel">${COURSES.map(c=>`<option value="${c.id}"${c.id===acadSel.course?' selected':''}>${c.name} (${fmtDur(c.durationMs*a.dur)})</option>`).join('')}</select></label></div>
+      ${co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: „${qualLabel(co.requiresCourse)}“.</div>`:''}
+      <div class="fld"><span>Personal (${acadSel.people.size}/${max})</span><div class="ac-people-pick">${avail.length?avail.map(p=>`<label class="ac-pick"><input type="checkbox" data-acp="${p.id}" ${acadSel.people.has(p.id)?'checked':''}/> ${esc(p.name)}</label>`).join(''):'<div class="pers-hint">Kein berechtigtes Personal an dieser Wache.</div>'}</div></div>
+      <div class="vb-form"><span class="pers-hint">${free?`${free} Lehrsaal${free>1?'e':''} frei`:'Alle Lehrsäle belegt'} · du kannst noch ${left} Person${left===1?'':'en'} schicken</span><span class="vb-sp"></span>
+        <button class="btn primary" id="vb-ac-start" ${can?'':'disabled'}>Lehrgang starten · ${fmt(cost)} €</button></div></div>
+    ${a.bookings.length?`<div class="vb-sec"><h4>Belegt durch</h4>${a.bookings.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim">${esc(courseById(b.course)?.name||b.course)} · ${b.persons} Pers.</span><span class="vb-sp"></span><span class="mono">${fmtDur(new Date(b.ends_at).getTime()-Date.now())}</span></div>`).join('')}</div>`:''}`;
+}
+async function allyBookCourse(){
+  const a=(allyAssets.academies||[]).find(x=>x.key===acadSel.key), co=courseById(acadSel.course), st=stationById(acadSel.station), ids=[...acadSel.people];
+  if(!a||!co||!st||!ids.length) return;
+  const cost=a.kind==='alliance'?VB_COURSE_FEE:Math.round(CONFIG.courseCost*a.cost);
+  if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} €)`,'err'); return; }
+  if(a.kind==='alliance') await saveGame(true);          // Server bucht die Gebühr vom gespeicherten Guthaben ab
+  const r=await allyCall('ally_course_book',{p_key:a.key,p_course:co.id,p_persons:ids.length,p_duration:co.durationMs},`Lehrgang „${co.name}“ in ${a.name} gestartet`);
+  if(!r) return;
+  state.credits-=cost; book('lehrgang',`Lehrgang ${co.name} (${a.name})`,-cost);
+  (state.allyCourses=state.allyCourses||[]).push({ id:r.id, akey:a.key, name:a.name, courseId:co.id, stationId:st.id, personIds:ids, startedAt:Date.now(), durationMs:r.duration_ms });
+  acadSel.people=new Set(); renderTopbar(); renderStations(); saveGame(true); await allyLoadAssets(); renderVerband();
+}
+function allyBuildingsHtml(){
+  const A=allyAssets, can=!!A.can_build, list=A.buildings||[];
+  return `<div class="vb-sec"><h4>Verbandsgebäude</h4>${list.length?list.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim">${VB_BUILD[b.type]?.name||b.type}${b.type==='akademie'?` · ${b.rooms}/${VB_BUILD.akademie.maxRooms} Lehrsäle`:''}</span><span class="vb-sp"></span>
+      <button class="btn sm ghost" data-vbgo="${b.id}">Karte</button>
+      ${can&&b.type==='akademie'&&b.rooms<VB_BUILD.akademie.maxRooms?`<button class="btn sm" data-vbexp="${b.id}">+ Lehrsaal · ${fmt(VB_BUILD.akademie.roomCost)} €</button>`:''}
+      ${can?`<button class="btn sm danger" data-vbdel="${b.id}">Abreißen</button>`:''}</div>`).join(''):'<div class="empty-hint">Noch keine Verbandsgebäude.</div>'}</div>
+    ${can?`<div class="vb-sec"><h4>Neues Gebäude aus der Verbandskasse (${fmt(A.kasse||0)} €)</h4>
+      ${Object.entries(VB_BUILD).map(([k,t])=>`<div class="vb-row"><b>${t.name}</b><span class="dim hide-sm">${t.desc}</span><span class="vb-sp"></span><span class="mono">${fmt(t.cost)} €</span>
+        <button class="btn sm primary" data-vbbuild="${k}" ${(A.kasse||0)>=t.cost?'':'disabled'}>Platzieren</button></div>`).join('')}
+      <div class="vb-form"><label class="fld sm"><span>Name (optional)</span><input id="vb-b-name" class="vb-in" maxlength="60" placeholder="z. B. Klinikum Nord"></label>
+        <label class="fld sm" style="max-width:220px"><span>Verbandsakademie: Personen je Mitglied</span><input id="vb-aclim" class="vb-in" type="number" min="1" max="10" value="${A.academy_limit||10}"></label><button class="btn sm" id="vb-aclim-save">Übernehmen</button></div></div>`
+    :`<div class="pers-hint">Bauen und Ausbauen dürfen Mitglieder mit dem Recht „Finanzen“. Gebäude werden aus der Verbandskasse bezahlt.</div>`}`;
+}
+function allyBind3(){
+  const box=document.getElementById('vb-content'), q=id=>document.getElementById(id), on=(id,fn)=>{ const e=q(id); if(e) e.onclick=fn; };
+  on('vb-news-post',async()=>{ if(await allyCall('ally_news_post',{p_title:q('vb-news-title').value,p_body:q('vb-news-body').value},'News veröffentlicht')) allyTabLoad(); });
+  box.querySelectorAll('[data-newsdel]').forEach(b=>b.onclick=async()=>{ if(confirm('News löschen?') && await allyCall('ally_news_delete',{p_id:Number(b.dataset.newsdel)},'Gelöscht')) allyTabLoad(); });
+  on('vb-rules-save',async()=>{ if(await allyCall('ally_rules_save',{p_rules:q('vb-rules').value},'Regeln gespeichert')) allyTabLoad(); });
+  box.querySelectorAll('[data-thread]').forEach(r=>r.onclick=()=>{ allyThreadId=Number(r.dataset.thread); allyThread=null; renderVerband(); allyTabLoad(); });
+  on('vb-forum-back',()=>{ allyThreadId=null; allyThread=null; renderVerband(); allyTabLoad(); });
+  on('vb-th-send',async()=>{ const r=await allyCall('ally_forum_post',{p_thread:null,p_title:q('vb-th-title').value,p_body:q('vb-th-body').value},'Thema erstellt');
+    if(r){ allyThreadId=r.thread; allyThread=null; renderVerband(); allyTabLoad(); } });
+  on('vb-reply-send',async()=>{ if(await allyCall('ally_forum_post',{p_thread:allyThreadId,p_title:null,p_body:q('vb-reply').value})) allyTabLoad(); });
+  box.querySelectorAll('[data-postdel]').forEach(b=>b.onclick=async()=>{ if(confirm('Beitrag löschen?') && await allyCall('ally_forum_delete',{p_post:Number(b.dataset.postdel)},'Gelöscht')) allyTabLoad(); });
+  box.querySelectorAll('[data-fmod]').forEach(b=>b.onclick=async()=>{ const act=b.dataset.fmod; if(act==='delete' && !confirm('Thema mit allen Beiträgen löschen?')) return;
+    if(await allyCall('ally_forum_mod',{p_thread:allyThreadId,p_action:act},'Erledigt')){ if(act==='delete'){ allyThreadId=null; allyThread=null; } allyTabLoad(); } });
+  box.querySelectorAll('[data-acad]').forEach(r=>r.onclick=()=>{ acadSel.key=r.dataset.acad; acadSel.people=new Set(); renderVerband(); });
+  const ast=q('vb-ac-st'); if(ast) ast.onchange=()=>{ acadSel.station=ast.value; acadSel.people=new Set(); renderVerband(); };
+  const aco=q('vb-ac-co'); if(aco) aco.onchange=()=>{ acadSel.course=aco.value; acadSel.people=new Set(); renderVerband(); };
+  box.querySelectorAll('[data-acp]').forEach(cb=>cb.onchange=()=>{ cb.checked?acadSel.people.add(cb.dataset.acp):acadSel.people.delete(cb.dataset.acp); renderVerband(); });
+  on('vb-ac-start',allyBookCourse);
+  box.querySelectorAll('[data-vbbuild]').forEach(b=>b.onclick=()=>allyStartPlace(b.dataset.vbbuild,(q('vb-b-name')?.value||'').trim()));
+  box.querySelectorAll('[data-vbexp]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_building_expand',{p_id:b.dataset.vbexp},'Lehrsaal gebaut')){ await allyLoadAssets(); renderVerband(); } });
+  box.querySelectorAll('[data-vbdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gebäude abreißen? Das Geld kommt nicht zurück.')) return;
+    if(await allyCall('ally_building_remove',{p_id:b.dataset.vbdel},'Gebäude abgerissen')){ await allyLoadMap(); renderVerband(); } });
+  box.querySelectorAll('[data-vbgo]').forEach(b=>b.onclick=()=>{ const x=(allyAssets.buildings||[]).find(y=>y.id===b.dataset.vbgo); if(x){ hideModal('modal-verband'); map.setView([x.lat,x.lng],15); } });
+  on('vb-aclim-save',async()=>{ const n=Math.max(1,Math.min(10,Math.floor(Number(q('vb-aclim').value)||10)));
+    if(await allyCall('ally_settings',{p_settings:{academy_limit:n}},`Limit: ${n} Personen je Mitglied`)){ await allyLoadAssets(); renderVerband(); } });
+}
+/* Eigene Akademie im Verband freigeben (im Akademie-Fenster) */
+function acadAllyPanel(a){
+  if(!allyInfo.id) return '';
+  const info=(allyAssets.academies||[]).find(x=>x.mine && x.key.endsWith(':'+a.id)), sh=a.allyShare;
+  return `<div class="ac-section-h">Verband</div><div class="ac-form">
+      <label class="vb-check"><input type="checkbox" id="av-share" ${sh?'checked':''}> Für den Verband freigeben: Mitglieder können freie Lehrsäle für eigenes Personal nutzen</label>
+      <label class="fld"><span>Höchstens Personen gleichzeitig je Mitglied</span><input id="av-share-lim" type="number" min="1" max="10" value="${sh?sh.limit:5}" ${sh?'':'disabled'}></label>
+      ${info&&info.bookings.length?`<div class="ac-rooms">${info.bookings.map(b=>`<div class="ac-room"><div class="ac-room-top"><span class="ac-cname">${esc(courseById(b.course)?.name||b.course)}</span><span class="ac-time">${fmtDur(new Date(b.ends_at).getTime()-Date.now())}</span></div>
+        <div class="ac-people"><span class="pchip">${esc(b.name)} · ${b.persons} Personen</span></div></div>`).join('')}</div>`:''}</div>`;
+}
+function acadExtUsed(a){ const info=(allyAssets.academies||[]).find(x=>x.mine && x.key.endsWith(':'+a.id)); return info?info.ext_used:0; }
 
 /* ------------------------- FUNK ------------------------- */
 let funkLog=[];
@@ -2767,7 +2952,8 @@ function inTransit(p){ return !!(p && p.transitUntil && p.transitUntil>Date.now(
 function poolPeople(st){ return (st.roster||[]).filter(p=>!p.vehicleId); }
 function fixedPeople(st,v){ return (st.roster||[]).filter(p=>p.vehicleId===v.id); }
 function deployedIdSet(st){ const s=new Set(); state.vehicles.filter(v=>v.stationId===st.id&&v.status!==2).forEach(v=>(v.crewIds||[]).forEach(id=>s.add(id))); return s; }
-function trainingSet(){ const s=new Set(); (state.buildings||[]).forEach(b=>{ if(b.courses) b.courses.forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); }); return s; }
+function trainingSet(){ const s=new Set(); (state.buildings||[]).forEach(b=>{ if(b.courses) b.courses.forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); });
+  (state.allyCourses||[]).forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); return s; }
 function poolFreePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return poolPeople(st).filter(p=>!dep.has(p.id)&&!tr.has(p.id)&&!inTransit(p)); }
 function stationAvailablePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return (st.roster||[]).filter(p=>!dep.has(p.id)&&!tr.has(p.id)&&!inTransit(p)); }
 function trainingCountOf(st){ const tr=trainingSet(); return (st.roster||[]).filter(p=>tr.has(p.id)).length; }
@@ -3112,6 +3298,10 @@ function finishDueCourses(now){ let changed=false;
       changed=true;
     });
     a.courses=keep; });
+  if(state.allyCourses && state.allyCourses.length){                 // Lehrgänge in Akademien des Verbands
+    const keep=state.allyCourses.filter(c=>(now-(c.startedAt||now)) < (c.durationMs||0));
+    state.allyCourses.filter(c=>!keep.includes(c)).forEach(c=>{ (c.personIds||[]).forEach(id=>{ const r=personById(id); if(r){ r.p.quals=r.p.quals||[]; if(!r.p.quals.includes(c.courseId)) r.p.quals.push(c.courseId); } }); changed=true; });
+    state.allyCourses=keep; }
   return changed;
 }
 function courseTick(){ if(finishDueCourses(Date.now())){ if(avId) renderAcademyView(); renderStations(); if(svStationId) renderStationView(); saveGame(true); toast('Lehrgang abgeschlossen','ok'); } }
@@ -3123,10 +3313,10 @@ let avTab='courses';
 function renderAcademyView(){
   const a=academyById(avId); if(!a){ hideModal('modal-academy'); return; }
   finishDueCourses(Date.now());
-  const rooms=academyRooms(a), used=(a.courses||[]).length, free=rooms-used;
+  const rooms=academyRooms(a), ext=acadExtUsed(a), used=(a.courses||[]).length+ext, free=rooms-used;
   const boni=[extCount(a,'sim')?'Lehrgänge 25 % kürzer':'', extCount(a,'hof')?'Lehrgänge 30 % günstiger':''].filter(Boolean);
   document.getElementById('av-title').textContent=`${a.name}`;
-  document.getElementById('av-sub').innerHTML=(stationReady(a)?'':`<span style="color:#fbbf24">Im Bau — fertig in ${fmtDur(a.readyAt-Date.now())}. Lehrgänge sind erst danach möglich.</span><br>`)+`Lehrsäle ${used}/${rooms} belegt · je Saal max. ${CONFIG.classroomCapacity} Personen (gleicher Lehrgang)${boni.length?' · '+boni.join(' · '):''}`;
+  document.getElementById('av-sub').innerHTML=(stationReady(a)?'':`<span style="color:#fbbf24">Im Bau — fertig in ${fmtDur(a.readyAt-Date.now())}. Lehrgänge sind erst danach möglich.</span><br>`)+`Lehrsäle ${used}/${rooms} belegt${ext?` (${ext} durch den Verband)`:''} · je Saal max. ${CONFIG.classroomCapacity} Personen (gleicher Lehrgang)${boni.length?' · '+boni.join(' · '):''}`;
   document.querySelectorAll('#modal-academy [data-avtab]').forEach(b=>{ b.classList.toggle('active',b.dataset.avtab===avTab); b.onclick=()=>{ avTab=b.dataset.avtab; renderAcademyView(); }; });
   if(avTab==='ext'){ renderExtTab(document.getElementById('av-content'), a, renderAcademyView); return; }
 
@@ -3164,7 +3354,12 @@ function renderAcademyView(){
       <div class="fld"><span>Personal (<span id="av-count">${avSelected.size}</span>/${CONFIG.classroomCapacity})</span><div class="ac-people-pick">${people}</div></div>
       <button class="btn primary" id="av-start" ${canStart?'':'disabled'}>${free<=0?'Alle Lehrsäle belegt':(COURSES.length===0?'Keine Lehrgänge verfügbar':(!canAfford(cc)?`Zu wenig Guthaben (${fmt(cc)} €)`:`Lehrgang starten · ${fmt(cc)} €`))}</button>
     </div>
-    <div class="pers-hint">Weitere Lehrsäle gibt es im Reiter <b>Erweiterungen</b>.</div>`;
+    <div class="pers-hint">Weitere Lehrsäle gibt es im Reiter <b>Erweiterungen</b>.</div>
+    ${acadAllyPanel(a)}`;
+  const shc=document.getElementById('av-share'), shl=document.getElementById('av-share-lim');
+  const shSave=async()=>{ a.allyShare=shc.checked?{ limit:Math.max(1,Math.min(10,Math.floor(Number(shl.value)||5))) }:null;
+    await saveGame(true); await allyLoadAssets(); renderAcademyView(); toast(a.allyShare?`${a.name} für den Verband freigegeben`:`Freigabe von ${a.name} beendet`,'ok'); };
+  if(shc){ shc.onchange=shSave; shl.onchange=()=>{ if(shc.checked) shSave(); }; }
 
   document.getElementById('av-station').onchange=e=>{ avStationId=e.target.value; avSelected=new Set(); renderAcademyView(); };
   document.getElementById('av-course').onchange=e=>{ avCourseId=e.target.value; avSelected=new Set(); renderAcademyView(); };
@@ -3178,7 +3373,7 @@ function renderAcademyView(){
 function updateAcademyStart(){
   const a=academyById(avId); if(!a) return;
   const st=avStationId?stationById(avStationId):null;
-  const free=academyRooms(a)-(a.courses||[]).length;
+  const free=academyRooms(a)-(a.courses||[]).length-acadExtUsed(a);
   const cnt=document.getElementById('av-count'); if(cnt) cnt.textContent=avSelected.size;
   const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && canAfford(courseCostFor(a)) && stationReady(a);
   const b=document.getElementById('av-start'); if(b) b.disabled=!canStart;
@@ -3186,7 +3381,7 @@ function updateAcademyStart(){
 function startCourse(){
   { const a=academyById(avId); if(a&&!stationReady(a)){ toast(`${a.name} ist noch im Bau (fertig in ${fmtDur(a.readyAt-Date.now())})`,'warn'); return; } }
   const a=academyById(avId); if(!a) return;
-  const rooms=academyRooms(a); if((a.courses||[]).length>=rooms){ toast('Alle Klassenräume belegt','warn'); return; }
+  const rooms=academyRooms(a); if((a.courses||[]).length+acadExtUsed(a)>=rooms){ toast('Alle Klassenräume belegt','warn'); return; }
   const co=courseById(avCourseId); if(!co){ toast('Kein Lehrgang gewählt','warn'); return; }
   const ids=[...avSelected]; if(!ids.length){ toast('Kein Personal gewählt','warn'); return; }
   if(ids.length>CONFIG.classroomCapacity){ toast(`Max. ${CONFIG.classroomCapacity} pro Klassenraum`,'warn'); return; }
@@ -3767,7 +3962,7 @@ document.getElementById('search').addEventListener('keydown',async e=>{
 
 /* UI-Events */
 document.getElementById('btn-build').onclick=openBuildMenu;
-document.getElementById('btn-build-cancel').onclick=()=>{ setBuildMode(false); pendingBuild=null; };
+document.getElementById('btn-build-cancel').onclick=()=>{ if(allyPlace) allyEndPlace(); setBuildMode(false); pendingBuild=null; };
 document.getElementById('build-start').onclick=startBuildPlacement;
 document.getElementById('btn-catalog').onclick=renderCatalog;
 function toggleMenu(force){ const m=document.getElementById('topbar-menu'); m.classList.toggle('hidden', force===undefined?undefined:!force); }
