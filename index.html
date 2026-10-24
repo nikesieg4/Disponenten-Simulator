@@ -390,6 +390,9 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .vb-post-h .dim{ font-size:11px; }
 .vb-post-b{ font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
 .vb-click{ cursor:pointer; }
+.vb-depts{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.vb-dept{ font-size:11px; padding:1px 7px; border-radius:10px; border:1px solid var(--border-2); color:var(--text-mut); }
+.vb-dept.build{ color:#fbbf24; border-color:#7c5a10; }
 .cv-row{ flex-wrap:wrap; } .cv-main{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 #codes-content a{ color:var(--text); }
 .vb-row .mono{ white-space:nowrap; }
@@ -1907,7 +1910,7 @@ function settlePayday(){
 /* ------------------------- VERBAND ------------------------- */
 // Server hält den Verband; der Browser fragt alle 10 s nach (Gutschriften) und lädt die Karte der Mitglieder alle 60 s
 const ALLY_COLOR='#a78bfa';
-const ALLY_PERMS=[['members','Bewerbungen & Einladungen'],['roles','Rollen verwalten'],['finance','Finanzen'],['moderate','Moderieren (Chat, News, Forum, Regeln)'],['kick','Kick'],['ban','Bann'],['timeout','Timeout (Chat)']];
+const ALLY_PERMS=[['members','Bewerbungen & Einladungen'],['roles','Rollen verwalten'],['finance','Finanzen'],['courses','Lehrgangsleitung (Verbandslehrgänge ausschreiben)'],['moderate','Moderieren (Chat, News, Forum, Regeln)'],['kick','Kick'],['ban','Bann'],['timeout','Timeout (Chat)']];
 // Verbandschat und Verbandsfunk (über ally_poll alle 10 s)
 let allyChat=[], allyChatAfter=0, allyChatSeen=0, allyRadioAfter=null, allyRadioQueue=[], allyMutedUntil=null;
 let allyRadioOn=(()=>{ try{ return localStorage.getItem('leitstelle_verbandsfunk')!=='0'; }catch(e){ return true; } })();
@@ -2334,15 +2337,17 @@ async function shareMission(m){
 }
 
 /* ---------- Verbände Teil 3: News, Regeln, Forum, Akademien im Verband, Verbandsgebäude ---------- */
-const VB_BUILD={ kh:{ name:'Verbandskrankenhaus', cost:3000000, desc:'Alle Fachabteilungen. Alle Mitglieder können Patienten hierher fahren.' },
-  akademie:{ name:'Verbandsakademie', cost:2500000, roomCost:1000000, maxRooms:4, desc:'Lehrgänge für alle Mitglieder. Jeder Lehrgang kostet 150.000 €, das Geld fließt in die Verbandskasse.' } };
-const VB_COURSE_FEE=150000;
+const VB_BUILD={ kh:{ name:'Verbandskrankenhaus', cost:3000000, desc:'Startet mit Innerer Medizin, weitere Fachabteilungen als Erweiterung. Alle Mitglieder können Patienten hierher fahren.' },
+  akademie:{ name:'Verbandsakademie', cost:2500000, roomCost:1000000, maxRooms:4, desc:'Die Lehrgangsleitung schreibt Lehrgänge aus (150.000 € aus der Kasse), Mitglieder melden ihr Personal an.' } };
+const VB_COURSE_COST=150000, VB_START_H=[1,3,6,12,24];
+const VB_DEPT_COST={ unf:500000, geb:500000, kin:500000, psy:500000, kar:2000000, str:2000000, bra:2000000 };   // Fachabteilungen im Verbandskrankenhaus
+let allyCoursesData=null, courseSel={ id:null, station:null, people:new Set() };
 let allyAssets={ buildings:[], academies:[] }, allyBoard=null, allyForum=null, allyThread=null, allyThreadId=null, allyPlace=null;
 let acadSel={ key:null, station:null, course:null, people:new Set() };
 async function allyLoadAssets(){
   if(!allyInfo.id){ allyAssets={ buildings:[], academies:[] }; allyHospitals=[]; return; }
   try{ const r=await rpc('ally_assets',{p_token:AUTH.token}); if(r && !r.error){ allyAssets=r;
-    allyHospitals=(r.buildings||[]).filter(b=>b.type==='kh').map(b=>({ id:'ah:'+b.id, name:b.name, lat:b.lat, lng:b.lng, dept:Object.keys(DEPTS), ally:true })); } }catch(e){}
+    allyHospitals=(r.buildings||[]).filter(b=>b.type==='kh').map(b=>({ id:'ah:'+b.id, name:b.name, lat:b.lat, lng:b.lng, dept:b.depts||['inn'], ally:true })); } }catch(e){}
 }
 function allyVbPin(type){ const icon=type==='kh'
     ? c=>`<rect x="4" y="5" width="16" height="16" rx="1.5" fill="${c}"/><path d="M12 7.5V14.5M8.5 11H15.5" stroke="#151a23" stroke-width="2.6"/>` : PIN_ICONS.academy;
@@ -2373,7 +2378,7 @@ async function allyTabLoad(){
   else if(tab==='forum'){
     if(allyThreadId){ r=await allyCall('ally_forum_thread',{p_id:allyThreadId}); if(r) allyThread=r; else allyThreadId=null; }
     if(!allyThreadId){ r=await allyCall('ally_forum',{}); if(r) allyForum=r; } }
-  else if(tab==='academies'||tab==='buildings') await allyLoadAssets();
+  else if(tab==='academies'||tab==='buildings'){ await allyLoadAssets(); if(tab==='academies'){ r=await allyCall('ally_courses',{}); if(r) allyCoursesData=r; } }
   else return;
   if(allyTab===tab && document.getElementById('modal-verband').classList.contains('show')) renderVerband();
 }
@@ -2410,58 +2415,127 @@ function allyForumHtml(){
     ${muted?'<div class="pers-hint" style="color:#fbbf24">Du bist stummgeschaltet und kannst nichts schreiben.</div>':`<div class="vb-sec"><h4>Neues Thema</h4><input id="vb-th-title" class="vb-in" maxlength="120" placeholder="Titel">
       <textarea id="vb-th-body" class="vb-ta" rows="3" maxlength="5000" placeholder="Erster Beitrag"></textarea><div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-th-send">Thema erstellen</button></div></div>`}`;
 }
-/* Akademien im Verband: freigegebene der Mitglieder und Verbandsakademien */
-function allyAcademiesHtml(){
-  const list=(allyAssets.academies||[]).filter(a=>!a.mine);
-  const mine=(state.allyCourses||[]);
-  const running=mine.length?`<div class="vb-sec"><h4>Meine Lehrgänge im Verband</h4>${mine.map(c=>{ const co=courseById(c.courseId), rem=Math.max(0,c.durationMs-(Date.now()-c.startedAt));
-      return `<div class="vb-row"><b>${esc(co?co.name:c.courseId)}</b><span class="dim">${esc(c.name)}</span><span class="vb-sp"></span><span class="dim">${(c.personIds||[]).length} Pers.</span><span class="mono">${fmtDur(rem)}</span></div>`; }).join('')}</div>`:'';
-  if(!list.length) return running+`<div class="empty-hint">Keine Akademien im Verband freigegeben.<br>Besitzer geben ihre Akademie im Akademie-Fenster frei. Mit dem Recht „Finanzen“ lässt sich unter „Gebäude“ eine Verbandsakademie bauen.</div>`;
-  if(!list.some(a=>a.key===acadSel.key)) acadSel.key=list[0].key;
-  const a=list.find(x=>x.key===acadSel.key), free=Math.max(0,a.rooms-a.used), left=Math.max(0,a.limit-a.my_persons);
-  if(!stationById(acadSel.station)) acadSel.station=state.stations[0]?.id||null;
-  if(!courseById(acadSel.course)) acadSel.course=COURSES[0]?.id||null;
-  const st=stationById(acadSel.station), co=courseById(acadSel.course);
+/* Akademien im Verband: Verbandslehrgänge (Verbandsakademie) und freigegebene Akademien der Mitglieder */
+function allyPeoplePick(st,co,sel,max,attr){
   const avail=st?stationAvailablePeople(st).filter(p=>co&&!hasQual(p,co.id)&&(!co.requiresCourse||hasQual(p,co.requiresCourse))):[];
-  [...acadSel.people].forEach(id=>{ if(!avail.some(p=>p.id===id)) acadSel.people.delete(id); });
-  const cost=a.kind==='alliance'?VB_COURSE_FEE:Math.round(CONFIG.courseCost*a.cost), max=Math.min(CONFIG.classroomCapacity,left);
-  const can=free>0 && acadSel.people.size>0 && acadSel.people.size<=max && canAfford(cost);
-  return running+`<div class="vb-sec"><h4>Akademien</h4><table class="lss-tbl"><thead><tr><th>Akademie</th><th>Lehrsäle frei</th><th class="hide-sm">Limit je Mitglied</th><th class="hide-sm">Lehrgänge</th></tr></thead><tbody>${list.map(x=>`<tr class="vb-click${x.key===a.key?' sel':''}" data-acad="${esc(x.key)}">
-      <td><b>${esc(x.name)}</b><div class="pat-dept">${x.kind==='alliance'?'Verbandsakademie':'von '+esc(x.owner)}</div></td><td class="mono">${Math.max(0,x.rooms-x.used)}/${x.rooms}</td>
-      <td class="hide-sm mono">${x.my_persons}/${x.limit} Pers.</td><td class="hide-sm dim">${x.dur<1?'25 % kürzer':''}${x.kind==='alliance'?'150.000 € in die Kasse':x.cost<1?' · 30 % günstiger':''}</td></tr>`).join('')}</tbody></table></div>
-    <div class="vb-sec"><h4>Lehrgang in ${esc(a.name)} starten</h4>
-      <div class="vb-form"><label class="fld sm"><span>Wache</span><select id="vb-ac-st" class="vb-sel">${state.stations.map(s=>`<option value="${s.id}"${s.id===acadSel.station?' selected':''}>${esc(s.name)}</option>`).join('')}</select></label>
-      <label class="fld sm"><span>Lehrgang</span><select id="vb-ac-co" class="vb-sel">${COURSES.map(c=>`<option value="${c.id}"${c.id===acadSel.course?' selected':''}>${c.name} (${fmtDur(c.durationMs*a.dur)})</option>`).join('')}</select></label></div>
-      ${co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: „${qualLabel(co.requiresCourse)}“.</div>`:''}
-      <div class="fld"><span>Personal (${acadSel.people.size}/${max})</span><div class="ac-people-pick">${avail.length?avail.map(p=>`<label class="ac-pick"><input type="checkbox" data-acp="${p.id}" ${acadSel.people.has(p.id)?'checked':''}/> ${esc(p.name)}</label>`).join(''):'<div class="pers-hint">Kein berechtigtes Personal an dieser Wache.</div>'}</div></div>
-      <div class="vb-form"><span class="pers-hint">${free?`${free} Lehrsaal${free>1?'e':''} frei`:'Alle Lehrsäle belegt'} · du kannst noch ${left} Person${left===1?'':'en'} schicken</span><span class="vb-sp"></span>
-        <button class="btn primary" id="vb-ac-start" ${can?'':'disabled'}>Lehrgang starten · ${fmt(cost)} €</button></div></div>
-    ${a.bookings.length?`<div class="vb-sec"><h4>Belegt durch</h4>${a.bookings.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim">${esc(courseById(b.course)?.name||b.course)} · ${b.persons} Pers.</span><span class="vb-sp"></span><span class="mono">${fmtDur(new Date(b.ends_at).getTime()-Date.now())}</span></div>`).join('')}</div>`:''}`;
+  [...sel].forEach(id=>{ if(!avail.some(p=>p.id===id)) sel.delete(id); });
+  return `<div class="fld"><span>Personal (${sel.size}/${max})</span><div class="ac-people-pick">${avail.length?avail.map(p=>`<label class="ac-pick"><input type="checkbox" ${attr}="${p.id}" ${sel.has(p.id)?'checked':''}/> ${esc(p.name)}</label>`).join(''):'<div class="pers-hint">Kein berechtigtes Personal an dieser Wache.</div>'}</div></div>`;
+}
+const stationOpts=sel=>state.stations.map(s=>`<option value="${s.id}"${s.id===sel?' selected':''}>${esc(s.name)}</option>`).join('');
+function allyAcademiesHtml(){
+  const mine=(state.allyCourses||[]), C=allyCoursesData, now=Date.now();
+  const running=mine.length?`<div class="vb-sec"><h4>Meine Lehrgänge im Verband</h4>${mine.map(c=>{ const co=courseById(c.courseId), rem=Math.max(0,c.durationMs-(now-c.startedAt));
+      return `<div class="vb-row"><b>${esc(co?co.name:c.courseId)}</b><span class="dim">${esc(c.name)}</span><span class="vb-sp"></span><span class="dim">${(c.personIds||[]).length} Pers.</span><span class="mono">${fmtDur(rem)}</span></div>`; }).join('')}</div>`:'';
+  // Verbandslehrgänge
+  let courses='';
+  if(C){
+    const list=C.courses||[];
+    if(!list.some(c=>c.id===courseSel.id)) courseSel.id=null;
+    const sel=list.find(c=>c.id===courseSel.id);
+    const rows=list.map(c=>{ const st=new Date(c.starts_at).getTime(), en=new Date(c.ends_at).getTime(), open=st>now, co=courseById(c.course);
+      return `<tr class="${open?'vb-click':''}${c.id===courseSel.id?' sel':''}" ${open?`data-vcourse="${c.id}"`:''}><td><b>${esc(co?co.name:c.course)}</b><div class="pat-dept">${esc(c.academy)} · von ${esc(c.by||'?')}</div></td>
+        <td>${open?`Start in ${fmtDur(st-now)}`:`läuft · fertig in ${fmtDur(en-now)}`}</td><td class="mono">${c.seats}/${c.capacity}</td>
+        <td class="mono hide-sm">${c.mine}/${c.per_member}</td><td class="mono hide-sm">${c.fee?fmt(c.fee)+' €':'gratis'}</td>
+        <td style="text-align:right">${open&&C.can_create&&!c.seats?`<button class="btn sm ghost" data-vcancel="${c.id}">Absagen</button>`:''}</td></tr>`; }).join('');
+    let join='';
+    if(sel){
+      if(!stationById(courseSel.station)) courseSel.station=state.stations[0]?.id||null;
+      const co=courseById(sel.course), max=Math.max(0,Math.min(sel.per_member-sel.mine, sel.capacity-sel.seats)), fee=sel.fee*courseSel.people.size;
+      const can=courseSel.people.size>0 && courseSel.people.size<=max && canAfford(fee);
+      join=`<div class="vb-sec"><h4>Anmelden: ${esc(co?co.name:sel.course)} in ${esc(sel.academy)}</h4>
+        <div class="vb-form"><label class="fld sm"><span>Wache</span><select id="vb-vc-st" class="vb-sel">${stationOpts(courseSel.station)}</select></label></div>
+        ${co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: „${qualLabel(co.requiresCourse)}“.</div>`:''}
+        ${allyPeoplePick(stationById(courseSel.station),co,courseSel.people,max,'data-vcp')}
+        <div class="vb-form"><span class="pers-hint">Dein Personal ist ab der Anmeldung bis zum Ende des Lehrgangs gebunden (Dauer ${fmtDur(new Date(sel.ends_at)-new Date(sel.starts_at))}).</span><span class="vb-sp"></span>
+          <button class="btn primary" id="vb-vc-join" ${can?'':'disabled'}>Anmelden${fee?' · '+fmt(fee)+' €':''}</button></div></div>`;
+    }
+    let create='';
+    if(C.can_create){
+      const acads=(allyAssets.academies||[]).filter(a=>a.kind==='alliance');
+      create=`<div class="vb-sec"><h4>Lehrgang ausschreiben (Lehrgangsleitung)</h4>${acads.length?`
+        <div class="vb-form"><label class="fld sm"><span>Verbandsakademie</span><select id="vb-nc-ak" class="vb-sel">${acads.map(a=>`<option value="${esc(a.key.slice(2))}">${esc(a.name)} (${Math.max(0,a.rooms-a.used)}/${a.rooms} frei)</option>`).join('')}</select></label>
+          <label class="fld sm"><span>Lehrgang</span><select id="vb-nc-co" class="vb-sel">${COURSES.map(c=>`<option value="${c.id}">${c.name} (${fmtDur(c.durationMs)})</option>`).join('')}</select></label></div>
+        <div class="vb-form"><label class="fld sm"><span>Start (Anmeldung bis dahin)</span><select id="vb-nc-start" class="vb-sel">${VB_START_H.map(h=>`<option value="${h}">in ${h} Stunde${h>1?'n':''}</option>`).join('')}</select></label>
+          <label class="fld sm" style="max-width:150px"><span>Plätze je Mitglied</span><input id="vb-nc-per" class="vb-in" type="number" min="1" max="10" value="3"></label>
+          <label class="fld sm" style="max-width:170px"><span>Gebühr je Person (€)</span><input id="vb-nc-fee" class="vb-in" type="number" min="0" max="100000" step="1000" value="0"></label>
+          <span class="vb-sp"></span><button class="btn primary" id="vb-nc-go" ${(C.kasse||0)>=VB_COURSE_COST?'':'disabled'}>Ausschreiben · ${fmt(VB_COURSE_COST)} € aus der Kasse</button></div>
+        <div class="pers-hint">Je Lehrgang höchstens ${CONFIG.classroomCapacity} Personen, ein Lehrsaal ist von der Ausschreibung bis zum Ende belegt. Gebühren fließen in die Kasse (${fmt(C.kasse||0)} €).</div>`
+        :'<div class="pers-hint">Erst eine Verbandsakademie bauen (Reiter „Gebäude“).</div>'}</div>`;
+    }
+    courses=`<div class="vb-sec"><h4>Verbandslehrgänge</h4>${list.length?`<table class="lss-tbl"><thead><tr><th>Lehrgang</th><th>Zeit</th><th>Plätze</th><th class="hide-sm">Meine</th><th class="hide-sm">Gebühr</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="pers-hint">Zum Anmelden einen ausgeschriebenen Lehrgang anklicken.</div>`:'<div class="empty-hint">Gerade kein Verbandslehrgang ausgeschrieben.</div>'}</div>${join}${create}`;
+  } else courses='<div class="empty-hint">Lade …</div>';
+  // Freigegebene Akademien der Mitglieder (Lehrsaal buchen)
+  const list=(allyAssets.academies||[]).filter(a=>!a.mine && a.kind==='member');
+  let member='';
+  if(list.length){
+    if(!list.some(a=>a.key===acadSel.key)) acadSel.key=list[0].key;
+    const a=list.find(x=>x.key===acadSel.key), free=Math.max(0,a.rooms-a.used), left=Math.max(0,a.limit-a.my_persons);
+    if(!stationById(acadSel.station)) acadSel.station=state.stations[0]?.id||null;
+    if(!courseById(acadSel.course)) acadSel.course=COURSES[0]?.id||null;
+    const co=courseById(acadSel.course), cost=Math.round(CONFIG.courseCost*a.cost), max=Math.min(CONFIG.classroomCapacity,left);
+    const pick=allyPeoplePick(stationById(acadSel.station),co,acadSel.people,max,'data-acp');
+    const can=free>0 && acadSel.people.size>0 && acadSel.people.size<=max && canAfford(cost);
+    member=`<div class="vb-sec"><h4>Akademien der Mitglieder</h4><table class="lss-tbl"><thead><tr><th>Akademie</th><th>Lehrsäle frei</th><th class="hide-sm">Limit je Mitglied</th><th class="hide-sm">Boni</th></tr></thead><tbody>${list.map(x=>`<tr class="vb-click${x.key===a.key?' sel':''}" data-acad="${esc(x.key)}">
+        <td><b>${esc(x.name)}</b><div class="pat-dept">von ${esc(x.owner)}</div></td><td class="mono">${Math.max(0,x.rooms-x.used)}/${x.rooms}</td>
+        <td class="hide-sm mono">${x.my_persons}/${x.limit} Pers.</td><td class="hide-sm dim">${[x.dur<1?'25 % kürzer':'',x.cost<1?'30 % günstiger':''].filter(Boolean).join(' · ')}</td></tr>`).join('')}</tbody></table></div>
+      <div class="vb-sec"><h4>Lehrsaal in ${esc(a.name)} buchen</h4>
+        <div class="vb-form"><label class="fld sm"><span>Wache</span><select id="vb-ac-st" class="vb-sel">${stationOpts(acadSel.station)}</select></label>
+        <label class="fld sm"><span>Lehrgang</span><select id="vb-ac-co" class="vb-sel">${COURSES.map(c=>`<option value="${c.id}"${c.id===acadSel.course?' selected':''}>${c.name} (${fmtDur(c.durationMs*a.dur)})</option>`).join('')}</select></label></div>
+        ${co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: „${qualLabel(co.requiresCourse)}“.</div>`:''}${pick}
+        <div class="vb-form"><span class="pers-hint">${free?`${free} Lehrsaal${free>1?'e':''} frei`:'Alle Lehrsäle belegt'} · du kannst noch ${left} Person${left===1?'':'en'} schicken</span><span class="vb-sp"></span>
+          <button class="btn primary" id="vb-ac-start" ${can?'':'disabled'}>Lehrgang starten · ${fmt(cost)} €</button></div></div>`;
+  }
+  return running+courses+member;
 }
 async function allyBookCourse(){
   const a=(allyAssets.academies||[]).find(x=>x.key===acadSel.key), co=courseById(acadSel.course), st=stationById(acadSel.station), ids=[...acadSel.people];
   if(!a||!co||!st||!ids.length) return;
-  const cost=a.kind==='alliance'?VB_COURSE_FEE:Math.round(CONFIG.courseCost*a.cost);
+  const cost=Math.round(CONFIG.courseCost*a.cost);
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} €)`,'err'); return; }
-  if(a.kind==='alliance') await saveGame(true);          // Server bucht die Gebühr vom gespeicherten Guthaben ab
   const r=await allyCall('ally_course_book',{p_key:a.key,p_course:co.id,p_persons:ids.length,p_duration:co.durationMs},`Lehrgang „${co.name}“ in ${a.name} gestartet`);
   if(!r) return;
   state.credits-=cost; book('lehrgang',`Lehrgang ${co.name} (${a.name})`,-cost);
   (state.allyCourses=state.allyCourses||[]).push({ id:r.id, akey:a.key, name:a.name, courseId:co.id, stationId:st.id, personIds:ids, startedAt:Date.now(), durationMs:r.duration_ms });
   acadSel.people=new Set(); renderTopbar(); renderStations(); saveGame(true); await allyLoadAssets(); renderVerband();
 }
+/* Verbandslehrgang: anmelden bzw. ausschreiben */
+async function allyJoinCourse(){
+  const c=(allyCoursesData?.courses||[]).find(x=>x.id===courseSel.id), st=stationById(courseSel.station), ids=[...courseSel.people]; if(!c||!st||!ids.length) return;
+  const fee=c.fee*ids.length; if(fee && !canAfford(fee)){ toast(`Nicht genug Guthaben (${fmt(fee)} €)`,'err'); return; }
+  if(fee) await saveGame(true);                         // Server bucht die Gebühr vom gespeicherten Guthaben ab
+  const co=courseById(c.course);
+  const r=await allyCall('ally_course_join',{p_course:c.id,p_persons:ids.length},`${ids.length} Person${ids.length>1?'en':''} für „${co?co.name:c.course}“ angemeldet`); if(!r) return;
+  if(r.fee){ state.credits-=r.fee; book('lehrgang',`Verbandslehrgang ${co?co.name:c.course}`,-r.fee); }
+  const end=new Date(r.ends_at).getTime();
+  (state.allyCourses=state.allyCourses||[]).push({ id:c.id+':'+nid(), akey:'a:'+c.building, name:c.academy, courseId:c.course, stationId:st.id, personIds:ids, startedAt:Date.now(), durationMs:Math.max(0,end-Date.now()) });
+  courseSel.people=new Set(); renderTopbar(); renderStations(); saveGame(true); allyTabLoad();
+}
+async function allyCreateCourse(){
+  const q=id=>document.getElementById(id), co=courseById(q('vb-nc-co').value); if(!co) return;
+  const r=await allyCall('ally_course_create',{p_building:q('vb-nc-ak').value,p_course:co.id,p_duration:co.durationMs,p_start_h:Number(q('vb-nc-start').value),
+    p_per_member:Math.max(1,Math.min(10,Math.floor(Number(q('vb-nc-per').value)||1))),p_fee:Math.max(0,Math.min(100000,Math.floor(Number(q('vb-nc-fee').value)||0)))},`Lehrgang „${co.name}“ ausgeschrieben`);
+  if(r){ courseSel.id=r.id; allyTabLoad(); }
+}
 function allyBuildingsHtml(){
   const A=allyAssets, can=!!A.can_build, list=A.buildings||[];
-  return `<div class="vb-sec"><h4>Verbandsgebäude</h4>${list.length?list.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim">${VB_BUILD[b.type]?.name||b.type}${b.type==='akademie'?` · ${b.rooms}/${VB_BUILD.akademie.maxRooms} Lehrsäle`:''}</span><span class="vb-sp"></span>
+  return `<div class="vb-sec"><h4>Verbandsgebäude</h4>${list.length?list.map(b=>`<div class="vb-row cv-row"><div class="cv-main"><b>${esc(b.name)}</b><span class="pat-dept">${VB_BUILD[b.type]?.name||b.type}${b.type==='akademie'?` · ${b.rooms}/${VB_BUILD.akademie.maxRooms} Lehrsäle`:''}</span>${b.type==='kh'?allyKhDepts(b,can):''}</div><span class="vb-sp"></span>
       <button class="btn sm ghost" data-vbgo="${b.id}">Karte</button>
       ${can&&b.type==='akademie'&&b.rooms<VB_BUILD.akademie.maxRooms?`<button class="btn sm" data-vbexp="${b.id}">+ Lehrsaal · ${fmt(VB_BUILD.akademie.roomCost)} €</button>`:''}
       ${can?`<button class="btn sm danger" data-vbdel="${b.id}">Abreißen</button>`:''}</div>`).join(''):'<div class="empty-hint">Noch keine Verbandsgebäude.</div>'}</div>
     ${can?`<div class="vb-sec"><h4>Neues Gebäude aus der Verbandskasse (${fmt(A.kasse||0)} €)</h4>
       ${Object.entries(VB_BUILD).map(([k,t])=>`<div class="vb-row"><b>${t.name}</b><span class="dim hide-sm">${t.desc}</span><span class="vb-sp"></span><span class="mono">${fmt(t.cost)} €</span>
         <button class="btn sm primary" data-vbbuild="${k}" ${(A.kasse||0)>=t.cost?'':'disabled'}>Platzieren</button></div>`).join('')}
-      <div class="vb-form"><label class="fld sm"><span>Name (optional)</span><input id="vb-b-name" class="vb-in" maxlength="60" placeholder="z. B. Klinikum Nord"></label>
-        <label class="fld sm" style="max-width:220px"><span>Verbandsakademie: Personen je Mitglied</span><input id="vb-aclim" class="vb-in" type="number" min="1" max="10" value="${A.academy_limit||10}"></label><button class="btn sm" id="vb-aclim-save">Übernehmen</button></div></div>`
+      <div class="vb-form"><label class="fld sm"><span>Name (optional)</span><input id="vb-b-name" class="vb-in" maxlength="60" placeholder="z. B. Klinikum Nord"></label></div></div>`
     :`<div class="pers-hint">Bauen und Ausbauen dürfen Mitglieder mit dem Recht „Finanzen“. Gebäude werden aus der Verbandskasse bezahlt.</div>`}`;
+}
+/* Fachabteilungen eines Verbandskrankenhauses: vorhandene, im Bau (Bauschlange) und neue */
+function allyKhDepts(b,can){
+  const have=b.depts||['inn'], building=b.building||[], now=Date.now();
+  const chips=have.map(d=>`<span class="vb-dept">${esc(DEPTS[d]||d)}</span>`).join('')+building.map(x=>`<span class="vb-dept build">${esc(DEPTS[x.dept]||x.dept)} · ${fmtDur(new Date(x.ready_at).getTime()-now)}</span>`).join('');
+  const open=Object.keys(VB_DEPT_COST).filter(d=>!have.includes(d)&&!building.some(x=>x.dept===d));
+  return `<div class="vb-depts">${chips}</div>${can&&open.length&&b.building!==undefined&&!(have.length===Object.keys(DEPTS).length)?`<div class="vb-form" style="margin-top:4px"><select class="vb-sel" data-khsel="${b.id}">${open.map(d=>`<option value="${d}">${esc(DEPTS[d])} · ${fmt(VB_DEPT_COST[d])} €</option>`).join('')}</select>
+    <button class="btn sm" data-khdept="${b.id}">Abteilung bauen (1 Tag)</button></div>`:''}`;
 }
 function allyBind3(){
   const box=document.getElementById('vb-content'), q=id=>document.getElementById(id), on=(id,fn)=>{ const e=q(id); if(e) e.onclick=fn; };
@@ -2486,8 +2560,13 @@ function allyBind3(){
   box.querySelectorAll('[data-vbdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gebäude abreißen? Das Geld kommt nicht zurück.')) return;
     if(await allyCall('ally_building_remove',{p_id:b.dataset.vbdel},'Gebäude abgerissen')){ await allyLoadMap(); renderVerband(); } });
   box.querySelectorAll('[data-vbgo]').forEach(b=>b.onclick=()=>{ const x=(allyAssets.buildings||[]).find(y=>y.id===b.dataset.vbgo); if(x){ hideModal('modal-verband'); map.setView([x.lat,x.lng],15); } });
-  on('vb-aclim-save',async()=>{ const n=Math.max(1,Math.min(10,Math.floor(Number(q('vb-aclim').value)||10)));
-    if(await allyCall('ally_settings',{p_settings:{academy_limit:n}},`Limit: ${n} Personen je Mitglied`)){ await allyLoadAssets(); renderVerband(); } });
+  box.querySelectorAll('[data-khdept]').forEach(b=>b.onclick=async()=>{ const d=box.querySelector(`[data-khsel="${b.dataset.khdept}"]`).value;
+    if(await allyCall('ally_kh_dept',{p_id:b.dataset.khdept,p_dept:d},`${DEPTS[d]} wird gebaut`)){ await allyLoadAssets(); renderVerband(); } });
+  box.querySelectorAll('[data-vcourse]').forEach(r=>r.onclick=()=>{ courseSel.id=r.dataset.vcourse; courseSel.people=new Set(); renderVerband(); });
+  box.querySelectorAll('[data-vcancel]').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); if(confirm('Lehrgang absagen? Die 150.000 € gehen zurück in die Kasse.') && await allyCall('ally_course_cancel',{p_course:b.dataset.vcancel},'Lehrgang abgesagt')) allyTabLoad(); });
+  const vst=q('vb-vc-st'); if(vst) vst.onchange=()=>{ courseSel.station=vst.value; courseSel.people=new Set(); renderVerband(); };
+  box.querySelectorAll('[data-vcp]').forEach(cb=>cb.onchange=()=>{ cb.checked?courseSel.people.add(cb.dataset.vcp):courseSel.people.delete(cb.dataset.vcp); renderVerband(); });
+  on('vb-vc-join',allyJoinCourse); on('vb-nc-go',allyCreateCourse);
 }
 /* Eigene Akademie im Verband freigeben (im Akademie-Fenster) */
 function acadAllyPanel(a){
