@@ -7,7 +7,7 @@ die Fahrzeuge je Stufe sind eigene Festlegungen, nicht die (nicht öffentliche) 
 import json,re,unicodedata
 # ---------- Fahrzeuggruppen ----------
 G={
- 'LOESCH':(['hlf20','lhf10','lf20','lfkats','lf16ts'],'LHF/LF'),
+ 'LOESCH':(['hlf20','lhf16','lf20','lfkats','lf16ts'],'LHF/LF'),
  'TLF':(['tlf','tlf3000','tlf4000','tlf1624','tlf2024','tlf2450cafs'],'TLF'),
  'DLK':(['dlk','tm50'],'DLK'),
  'ELWC':(['elw1c'],'ELW 1 C'), 'ELWB':(['elw1b'],'ELW 1 B'), 'ELW2':(['elw2'],'ELW 2'), 'KDOW':(['kdow'],'KdoW'),
@@ -16,7 +16,7 @@ G={
  'OEL':(['ab_auffang'],'AB-Auffang'), 'SCHAUM':(['ab_schaum','ab_sonderl','tlf2450cafs','tlf2024'],'Schaum/CAFS'),
  'SCHLAUCH':(['sw2000','swkats','ab_schlauch'],'Schlauch'), 'KRAN':(['fwk'],'FwK'), 'HOEHE':(['gw_hoehe'],'GW-Höhe'),
  'TAUCH':(['gw_taucher'],'GW-Taucher'), 'BOOT':(['mzb','gw_wr'],'Boot/GW-W'), 'NEA':(['fwa_notstrom'],'Notstrom'),
- 'KLEIN':(['klef','hlf20','lhf10','lf20','lfkats','lf16ts'],'KLEF/LHF'), 'TM':(['tm50'],'TM 50'), 'WLF':(['wlf'],'WLF'),
+ 'KLEIN':(['klef','hlf20','lhf16','lf20','lfkats','lf16ts'],'KLEF/LHF'), 'TM':(['tm50'],'TM 50'), 'WLF':(['wlf'],'WLF'),
 }
 def R(grp,n=1):
     t,l=G[grp]; return {'count':n,'types':t,'label':l}

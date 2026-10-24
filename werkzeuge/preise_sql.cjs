@@ -10,6 +10,9 @@ const VEHICLES = JSON.parse(grab(/const VEHICLES = (\{.*\});/, 'VEHICLES'));
 
 const rows = [];
 for (const v of Object.values(VEHICLES)) rows.push(['vehicle', v.id, v.cost]);
+// Umbenannte Typen alter Spielstände behalten den Preis des Nachfolgers (sonst Fehlalarm beim Umstieg)
+const LEGACY_TYPES = { lhf10: 'lhf16' };
+for (const [alt, neu] of Object.entries(LEGACY_TYPES)) rows.push(['vehicle', alt, VEHICLES[neu].cost]);
 // Wache Level n: günstigster legaler Weg = direkt mit n Ausbaustufen bauen (mit Rabatt)
 for (let n = 1; n <= CONFIG.maxStationLevel; n++) {
   let up = 0; for (let l = 1; l < n; l++) up += CONFIG.upgradeCost(l);
