@@ -384,6 +384,16 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .vb-det{ display:flex; flex-direction:column; gap:3px; }
 .vb-ta, .vb-in, .vb-sel{ background:var(--panel-3); border:1px solid var(--border-2); border-radius:8px; color:var(--text); padding:7px 9px; font:inherit; font-size:13px; }
 .vb-ta{ width:100%; box-sizing:border-box; resize:vertical; }
+.vb-chat{ max-height:46vh; min-height:200px; overflow:auto; display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.vb-msg{ display:flex; flex-direction:column; gap:2px; padding:6px 9px; border-radius:9px; background:var(--panel-3); max-width:80%; align-self:flex-start; }
+.vb-msg.me{ align-self:flex-end; background:color-mix(in srgb, var(--fire) 18%, var(--panel-3)); }
+.vb-msg-h{ display:flex; align-items:center; gap:6px; font-size:12px; }
+.vb-msg-t{ font-size:14px; white-space:pre-wrap; word-break:break-word; }
+.vb-x{ margin-left:auto; background:none; border:0; color:var(--text-mut); cursor:pointer; font-size:15px; line-height:1; padding:0 2px; }
+#vb-content td.mono{ white-space:nowrap; }
+.vb-acts{ display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; }
+.funk-row.ally{ border-left:3px solid #a78bfa; }
+.funk-ally{ margin-left:auto; } .funk-ally.on{ color:#fff; border-color:#a78bfa; background:color-mix(in srgb, #a78bfa 25%, transparent); }
 /* Erweiterungen */
 .ext-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; }
 .ext-card{ border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:6px; background:var(--panel-2); }
@@ -658,7 +668,8 @@ a.dd-item{ text-decoration:none; color:var(--text); }
       <div class="tab-body hidden" id="tab-stations"><div class="panel-body" id="stations-list"></div></div>
       <div class="funk">
         <div class="funk-head"><span>Funkverkehr</span><span class="count zero" id="funk-count">0</span>
-          <button class="btn sm ghost" id="btn-funk-clear" style="margin-left:auto" title="Funkprotokoll leeren">Leeren</button></div>
+          <button class="btn sm ghost funk-ally" id="btn-funk-ally" title="Funkmeldungen der Verbandsmitglieder anzeigen" aria-label="Verbandsfunk an oder aus">Verband</button>
+          <button class="btn sm ghost" id="btn-funk-clear" style="margin-left:6px" title="Funkprotokoll leeren">Leeren</button></div>
         <div class="funk-body" id="funk-list"></div>
       </div>
     </div>
@@ -1851,7 +1862,10 @@ function settlePayday(){
 /* ------------------------- VERBAND ------------------------- */
 // Server hält den Verband; der Browser fragt alle 10 s nach (Gutschriften) und lädt die Karte der Mitglieder alle 60 s
 const ALLY_COLOR='#a78bfa';
-const ALLY_PERMS=[['members','Mitglieder verwalten'],['roles','Rollen verwalten'],['finance','Finanzen'],['moderate','News/Forum/Regeln']];
+const ALLY_PERMS=[['members','Bewerbungen & Einladungen'],['roles','Rollen verwalten'],['finance','Finanzen'],['moderate','Moderieren (Chat, News, Forum, Regeln)'],['kick','Kick'],['ban','Bann'],['timeout','Timeout (Chat)']];
+// Verbandschat und Verbandsfunk (über ally_poll alle 10 s)
+let allyChat=[], allyChatAfter=0, allyChatSeen=0, allyRadioAfter=null, allyRadioQueue=[], allyMutedUntil=null;
+let allyRadioOn=(()=>{ try{ return localStorage.getItem('leitstelle_verbandsfunk')!=='0'; }catch(e){ return true; } })();
 let allyInfo={ id:null, autoPct:0 }, allyData=null, allyTab='overview', allySearch='', allyList=[], allyLayer=null, allyMapAt=0;
 function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 function fmtDate(t){ return new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(t)); }
@@ -1862,8 +1876,14 @@ async function allyCall(fn,args,okMsg){
 async function allyPoll(){
   if(!sb||!AUTH.token||!state||simulating) return;
   try{
-    const r=await rpc('ally_poll',{p_token:AUTH.token}); if(!r||r.error) return;
+    const radio=allyRadioQueue.splice(0,30);
+    let r; try{ r=await rpc('ally_poll',{p_token:AUTH.token,p_radio:radio,p_radio_after:allyRadioAfter,p_chat_after:allyChatAfter}); }
+    catch(e){ allyRadioQueue.unshift(...radio); throw e; }
+    if(!r||r.error) return;
     const changed=(r.alliance||null)!==allyInfo.id; allyInfo.id=r.alliance||null; allyInfo.autoPct=Number(r.auto_pct||0);
+    if(changed){ allyChat=[]; allyChatAfter=0; allyChatSeen=0; allyRadioAfter=null; }
+    allyMutedUntil=r.muted_until||null;
+    allyTakeRadio(r); allyTakeChat(r.chat||[]);
     let got=0; (r.grants||[]).forEach(g=>{ const a=Math.round(g.amount||0); if(a>0){ got+=a; state.credits+=a; book('verband_in',g.note||'Gutschrift',a); } });
     if(got){ renderTopbar(); toast(`Gutschrift: +${fmt(got)} €`,'ok'); saveGame(true); }
     if(changed || Date.now()-allyMapAt>60000) allyLoadMap();
@@ -1887,6 +1907,26 @@ function allyStationPin(st){ const c=st.ready?ALLY_COLOR:'#6b7280';
   return `<svg viewBox="0 0 48 52" width="48" height="52" aria-hidden="true"><path d="${PIN_PATH}" fill="#151a23" stroke="${c}" stroke-width="2"${st.ready?'':' stroke-dasharray="4 3"'}/><g transform="translate(8 11)"><path d="M3 21V10L12 4.5L21 10V21Z" fill="${c}"/><rect x="7" y="13" width="10" height="8" fill="#151a23"/><path d="M7 15.6H17M7 18.3H17" stroke="${c}" stroke-width="1.3"/></g><rect x="28" y="1" width="18" height="12" rx="4" fill="#0d1017" stroke="#3a4250" stroke-width="1"/><text x="37" y="10" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="#e6ebf2">L${Number(st.level)||1}</text></svg>`; }
 function allyBuildingPin(b,t){ const c=b.ready?ALLY_COLOR:'#6b7280', icon=PIN_ICONS[t.id];
   return `<svg viewBox="0 0 40 48" width="40" height="48" aria-hidden="true"><path d="M8 2H32A6 6 0 0 1 38 8V30A6 6 0 0 1 32 36H25L20 44L15 36H8A6 6 0 0 1 2 30V8A6 6 0 0 1 8 2Z" fill="#151a23" stroke="${c}" stroke-width="2"${b.ready?'':' stroke-dasharray="4 3"'}/>${icon?`<g transform="translate(8 7)">${icon(c)}</g>`:''}</svg>`; }
+/* Verbandsfunk: Meldungen der anderen Mitglieder im eigenen Funkprotokoll (abschaltbar) */
+function allyTakeRadio(r){
+  const first=allyRadioAfter===null; allyRadioAfter=Math.max(allyRadioAfter||0, Number(r.radio_max||0), ...(r.radio||[]).map(x=>Number(x.id)));
+  if(first||!allyRadioOn) return;
+  (r.radio||[]).forEach(x=>{ funkLog.unshift({ t:clockTimeFmt.format(new Date(x.at)), name:`${x.player} · ${x.vehicle}`, status:x.status||null, label:x.status?FMS_SHORT[x.status]:'', note:x.note||'', ally:true }); });
+  if(funkLog.length>60) funkLog.length=60; if((r.radio||[]).length) renderFunk();
+}
+function allyTakeChat(list){
+  if(!list.length) return;
+  list.forEach(m=>{ const i=allyChat.findIndex(x=>x.id===m.id); if(i>=0) allyChat[i]=m; else allyChat.push(m); });
+  allyChat.sort((a,b)=>a.id-b.id); if(allyChat.length>200) allyChat.splice(0,allyChat.length-200);
+  allyChatAfter=Math.max(allyChatAfter,...list.map(m=>Number(m.id)));
+  if(!allyChatSeen) allyChatSeen=allyChatAfter;                       // beim ersten Abruf alles als gelesen werten
+  const open=document.getElementById('modal-verband').classList.contains('show') && allyTab==='chat';
+  if(open){ allyChatSeen=allyChatAfter; renderVerband(); } else allyUnreadBadge();
+}
+function allyUnread(){ return allyChat.filter(m=>m.id>allyChatSeen && m.user_id!==allyData?.me && !m.deleted).length; }
+function allyUnreadBadge(){ const n=allyUnread(), b=document.getElementById('dd-verband'); if(b) b.textContent=n?`Verband (${n} neu)`:'Verband'; }
+function toggleAllyRadio(){ allyRadioOn=!allyRadioOn; try{ localStorage.setItem('leitstelle_verbandsfunk',allyRadioOn?'1':'0'); }catch(e){}
+  const b=document.getElementById('btn-funk-ally'); if(b) b.classList.toggle('on',allyRadioOn); toast(`Verbandsfunk ${allyRadioOn?'an':'aus'}`,'ok'); }
 /* Automatischer Anteil der Tageseinnahmen (bei der Auszahlung um 0 Uhr) */
 async function allyAutoDeposit(earned){
   const pct=allyInfo.id?allyInfo.autoPct:0; if(!(pct>0)||!(earned>0)) return;
@@ -1910,11 +1950,14 @@ function renderVerband(){
   document.getElementById('vb-title').textContent=d.member?`${d.alliance.name} [${d.alliance.tag}]`:'Verband';
   if(!d.member){ tabs.innerHTML=''; box.innerHTML=allyNoMemberHtml(); allyBindNoMember(); return; }
   const P=d.perms, req=(d.requests||[]).filter(x=>x.kind==='apply').length;
-  const T=[['overview','Übersicht'],['members',`Mitglieder ${d.members.length}`],['roles','Rollen'],['kasse','Kasse'],['stats','Statistik']].concat(P.members?[['requests',`Anfragen${req?' '+req:''}`]]:[]);
+  if(allyTab==='chat') allyChatSeen=allyChatAfter;
+  const un=allyUnread();
+  const T=[['overview','Übersicht'],['chat',`Chat${un?' '+un:''}`],['members',`Mitglieder ${d.members.length}`],['roles','Rollen'],['kasse','Kasse'],['stats','Statistik']].concat(P.members||P.ban?[['requests',`Anfragen${req?' '+req:''}`]]:[]);
+  if(allyTab==='chat'){ allyChatSeen=allyChatAfter; allyUnreadBadge(); }
   if(!T.some(t=>t[0]===allyTab)) allyTab='overview';
   tabs.innerHTML=T.map(([k,n])=>`<button class="tab${k===allyTab?' active':''}" data-vbtab="${k}">${n}</button>`).join('');
   tabs.querySelectorAll('[data-vbtab]').forEach(b=>b.onclick=()=>{ allyTab=b.dataset.vbtab; renderVerband(); });
-  box.innerHTML=({overview:allyOverviewHtml,members:allyMembersHtml,roles:allyRolesHtml,kasse:allyKasseHtml,stats:allyStatsHtml,requests:allyRequestsHtml}[allyTab])();
+  box.innerHTML=({overview:allyOverviewHtml,chat:allyChatHtml,members:allyMembersHtml,roles:allyRolesHtml,kasse:allyKasseHtml,stats:allyStatsHtml,requests:allyRequestsHtml}[allyTab])();
   allyBind();
 }
 function allyNoMemberHtml(){
@@ -1963,6 +2006,23 @@ function allyOverviewHtml(){
       <button class="btn" id="vb-transfer-btn" ${others.length?'':'disabled'}>Übertragen</button><button class="btn danger" id="vb-dissolve">Verband auflösen</button>`
       :`<button class="btn danger" id="vb-leave">Verband verlassen</button>`}</div></div>`;
 }
+function allyChatHtml(){
+  const d=allyData, me=d.me, mod=d.perms.moderate, mem=id=>d.members.find(m=>m.id===id);
+  const color=id=>{ const m=mem(id); if(!m) return 'var(--text-mut)'; if(id===d.alliance.owner) return '#f59e0b'; const r=(d.roles||[]).filter(r=>m.roles.includes(r.id)).sort((a,b)=>a.position-b.position)[0]; return r?r.color:'var(--text)'; };
+  const muted=allyMutedUntil&&new Date(allyMutedUntil).getTime()>Date.now();
+  return `<div class="vb-chat" id="vb-chat-list">${allyChat.length?allyChat.map(m=>`<div class="vb-msg${m.user_id===me?' me':''}">
+      <span class="vb-msg-h"><b style="color:${esc(color(m.user_id))}">${esc(m.name||'gelöscht')}</b><span class="dim"> ${fmtDate(m.at)}</span>
+      ${!m.deleted&&(m.user_id===me||mod)?`<button class="vb-x" data-chatdel="${m.id}" aria-label="Nachricht löschen" title="Löschen">×</button>`:''}</span>
+      <span class="vb-msg-t${m.deleted?' dim':''}">${m.deleted?'Nachricht gelöscht':esc(m.msg)}</span></div>`).join(''):'<div class="empty-hint">Noch keine Nachrichten. Schreib die erste!</div>'}</div>
+    ${muted?`<div class="pers-hint" style="color:#fbbf24">Du bist im Chat stummgeschaltet bis ${fmtDate(allyMutedUntil)}.</div>`:''}
+    <div class="vb-form"><label class="fld sm" style="flex:1"><span>Nachricht an den Verband</span><input id="vb-chat-in" type="text" maxlength="500" placeholder="Nachricht (Enter zum Senden)" ${muted?'disabled':''}></label>
+      <button class="btn primary" id="vb-chat-send" ${muted?'disabled':''}>Senden</button></div>
+    <div class="pers-hint">Nachrichten werden 7 Tage gespeichert. Neue Nachrichten kommen alle 10 Sekunden.</div>`;
+}
+async function allyChatSend(){
+  const inp=document.getElementById('vb-chat-in'), msg=(inp?.value||'').trim(); if(!msg) return;
+  if(await allyCall('ally_chat_send',{p_msg:msg})){ inp.value=''; await allyPoll(); setTimeout(()=>document.getElementById('vb-chat-in')?.focus(),30); }
+}
 function allyMembersHtml(){
   const d=allyData, P=d.perms, canEdit=m=>m.id!==d.me&&(P.owner||m.rank>P.rank);
   const roles=(d.roles||[]).filter(r=>P.owner||r.position>P.rank);
@@ -1971,7 +2031,10 @@ function allyMembersHtml(){
       <td><b>${esc(m.name)}</b>${m.id===d.alliance.owner?' <span class="vb-role" style="--rc:#f59e0b">Gründer</span>':''}<div class="pat-dept">seit ${fmtDate(m.joined_at)}</div></td>
       <td>${roleChips(m.roles)||'<span class="dim">—</span>'}${P.roles&&canEdit(m)?`<details class="vb-det"><summary>Rollen ändern</summary>${roles.map(r=>`<label class="vb-check"><input type="checkbox" data-mr="${m.id}" value="${r.id}" ${m.roles.includes(r.id)?'checked':''}> ${esc(r.name)}</label>`).join('')}<button class="btn sm" data-mrsave="${m.id}">Speichern</button></details>`:''}</td>
       <td class="mono">${fmt(m.today)} €</td><td class="mono">${fmt(m.month)} €</td><td class="mono">${fmt(m.total)} €</td>
-      <td style="text-align:right">${P.members&&canEdit(m)?`<button class="btn sm danger" data-kick="${m.id}">Entfernen</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+      <td style="text-align:right" class="vb-acts">${(d.timeouts||{})[m.id]?`<div class="pat-dept">stumm bis ${fmtDate(d.timeouts[m.id])}</div>`:''}${canEdit(m)?`
+        ${P.timeout?`<select class="vb-sel" data-timeout="${m.id}"><option value="">Timeout …</option><option value="10">10 Minuten</option><option value="60">1 Stunde</option><option value="1440">1 Tag</option><option value="10080">7 Tage</option>${(d.timeouts||{})[m.id]?'<option value="0">aufheben</option>':''}</select>`:''}
+        ${P.kick?`<button class="btn sm" data-kick="${m.id}">Kick</button>`:''}
+        ${P.ban?`<select class="vb-sel" data-ban="${m.id}"><option value="">Bann …</option><option value="1">1 Tag</option><option value="7">7 Tage</option><option value="30">30 Tage</option><option value="0">dauerhaft</option></select>`:''}`:''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function allyRolesHtml(){
   const d=allyData, P=d.perms, mine=r=>P.owner||r.position>P.rank;
@@ -1986,7 +2049,7 @@ function allyRolesHtml(){
       <td><input class="vb-in" style="width:64px" type="number" min="1" max="999" data-k="position" value="${Math.max(P.rank+1,50)}"></td>${ALLY_PERMS.map(p=>`<td><input type="checkbox" data-perm="${p[0]}"></td>`).join('')}<td></td></tr>
     </tbody></table></div><div class="vb-form"><span class="vb-sp"></span><button class="btn primary" id="vb-roles-save">Rollen speichern</button></div>`;
 }
-const ALLY_KIND={einzahlung:'Einzahlung',auto:'Automatisch',auszahlung:'Auszahlung',gruendung:'Gründung',beitritt:'Beitritt',austritt:'Austritt'};
+const ALLY_KIND={einzahlung:'Einzahlung',auto:'Automatisch',auszahlung:'Auszahlung',gruendung:'Gründung',beitritt:'Beitritt',austritt:'Austritt',bann:'Bann'};
 function allyKasseHtml(){
   const d=allyData, P=d.perms, a=d.alliance, lim=Math.min(a.payout_limit,2000000);
   const eligible=d.members.filter(m=>Date.now()-new Date(m.joined_at).getTime()>=3*86400000);
@@ -2017,8 +2080,10 @@ function allyStatsHtml(){
 function allyRequestsHtml(){
   const r=allyData.requests||[], ap=r.filter(x=>x.kind==='apply'), iv=r.filter(x=>x.kind==='invite');
   return `<div class="vb-sec"><h4>Bewerbungen</h4>${ap.length?ap.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span><span class="vb-sp"></span>
-      <button class="btn sm primary" data-req="${x.user_id}" data-acc="1">Annehmen</button><button class="btn sm ghost" data-req="${x.user_id}" data-acc="0">Ablehnen</button></div>`).join(''):'<div class="pers-hint">Keine offenen Bewerbungen.</div>'}</div>
-    <div class="vb-sec"><h4>Offene Einladungen</h4>${iv.length?iv.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span></div>`).join(''):'<div class="pers-hint">Keine.</div>'}</div>`;
+      ${allyData.perms.members?`<button class="btn sm primary" data-req="${x.user_id}" data-acc="1">Annehmen</button><button class="btn sm ghost" data-req="${x.user_id}" data-acc="0">Ablehnen</button>`:''}
+      ${allyData.perms.ban?`<select class="vb-sel" data-ban="${x.user_id}"><option value="">Sperren …</option><option value="7">7 Tage</option><option value="0">dauerhaft</option></select>`:''}</div>`).join(''):'<div class="pers-hint">Keine offenen Bewerbungen.</div>'}</div>
+    <div class="vb-sec"><h4>Offene Einladungen</h4>${iv.length?iv.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span></div>`).join(''):'<div class="pers-hint">Keine.</div>'}</div>
+    ${allyData.perms.ban?`<div class="vb-sec"><h4>Gesperrte Spieler</h4>${(allyData.bans||[]).length?allyData.bans.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim"> · ${b.until?'bis '+fmtDate(b.until):'dauerhaft'}${b.reason?' · '+esc(b.reason):''}</span><span class="vb-sp"></span><button class="btn sm" data-unban="${b.user_id}">Entsperren</button></div>`).join(''):'<div class="pers-hint">Niemand gesperrt.</div>'}</div>`:''}`;
 }
 function allyBind(){
   const box=document.getElementById('vb-content'), q=id=>document.getElementById(id), val=id=>q(id)?.value;
@@ -2033,7 +2098,17 @@ function allyBind(){
   on('vb-transfer-btn',async()=>{ const o=q('vb-transfer'); if(!o||!confirm(`Leitung an ${o.selectedOptions[0].text} übertragen?`)) return; if(await allyCall('ally_transfer',{p_user:o.value},'Leitung übertragen')) allyRefresh(); });
   on('vb-dissolve',async()=>{ if(!confirm('Verband auflösen? Die Kasse geht verloren.')) return; if(await allyCall('ally_dissolve',{},'Verband aufgelöst')){ allyInfo.id=null; allyRefresh(); } });
   on('vb-inv-btn',async()=>{ const n=(val('vb-inv-name')||'').trim(); if(n && await allyCall('ally_invite',{p_username:n},`${n} eingeladen`)) allyRefresh(); });
-  box.querySelectorAll('[data-kick]').forEach(b=>b.onclick=async()=>{ if(!confirm('Mitglied entfernen?')) return; if(await allyCall('ally_kick',{p_user:b.dataset.kick},'Mitglied entfernt')) allyRefresh(); });
+  box.querySelectorAll('[data-kick]').forEach(b=>b.onclick=async()=>{ if(!confirm('Mitglied aus dem Verband werfen? Es kann sich neu bewerben.')) return; if(await allyCall('ally_kick',{p_user:b.dataset.kick},'Mitglied entfernt')) allyRefresh(); });
+  box.querySelectorAll('[data-ban]').forEach(sel=>sel.onchange=async()=>{ if(sel.value==='') return; const days=Number(sel.value);
+    const reason=prompt(`Grund für den Bann (${days?days+' Tage':'dauerhaft'}):`,''); if(reason===null){ sel.value=''; return; }
+    if(await allyCall('ally_ban',{p_user:sel.dataset.ban,p_days:days||null,p_reason:reason},'Spieler gesperrt')) allyRefresh(); else sel.value=''; });
+  box.querySelectorAll('[data-unban]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_unban',{p_user:b.dataset.unban},'Sperre aufgehoben')) allyRefresh(); });
+  box.querySelectorAll('[data-timeout]').forEach(sel=>sel.onchange=async()=>{ if(sel.value==='') return;
+    if(await allyCall('ally_timeout',{p_user:sel.dataset.timeout,p_minutes:Number(sel.value)},Number(sel.value)?'Timeout gesetzt':'Timeout aufgehoben')) allyRefresh(); else sel.value=''; });
+  box.querySelectorAll('[data-chatdel]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_chat_delete',{p_id:Number(b.dataset.chatdel)},'Nachricht gelöscht')){ allyChatAfter=0; await allyPoll(); renderVerband(); } });
+  on('vb-chat-send',allyChatSend);
+  const ci=q('vb-chat-in'); if(ci) ci.onkeydown=e=>{ if(e.key==='Enter') allyChatSend(); };
+  const cl=q('vb-chat-list'); if(cl) cl.scrollTop=cl.scrollHeight;
   box.querySelectorAll('[data-mrsave]').forEach(b=>b.onclick=async()=>{ const uid=b.dataset.mrsave, ids=[...box.querySelectorAll(`[data-mr="${uid}"]:checked`)].map(x=>x.value);
     if(await allyCall('ally_member_roles',{p_user:uid,p_role_ids:ids},'Rollen gespeichert')) allyRefresh(); });
   on('vb-roles-save',async()=>{ const roles=[...box.querySelectorAll('[data-role]')].map(tr=>{ const g=k=>tr.querySelector(`[data-k="${k}"]`);
@@ -2057,6 +2132,7 @@ function vehAutoName(v){
 function vehName(v){ return (v.customName&&v.customName.trim()) ? v.customName.trim() : vehAutoName(v); }
 function funk(v,status,note){ if(simulating) return;
   funkLog.unshift({ t:clockTimeFmt.format(new Date()), name:vehName(v), status:status||null, label:status?FMS_SHORT[status]:'', note:note||'' });
+  if(allyInfo.id && allyRadioQueue.length<60) allyRadioQueue.push({ vehicle:vehName(v), status:status||null, note:note||'' });   // Verbandsfunk
   if(funkLog.length>60) funkLog.length=60;
   renderFunk();
 }
@@ -3404,8 +3480,8 @@ function renderFunk(){ if(simulating) return;
   cnt.textContent=funkLog.length; cnt.classList.toggle('zero',funkLog.length===0);
   if(!funkLog.length){ list.innerHTML=`<div class="funk-empty">Noch kein Funkverkehr.</div>`; return; }
   list.innerHTML=funkLog.map(e=> e.status
-    ? `<div class="funk-row"><span class="f-time">${e.t}</span><span class="f-txt"><b>${e.name}</b> meldet sich Status <span class="fbox fbox-${e.status}">${e.status}</span> ${e.label}${e.note?' · '+e.note:''}</span></div>`
-    : `<div class="funk-row"><span class="f-time">${e.t}</span><span class="f-txt"><b>${e.name}</b>: ${e.note}</span></div>`
+    ? `<div class="funk-row${e.ally?' ally':''}"><span class="f-time">${e.t}</span><span class="f-txt"><b>${esc(e.name)}</b> meldet sich Status <span class="fbox fbox-${e.status}">${e.status}</span> ${e.label}${e.note?' · '+esc(e.note):''}</span></div>`
+    : `<div class="funk-row${e.ally?' ally':''}"><span class="f-time">${e.t}</span><span class="f-txt"><b>${esc(e.name)}</b>: ${esc(e.note)}</span></div>`
   ).join('');
 }
 
@@ -3521,6 +3597,7 @@ document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-w
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
 document.getElementById('dd-bank').onclick=()=>{ closeMenu(); renderBank(); showModal('modal-bank'); };
 document.getElementById('dd-verband').onclick=()=>{ closeMenu(); openVerband(); };
+document.getElementById('btn-funk-ally').onclick=toggleAllyRadio; document.getElementById('btn-funk-ally').classList.toggle('on',allyRadioOn);
 document.getElementById('dd-save').onclick=()=>{ closeMenu(); saveGame(); };
 document.getElementById('dd-settings').onclick=()=>{ closeMenu(); openSettings(); };
 document.getElementById('dd-logout').onclick=()=>{ closeMenu(); doLogout(); };

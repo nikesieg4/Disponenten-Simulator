@@ -367,8 +367,8 @@ end; $$;
    VERBÄNDE (Teil 1: Grundlage)
    Verband gründen/beitreten, Rollen mit Rechten, Verbandskasse mit Kassenbuch,
    Auszahlungen mit Wochenlimit, Wachen der Mitglieder auf der Karte.
-   Rechte: members (Mitglieder verwalten), roles (Rollen verwalten),
-           finance (Finanzen), moderate (News/Forum/Regeln). Gründer: alle.
+   Rechte: members (Bewerbungen/Einladungen), roles (Rollen verwalten), finance (Finanzen),
+           moderate (News/Forum/Regeln, Chat-Nachrichten löschen), kick, ban, timeout (Chat). Gründer: alle.
    =========================================================================== */
 create table if not exists app_alliances (
   id uuid primary key default gen_random_uuid(), name text not null, tag text not null, description text not null default '',
@@ -405,6 +405,39 @@ alter table app_alliance_requests enable row level security; alter table app_all
 alter table app_grants enable row level security;
 revoke all on app_alliances, app_alliance_members, app_alliance_roles, app_alliance_member_roles, app_alliance_requests, app_alliance_ledger, app_grants from anon, authenticated;
 
+/* ---------- Verbände Teil 2a: Kick/Bann/Timeout, Verbandschat, Verbandsfunk ---------- */
+create table if not exists app_migrations ( key text primary key, at timestamptz not null default now() );
+create table if not exists app_alliance_bans (
+  alliance_id uuid not null references app_alliances(id) on delete cascade, user_id uuid not null references app_users(id) on delete cascade,
+  until timestamptz, reason text not null default '', by_user uuid references app_users(id) on delete set null, created_at timestamptz not null default now(),
+  primary key (alliance_id, user_id) );
+create table if not exists app_alliance_timeouts (
+  alliance_id uuid not null references app_alliances(id) on delete cascade, user_id uuid not null references app_users(id) on delete cascade,
+  until timestamptz not null, primary key (alliance_id, user_id) );
+create table if not exists app_alliance_chat (
+  id bigserial primary key, alliance_id uuid not null references app_alliances(id) on delete cascade, user_id uuid references app_users(id) on delete set null,
+  msg text not null, deleted boolean not null default false, created_at timestamptz not null default now() );
+create index if not exists app_alliance_chat_a on app_alliance_chat(alliance_id, id);
+create table if not exists app_alliance_radio (
+  id bigserial primary key, alliance_id uuid not null references app_alliances(id) on delete cascade, user_id uuid not null references app_users(id) on delete cascade,
+  vehicle text not null, status int, note text not null default '', created_at timestamptz not null default now() );
+create index if not exists app_alliance_radio_a on app_alliance_radio(alliance_id, id);
+alter table app_migrations enable row level security; alter table app_alliance_bans enable row level security;
+alter table app_alliance_timeouts enable row level security; alter table app_alliance_chat enable row level security; alter table app_alliance_radio enable row level security;
+revoke all on app_migrations, app_alliance_bans, app_alliance_timeouts, app_alliance_chat, app_alliance_radio from anon, authenticated;
+
+-- Einmalig: bestehende Rollen mit „Mitglieder verwalten“ bekommen „Kick“ (vorher dasselbe Recht), Leitung zusätzlich Bann/Timeout
+do $$ begin
+  if not exists(select 1 from app_migrations where key='ally_kick_ban_timeout') then
+    update app_alliance_roles set perms=array(select distinct unnest(perms||'{kick}'::text[])) where 'members'=any(perms);
+    update app_alliance_roles set perms=array(select distinct unnest(perms||'{ban,timeout}'::text[])) where 'members'=any(perms) and 'roles'=any(perms);
+    insert into app_migrations(key) values ('ally_kick_ban_timeout');
+  end if;
+end $$;
+
+create or replace function _ally_banned(p_aid uuid, p_uid uuid) returns boolean language sql stable security definer set search_path=public, extensions as $$
+  select exists(select 1 from app_alliance_bans where alliance_id=p_aid and user_id=p_uid and (until is null or until > now())); $$;
+
 create or replace function _ally_of(p_uid uuid) returns uuid language sql stable security definer set search_path=public, extensions as $$
   select alliance_id from app_alliance_members where user_id=p_uid; $$;
 create or replace function _ally_is_owner(p_uid uuid) returns boolean language sql stable security definer set search_path=public, extensions as $$
@@ -440,7 +473,7 @@ begin
   insert into app_alliances(name, tag, owner) values (p_name, p_tag, v_uid) returning id into v_id;
   insert into app_alliance_members(user_id, alliance_id) values (v_uid, v_id);
   delete from app_alliance_requests where user_id=v_uid;
-  insert into app_alliance_roles(alliance_id, name, color, position, perms) values (v_id,'Leitung','#f59e0b',10,'{members,roles,finance,moderate}'),(v_id,'Mitglied','#a78bfa',90,'{}');
+  insert into app_alliance_roles(alliance_id, name, color, position, perms) values (v_id,'Leitung','#f59e0b',10,'{members,roles,finance,moderate,kick,ban,timeout}'),(v_id,'Mitglied','#a78bfa',90,'{}');
   insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_id, v_uid, 'gruendung', 0, 'Verband gegründet');
   return json_build_object('ok',true,'id',v_id,'cost',c_cost);
 end; $$;
@@ -457,6 +490,7 @@ create or replace function _ally_join(p_uid uuid, p_aid uuid) returns json langu
 declare v_role uuid;
 begin
   if _ally_of(p_uid) is not null then return json_build_object('error','Bereits in einem Verband'); end if;
+  if _ally_banned(p_aid, p_uid) then return json_build_object('error','Für diesen Verband gesperrt'); end if;
   if (select count(*) from app_alliance_members where alliance_id=p_aid) >= 100 then return json_build_object('error','Der Verband ist voll (100 Mitglieder)'); end if;
   insert into app_alliance_members(user_id, alliance_id) values (p_uid, p_aid);
   delete from app_alliance_requests where user_id=p_uid;
@@ -473,6 +507,7 @@ begin
   if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
   select open into v_open from app_alliances where id=p_aid; if v_open is null then return json_build_object('error','Verband nicht gefunden'); end if;
   if _ally_of(v_uid) is not null then return json_build_object('error','Du bist bereits in einem Verband'); end if;
+  if _ally_banned(p_aid, v_uid) then return json_build_object('error','Du bist für diesen Verband gesperrt'); end if;
   if v_open then return _ally_join(v_uid, p_aid); end if;
   insert into app_alliance_requests(alliance_id, user_id, kind) values (p_aid, v_uid, 'apply') on conflict (alliance_id,user_id) do nothing;
   return json_build_object('ok',true,'applied',true);
@@ -485,6 +520,7 @@ begin
   if v_aid is null or not _ally_perm(v_uid,'members') then return json_build_object('error','Keine Berechtigung'); end if;
   select id into v_t from app_users where lower(username)=lower(btrim(p_username)); if v_t is null then return json_build_object('error','Spieler nicht gefunden'); end if;
   if _ally_of(v_t) is not null then return json_build_object('error','Spieler ist bereits in einem Verband'); end if;
+  if _ally_banned(v_aid, v_t) then return json_build_object('error','Spieler ist gesperrt (erst entsperren)'); end if;
   insert into app_alliance_requests(alliance_id, user_id, kind) values (v_aid, v_t, 'invite') on conflict (alliance_id,user_id) do update set kind='invite', created_at=now();
   return json_build_object('ok',true);
 end; $$;
@@ -524,7 +560,7 @@ create or replace function ally_kick(p_token uuid, p_user uuid)
 returns json language plpgsql security definer set search_path=public, extensions as $$
 declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
 begin
-  if v_aid is null or not _ally_perm(v_uid,'members') or _ally_of(p_user) is distinct from v_aid or p_user=v_uid then return json_build_object('error','Keine Berechtigung'); end if;
+  if v_aid is null or not _ally_perm(v_uid,'kick') or _ally_of(p_user) is distinct from v_aid or p_user=v_uid then return json_build_object('error','Keine Berechtigung'); end if;
   if _ally_rank(p_user) <= _ally_rank(v_uid) then return json_build_object('error','Nur Mitglieder mit niedrigerer Rolle'); end if;
   perform _ally_remove(p_user); return json_build_object('ok',true);
 end; $$;
@@ -555,7 +591,7 @@ begin
   v_rank := _ally_rank(v_uid);
   for r in select * from jsonb_array_elements(coalesce(p_roles,'[]'::jsonb)) loop
     v_pos := greatest(1, least(999, coalesce((r->>'position')::int, 100)));
-    select array_agg(p) into v_perms from jsonb_array_elements_text(coalesce(r->'perms','[]'::jsonb)) p where p in ('members','roles','finance','moderate');
+    select array_agg(p) into v_perms from jsonb_array_elements_text(coalesce(r->'perms','[]'::jsonb)) p where p in ('members','roles','finance','moderate','kick','ban','timeout');
     if r ? 'id' and (r->>'id') <> '' then
       select position into v_old from app_alliance_roles where id=(r->>'id')::uuid and alliance_id=v_aid;
       if v_old is null then continue; end if;
@@ -638,6 +674,62 @@ begin
   return json_build_object('ok',true);
 end; $$;
 
+-- Bann: entfernt (falls Mitglied) und sperrt Bewerbung/Einladung; p_days null = dauerhaft
+create or replace function ally_ban(p_token uuid, p_user uuid, p_days int, p_reason text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null or not _ally_perm(v_uid,'ban') or p_user=v_uid then return json_build_object('error','Keine Berechtigung'); end if;
+  if _ally_of(p_user)=v_aid then
+    if _ally_rank(p_user) <= _ally_rank(v_uid) then return json_build_object('error','Nur Mitglieder mit niedrigerer Rolle'); end if;
+    perform _ally_remove(p_user);
+  end if;
+  delete from app_alliance_requests where alliance_id=v_aid and user_id=p_user;
+  insert into app_alliance_bans(alliance_id, user_id, until, reason, by_user) values (v_aid, p_user, case when p_days is null or p_days<=0 then null else now()+make_interval(days=>p_days) end, left(coalesce(p_reason,''),200), v_uid)
+    on conflict (alliance_id,user_id) do update set until=excluded.until, reason=excluded.reason, by_user=excluded.by_user, created_at=now();
+  insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, p_user, 'bann', 0, case when p_days is null or p_days<=0 then 'dauerhaft' else p_days||' Tage' end);
+  return json_build_object('ok',true);
+end; $$;
+create or replace function ally_unban(p_token uuid, p_user uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null or not _ally_perm(v_uid,'ban') then return json_build_object('error','Keine Berechtigung'); end if;
+  delete from app_alliance_bans where alliance_id=v_aid and user_id=p_user; return json_build_object('ok',true);
+end; $$;
+-- Timeout im Chat: p_minutes 0 hebt auf
+create or replace function ally_timeout(p_token uuid, p_user uuid, p_minutes int)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null or not _ally_perm(v_uid,'timeout') or _ally_of(p_user) is distinct from v_aid or p_user=v_uid then return json_build_object('error','Keine Berechtigung'); end if;
+  if _ally_rank(p_user) <= _ally_rank(v_uid) then return json_build_object('error','Nur Mitglieder mit niedrigerer Rolle'); end if;
+  if coalesce(p_minutes,0) <= 0 then delete from app_alliance_timeouts where alliance_id=v_aid and user_id=p_user; return json_build_object('ok',true); end if;
+  insert into app_alliance_timeouts values (v_aid, p_user, now()+make_interval(mins=>least(p_minutes,43200)))
+    on conflict (alliance_id,user_id) do update set until=excluded.until;
+  return json_build_object('ok',true);
+end; $$;
+create or replace function ally_chat_send(p_token uuid, p_msg text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); v_until timestamptz;
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  select until into v_until from app_alliance_timeouts where alliance_id=v_aid and user_id=v_uid and until > now();
+  if v_until is not null then return json_build_object('error','Du bist im Chat stummgeschaltet bis '||to_char(v_until at time zone 'Europe/Berlin','DD.MM. HH24:MI')); end if;
+  p_msg := btrim(coalesce(p_msg,'')); if p_msg='' then return json_build_object('error','Leere Nachricht'); end if;
+  if (select count(*) from app_alliance_chat where user_id=v_uid and created_at > now()-interval '10 seconds') >= 5 then return json_build_object('error','Bitte langsamer schreiben'); end if;
+  insert into app_alliance_chat(alliance_id, user_id, msg) values (v_aid, v_uid, left(p_msg,500));
+  delete from app_alliance_chat where alliance_id=v_aid and created_at < now()-interval '7 days';
+  return json_build_object('ok',true);
+end; $$;
+create or replace function ally_chat_delete(p_token uuid, p_id bigint)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  update app_alliance_chat set deleted=true, msg='' where id=p_id and alliance_id=v_aid and (user_id=v_uid or _ally_perm(v_uid,'moderate'));
+  if not found then return json_build_object('error','Keine Berechtigung'); end if; return json_build_object('ok',true);
+end; $$;
+
 -- Alles für das Verbandsfenster
 create or replace function ally_overview(p_token uuid)
 returns json language plpgsql security definer set search_path=public, extensions as $$
@@ -651,7 +743,11 @@ begin
   return json_build_object('member',true,'me',v_uid,
     'alliance',json_build_object('id',v_a.id,'name',v_a.name,'tag',v_a.tag,'description',v_a.description,'open',v_a.open,'kasse',v_a.kasse,
       'payout_limit',v_a.payout_limit,'ranking_public',v_a.ranking_public,'owner',v_a.owner,'created_at',v_a.created_at),
-    'perms',json_build_object('owner',_ally_is_owner(v_uid),'members',_ally_perm(v_uid,'members'),'roles',_ally_perm(v_uid,'roles'),'finance',v_fin,'moderate',_ally_perm(v_uid,'moderate'),'rank',_ally_rank(v_uid)),
+    'perms',json_build_object('owner',_ally_is_owner(v_uid),'members',_ally_perm(v_uid,'members'),'roles',_ally_perm(v_uid,'roles'),'finance',v_fin,'moderate',_ally_perm(v_uid,'moderate'),
+      'kick',_ally_perm(v_uid,'kick'),'ban',_ally_perm(v_uid,'ban'),'timeout',_ally_perm(v_uid,'timeout'),'rank',_ally_rank(v_uid)),
+    'bans',case when _ally_perm(v_uid,'ban') then coalesce((select json_agg(json_build_object('user_id',b.user_id,'name',u.username,'until',b.until,'reason',b.reason,'created_at',b.created_at) order by b.created_at desc)
+        from app_alliance_bans b join app_users u on u.id=b.user_id where b.alliance_id=v_aid and (b.until is null or b.until > now())),'[]'::json) else '[]'::json end,
+    'timeouts',coalesce((select json_object_agg(user_id, until) from app_alliance_timeouts where alliance_id=v_aid and until > now()),'{}'::json),
     'roles',coalesce((select json_agg(json_build_object('id',id,'name',name,'color',color,'position',position,'perms',perms) order by position) from app_alliance_roles where alliance_id=v_aid),'[]'::json),
     'members',coalesce((select json_agg(json_build_object('id',m.user_id,'name',u.username,'joined_at',m.joined_at,'auto_pct',m.auto_pct,'rank',_ally_rank(m.user_id),
         'roles',coalesce((select json_agg(mr.role_id) from app_alliance_member_roles mr where mr.user_id=m.user_id),'[]'::json),
@@ -682,9 +778,13 @@ returns json language sql security definer set search_path=public, extensions as
   where m.alliance_id=_ally_of(_uid(p_token)) and m.user_id<>_uid(p_token); $$;
 
 -- Gutschriften abholen (alle 10 s): werden bei der nächsten Geldprüfung als erlaubter Zuwachs angerechnet
-create or replace function ally_poll(p_token uuid)
+drop function if exists ally_poll(uuid);
+-- p_radio: eigene Funkmeldungen [{vehicle,status,note}]; p_radio_after: zuletzt gesehene Funk-id (null = erster Abruf, nur Startwert);
+-- p_chat_after: zuletzt gesehene Chat-id (0 = letzte 100 Nachrichten)
+drop function if exists ally_poll(uuid, jsonb, bigint, bigint);
+create or replace function ally_poll(p_token uuid, p_radio jsonb default '[]', p_radio_after bigint default null, p_chat_after bigint default 0)
 returns json language plpgsql security definer set search_path=public, extensions as $$
-declare v_uid uuid := _uid(p_token); v_sum numeric; v_list json;
+declare v_uid uuid := _uid(p_token); v_sum numeric; v_list json; v_aid uuid; v_radio json; v_chat json; v_rmax bigint; v_cmax bigint;
 begin
   if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
   select coalesce(json_agg(json_build_object('amount',amount,'note',note)),'[]'::json), coalesce(sum(amount),0) into v_list, v_sum
@@ -693,7 +793,21 @@ begin
     update app_grants set claimed_at=now() where user_id=v_uid and claimed_at is null;
     update app_saves set econ_adjust=econ_adjust+v_sum where user_id=v_uid;
   end if;
-  return json_build_object('ok',true,'alliance',_ally_of(v_uid),'grants',v_list,
+  v_aid := _ally_of(v_uid);
+  if v_aid is not null then
+    insert into app_alliance_radio(alliance_id, user_id, vehicle, status, note)
+      select v_aid, v_uid, left(coalesce(x->>'vehicle',''),60), case when (x->>'status') ~ '^[1-8]$' then (x->>'status')::int end, left(coalesce(x->>'note',''),120)
+      from (select x from jsonb_array_elements(case when jsonb_typeof(p_radio)='array' then p_radio else '[]'::jsonb end) x limit 30) q;
+    delete from app_alliance_radio where alliance_id=v_aid and created_at < now()-interval '1 hour';
+    select coalesce(max(id),0) into v_rmax from app_alliance_radio where alliance_id=v_aid;
+    select coalesce(json_agg(json_build_object('id',r.id,'player',u.username,'vehicle',r.vehicle,'status',r.status,'note',r.note,'at',r.created_at) order by r.id),'[]'::json) into v_radio
+      from (select * from app_alliance_radio where alliance_id=v_aid and user_id<>v_uid and id > coalesce(p_radio_after, v_rmax) order by id limit 50) r join app_users u on u.id=r.user_id;
+    select coalesce(max(id),0) into v_cmax from app_alliance_chat where alliance_id=v_aid;
+    select coalesce(json_agg(json_build_object('id',c.id,'user_id',c.user_id,'name',u.username,'msg',c.msg,'deleted',c.deleted,'at',c.created_at) order by c.id),'[]'::json) into v_chat
+      from (select * from app_alliance_chat where alliance_id=v_aid and id > p_chat_after and created_at > now()-interval '7 days' order by id desc limit 100) c left join app_users u on u.id=c.user_id;
+  end if;
+  return json_build_object('ok',true,'alliance',v_aid,'grants',v_list,'radio',coalesce(v_radio,'[]'::json),'radio_max',coalesce(v_rmax,0),'chat',coalesce(v_chat,'[]'::json),
+    'muted_until',(select until from app_alliance_timeouts where alliance_id=v_aid and user_id=v_uid and until > now()),
     'auto_pct',(select auto_pct from app_alliance_members where user_id=v_uid));
 end; $$;
 
@@ -701,6 +815,7 @@ grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
 revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]),
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
-  _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid) from public, anon, authenticated;
+  _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
+  _ally_banned(uuid,uuid) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
