@@ -670,7 +670,8 @@ begin
     update app_alliances set open=coalesce((p_settings->>'open')::boolean, open), description=left(coalesce(p_settings->>'description', description),500) where id=v_aid; end if;
   if _ally_perm(v_uid,'finance') then
     update app_alliances set payout_limit=greatest(0,least(2000000,coalesce((p_settings->>'payout_limit')::bigint, payout_limit))),
-      ranking_public=coalesce((p_settings->>'ranking_public')::boolean, ranking_public) where id=v_aid; end if;
+      ranking_public=coalesce((p_settings->>'ranking_public')::boolean, ranking_public),
+      academy_limit=greatest(1,least(10,coalesce((p_settings->>'academy_limit')::int, academy_limit))) where id=v_aid; end if;
   return json_build_object('ok',true);
 end; $$;
 
@@ -772,7 +773,7 @@ returns json language sql security definer set search_path=public, extensions as
   select coalesce(json_agg(json_build_object('owner',u.username,
       'stations',coalesce((select json_agg(json_build_object('name',st->>'name','lat',st->'lat','lng',st->'lng','level',st->'level',
           'ready',coalesce((st->>'readyAt')::numeric,0) <= extract(epoch from now())*1000)) from jsonb_array_elements(_jarr(s.data,'stations')) st),'[]'::json),
-      'buildings',coalesce((select json_agg(json_build_object('typeId',b->>'typeId','name',b->>'name','lat',b->'lat','lng',b->'lng',
+      'buildings',coalesce((select json_agg(json_build_object('typeId',b->>'typeId','name',b->>'name','lat',b->'lat','lng',b->'lng','shared',jsonb_typeof(b->'allyShare')='object',
           'ready',coalesce((b->>'readyAt')::numeric,0) <= extract(epoch from now())*1000)) from jsonb_array_elements(_jarr(s.data,'buildings')) b),'[]'::json))), '[]'::json)
   from app_alliance_members m join app_users u on u.id=m.user_id join app_saves s on s.user_id=m.user_id
   where m.alliance_id=_ally_of(_uid(p_token)) and m.user_id<>_uid(p_token); $$;
@@ -991,11 +992,255 @@ begin
   return json_build_object('ok',true,'missions',v_list);
 end; $$;
 
+/* ---------- Verbände Teil 3: News, Regeln, Forum, Akademie-Freigabe, Verbandsgebäude ----------
+   News und Regeln schreibt, wer „Moderieren“ hat. Forum: alle Mitglieder (Timeout sperrt auch das Forum).
+   Akademien: Besitzer gibt sie im Spielstand frei (buildings[].allyShare = {limit}); Mitglieder buchen einen
+   Lehrsaal für eigene Leute (höchstens limit Personen gleichzeitig je Mitglied).
+   Verbandsgebäude werden aus der Verbandskasse gebaut (Recht „Finanzen“): Krankenhaus und Akademie. */
+alter table app_alliances add column if not exists rules text not null default '';
+alter table app_alliances add column if not exists academy_limit int not null default 10;
+create table if not exists app_alliance_news (
+  id bigserial primary key, alliance_id uuid not null references app_alliances(id) on delete cascade, user_id uuid references app_users(id) on delete set null,
+  title text not null, body text not null default '', created_at timestamptz not null default now() );
+create index if not exists app_alliance_news_a on app_alliance_news(alliance_id, id desc);
+create table if not exists app_alliance_threads (
+  id bigserial primary key, alliance_id uuid not null references app_alliances(id) on delete cascade, user_id uuid references app_users(id) on delete set null,
+  title text not null, pinned boolean not null default false, locked boolean not null default false,
+  created_at timestamptz not null default now(), last_at timestamptz not null default now() );
+create index if not exists app_alliance_threads_a on app_alliance_threads(alliance_id, last_at desc);
+create table if not exists app_alliance_posts (
+  id bigserial primary key, thread_id bigint not null references app_alliance_threads(id) on delete cascade, user_id uuid references app_users(id) on delete set null,
+  body text not null, deleted boolean not null default false, created_at timestamptz not null default now() );
+create index if not exists app_alliance_posts_t on app_alliance_posts(thread_id, id);
+create table if not exists app_alliance_buildings (
+  id uuid primary key default gen_random_uuid(), alliance_id uuid not null references app_alliances(id) on delete cascade,
+  type text not null, name text not null, lat double precision not null, lng double precision not null, rooms int not null default 1,
+  created_at timestamptz not null default now() );
+create table if not exists app_academy_bookings (                -- belegte Lehrsäle (fremde Akademie oder Verbandsakademie)
+  id uuid primary key default gen_random_uuid(), akey text not null, user_id uuid not null references app_users(id) on delete cascade,
+  course text not null, persons int not null, started_at timestamptz not null default now(), ends_at timestamptz not null );
+create index if not exists app_academy_bookings_k on app_academy_bookings(akey, ends_at);
+alter table app_alliance_news enable row level security; alter table app_alliance_threads enable row level security;
+alter table app_alliance_posts enable row level security; alter table app_alliance_buildings enable row level security; alter table app_academy_bookings enable row level security;
+revoke all on app_alliance_news, app_alliance_threads, app_alliance_posts, app_alliance_buildings, app_academy_bookings from anon, authenticated;
+
+create or replace function _ally_muted(p_aid uuid, p_uid uuid) returns timestamptz language sql stable security definer set search_path=public, extensions as $$
+  select until from app_alliance_timeouts where alliance_id=p_aid and user_id=p_uid and until > now(); $$;
+
+-- Regeln und News
+create or replace function ally_board(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  return json_build_object('rules',(select rules from app_alliances where id=v_aid), 'can_mod',_ally_perm(v_uid,'moderate'),
+    'news',coalesce((select json_agg(x) from (select n.id, n.title, n.body, n.created_at as at, u.username as name from app_alliance_news n
+      left join app_users u on u.id=n.user_id where n.alliance_id=v_aid order by n.id desc limit 30) x),'[]'::json));
+end; $$;
+create or replace function ally_rules_save(p_token uuid, p_rules text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null or not _ally_perm(v_uid,'moderate') then return json_build_object('error','Keine Berechtigung'); end if;
+  update app_alliances set rules=left(coalesce(p_rules,''),10000) where id=v_aid;
+  return json_build_object('ok',true);
+end; $$;
+create or replace function ally_news_post(p_token uuid, p_title text, p_body text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null or not _ally_perm(v_uid,'moderate') then return json_build_object('error','Keine Berechtigung'); end if;
+  if btrim(coalesce(p_title,''))='' then return json_build_object('error','Titel fehlt'); end if;
+  insert into app_alliance_news(alliance_id, user_id, title, body) values (v_aid, v_uid, left(btrim(p_title),120), left(coalesce(p_body,''),5000));
+  return json_build_object('ok',true);
+end; $$;
+create or replace function ally_news_delete(p_token uuid, p_id bigint)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null or not _ally_perm(v_uid,'moderate') then return json_build_object('error','Keine Berechtigung'); end if;
+  delete from app_alliance_news where id=p_id and alliance_id=v_aid;
+  return json_build_object('ok',true);
+end; $$;
+
+-- Forum
+create or replace function ally_forum(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  return json_build_object('can_mod',_ally_perm(v_uid,'moderate'),'muted_until',_ally_muted(v_aid,v_uid),
+    'threads',coalesce((select json_agg(x) from (select t.id, t.title, t.pinned, t.locked, t.created_at, t.last_at, u.username as name,
+      (select count(*) from app_alliance_posts p where p.thread_id=t.id and not p.deleted) as posts,
+      (select lu.username from app_alliance_posts p left join app_users lu on lu.id=p.user_id where p.thread_id=t.id order by p.id desc limit 1) as last_name
+      from app_alliance_threads t left join app_users u on u.id=t.user_id where t.alliance_id=v_aid order by t.pinned desc, t.last_at desc limit 100) x),'[]'::json));
+end; $$;
+create or replace function ally_forum_thread(p_token uuid, p_id bigint)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); t app_alliance_threads;
+begin
+  select * into t from app_alliance_threads where id=p_id and alliance_id=v_aid;
+  if v_aid is null or t.id is null then return json_build_object('error','Thema nicht gefunden'); end if;
+  return json_build_object('thread',json_build_object('id',t.id,'title',t.title,'pinned',t.pinned,'locked',t.locked),
+    'posts',coalesce((select json_agg(x) from (select p.id, p.user_id, case when p.deleted then '' else p.body end as body, p.deleted, p.created_at as at,
+      u.username as name, p.user_id=v_uid as mine from app_alliance_posts p left join app_users u on u.id=p.user_id where p.thread_id=t.id order by p.id) x),'[]'::json));
+end; $$;
+-- p_thread null: neues Thema mit p_title
+create or replace function ally_forum_post(p_token uuid, p_thread bigint, p_title text, p_body text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); v_until timestamptz; t app_alliance_threads; v_tid bigint;
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  v_until := _ally_muted(v_aid,v_uid);
+  if v_until is not null then return json_build_object('error','Du bist stummgeschaltet bis '||to_char(v_until at time zone 'Europe/Berlin','DD.MM. HH24:MI')); end if;
+  p_body := btrim(coalesce(p_body,'')); if p_body='' then return json_build_object('error','Leerer Beitrag'); end if;
+  if (select count(*) from app_alliance_posts where user_id=v_uid and created_at > now()-interval '1 minute') >= 5 then return json_build_object('error','Bitte langsamer schreiben'); end if;
+  if p_thread is null then
+    if btrim(coalesce(p_title,''))='' then return json_build_object('error','Titel fehlt'); end if;
+    if (select count(*) from app_alliance_threads where alliance_id=v_aid) >= 500 then return json_build_object('error','Zu viele Themen – bitte alte löschen'); end if;
+    insert into app_alliance_threads(alliance_id, user_id, title) values (v_aid, v_uid, left(btrim(p_title),120)) returning id into v_tid;
+  else
+    select * into t from app_alliance_threads where id=p_thread and alliance_id=v_aid;
+    if t.id is null then return json_build_object('error','Thema nicht gefunden'); end if;
+    if t.locked and not _ally_perm(v_uid,'moderate') then return json_build_object('error','Thema ist geschlossen'); end if;
+    v_tid := t.id; update app_alliance_threads set last_at=now() where id=v_tid;
+  end if;
+  insert into app_alliance_posts(thread_id, user_id, body) values (v_tid, v_uid, left(p_body,5000));
+  return json_build_object('ok',true,'thread',v_tid);
+end; $$;
+create or replace function ally_forum_delete(p_token uuid, p_post bigint)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  update app_alliance_posts p set deleted=true from app_alliance_threads t
+    where p.id=p_post and t.id=p.thread_id and t.alliance_id=v_aid and (p.user_id=v_uid or _ally_perm(v_uid,'moderate'));
+  if not found then return json_build_object('error','Keine Berechtigung'); end if;
+  return json_build_object('ok',true);
+end; $$;
+-- p_action: pin, unpin, lock, unlock, delete
+create or replace function ally_forum_mod(p_token uuid, p_thread bigint, p_action text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null or not _ally_perm(v_uid,'moderate') then return json_build_object('error','Keine Berechtigung'); end if;
+  if p_action='delete' then delete from app_alliance_threads where id=p_thread and alliance_id=v_aid;
+  elsif p_action in ('pin','unpin') then update app_alliance_threads set pinned=(p_action='pin') where id=p_thread and alliance_id=v_aid;
+  elsif p_action in ('lock','unlock') then update app_alliance_threads set locked=(p_action='lock') where id=p_thread and alliance_id=v_aid;
+  else return json_build_object('error','Unbekannte Aktion'); end if;
+  return json_build_object('ok',true);
+end; $$;
+
+-- Verbandsgebäude (Kosten: Krankenhaus 3 Mio., Akademie 2,5 Mio., weiterer Lehrsaal 1 Mio., höchstens 4 Säle)
+create or replace function ally_building_build(p_token uuid, p_type text, p_name text, p_lat double precision, p_lng double precision)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); v_cost bigint; v_kasse bigint;
+begin
+  if v_aid is null or not _ally_perm(v_uid,'finance') then return json_build_object('error','Keine Berechtigung'); end if;
+  v_cost := case p_type when 'kh' then 3000000 when 'akademie' then 2500000 end;
+  if v_cost is null then return json_build_object('error','Unbekannter Gebäudetyp'); end if;
+  if p_lat is null or p_lng is null or abs(p_lat)>85 or abs(p_lng)>180 then return json_build_object('error','Ungültiger Ort'); end if;
+  if (select count(*) from app_alliance_buildings where alliance_id=v_aid) >= 20 then return json_build_object('error','Höchstens 20 Verbandsgebäude'); end if;
+  select kasse into v_kasse from app_alliances where id=v_aid for update;
+  if v_kasse < v_cost then return json_build_object('error','Zu wenig in der Verbandskasse ('||v_cost||' € nötig)'); end if;
+  update app_alliances set kasse=kasse-v_cost where id=v_aid;
+  insert into app_alliance_buildings(alliance_id, type, name, lat, lng)
+    values (v_aid, p_type, left(coalesce(nullif(btrim(p_name),''), case p_type when 'kh' then 'Verbandskrankenhaus' else 'Verbandsakademie' end),60), p_lat, p_lng);
+  insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'gebaeude', -v_cost,
+    case p_type when 'kh' then 'Verbandskrankenhaus' else 'Verbandsakademie' end||' gebaut: '||left(coalesce(p_name,''),60));
+  return json_build_object('ok',true,'cost',v_cost);
+end; $$;
+create or replace function ally_building_expand(p_token uuid, p_id uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); b app_alliance_buildings; v_kasse bigint;
+begin
+  if v_aid is null or not _ally_perm(v_uid,'finance') then return json_build_object('error','Keine Berechtigung'); end if;
+  select * into b from app_alliance_buildings where id=p_id and alliance_id=v_aid for update;
+  if b.id is null or b.type<>'akademie' then return json_build_object('error','Gebäude nicht gefunden'); end if;
+  if b.rooms >= 4 then return json_build_object('error','Höchstens 4 Lehrsäle'); end if;
+  select kasse into v_kasse from app_alliances where id=v_aid for update;
+  if v_kasse < 1000000 then return json_build_object('error','Zu wenig in der Verbandskasse (1.000.000 € nötig)'); end if;
+  update app_alliances set kasse=kasse-1000000 where id=v_aid;
+  update app_alliance_buildings set rooms=rooms+1 where id=p_id;
+  insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'gebaeude', -1000000, 'Lehrsaal für '||b.name);
+  return json_build_object('ok',true);
+end; $$;
+create or replace function ally_building_remove(p_token uuid, p_id uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); v_name text;
+begin
+  if v_aid is null or not _ally_perm(v_uid,'finance') then return json_build_object('error','Keine Berechtigung'); end if;
+  delete from app_alliance_buildings where id=p_id and alliance_id=v_aid returning name into v_name;
+  if v_name is null then return json_build_object('error','Gebäude nicht gefunden'); end if;
+  insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'gebaeude', 0, 'abgerissen: '||v_name);
+  return json_build_object('ok',true);
+end; $$;
+
+-- Akademien im Verband: freigegebene Akademien der Mitglieder (aus dem Spielstand) und Verbandsakademien
+create or replace function _ally_academies(p_aid uuid) returns table(akey text, kind text, owner uuid, owner_name text, name text, lat double precision, lng double precision,
+  rooms int, own_used int, ext_used int, lim int, dur numeric, cost numeric)
+language sql stable security definer set search_path=public, extensions as $$
+  with now_ms as (select extract(epoch from now())*1000 as t)
+  select 'u:'||m.user_id||':'||(b->>'id'), 'member', m.user_id, u.username, b->>'name', (b->>'lat')::double precision, (b->>'lng')::double precision,
+    1 + (select count(*)::int from jsonb_array_elements(coalesce(b->'exts','[]')) e where e->>'key'='saal' and coalesce((e->>'readyAt')::numeric,0) <= (select t from now_ms)),
+    (select count(*)::int from jsonb_array_elements(coalesce(b->'courses','[]')) c where coalesce((c->>'startedAt')::numeric,0)+coalesce((c->>'durationMs')::numeric,0) > (select t from now_ms)),
+    (select count(*)::int from app_academy_bookings k where k.akey='u:'||m.user_id||':'||(b->>'id') and k.ends_at > now()),
+    greatest(1,least(10,coalesce((b->'allyShare'->>'limit')::int,10))),
+    case when exists(select 1 from jsonb_array_elements(coalesce(b->'exts','[]')) e where e->>'key'='sim' and coalesce((e->>'readyAt')::numeric,0) <= (select t from now_ms)) then 0.75 else 1 end,
+    case when exists(select 1 from jsonb_array_elements(coalesce(b->'exts','[]')) e where e->>'key'='hof' and coalesce((e->>'readyAt')::numeric,0) <= (select t from now_ms)) then 0.7 else 1 end
+  from app_alliance_members m join app_users u on u.id=m.user_id join app_saves s on s.user_id=m.user_id, jsonb_array_elements(_jarr(s.data,'buildings')) b
+  where m.alliance_id=p_aid and b->>'typeId'='academy' and jsonb_typeof(b->'allyShare')='object'
+    and coalesce((b->>'readyAt')::numeric,0) <= (select t from now_ms)
+  union all
+  select 'a:'||ab.id, 'alliance', null, null, ab.name, ab.lat, ab.lng, ab.rooms, 0,
+    (select count(*)::int from app_academy_bookings k where k.akey='a:'||ab.id and k.ends_at > now()), al.academy_limit, 1, 1
+  from app_alliance_buildings ab join app_alliances al on al.id=ab.alliance_id where ab.alliance_id=p_aid and ab.type='akademie'; $$;
+
+-- Gebäude und Akademien des Verbands (Karte, Krankenhausliste, Reiter Akademien/Gebäude)
+create or replace function ally_assets(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid);
+begin
+  if v_aid is null then return json_build_object('buildings','[]'::json,'academies','[]'::json); end if;
+  return json_build_object('can_build',_ally_perm(v_uid,'finance'),'kasse',(select kasse from app_alliances where id=v_aid),'academy_limit',(select academy_limit from app_alliances where id=v_aid),
+    'buildings',coalesce((select json_agg(json_build_object('id',id,'type',type,'name',name,'lat',lat,'lng',lng,'rooms',rooms) order by created_at) from app_alliance_buildings where alliance_id=v_aid),'[]'::json),
+    'academies',coalesce((select json_agg(json_build_object('key',a.akey,'kind',a.kind,'owner',a.owner_name,'mine',a.owner=v_uid,'name',a.name,'lat',a.lat,'lng',a.lng,
+        'rooms',a.rooms,'used',a.own_used+a.ext_used,'ext_used',a.ext_used,'limit',a.lim,'dur',a.dur,'cost',a.cost,
+        'my_persons',(select coalesce(sum(persons),0) from app_academy_bookings k where k.akey=a.akey and k.user_id=v_uid and k.ends_at > now()),
+        'bookings',(select coalesce(json_agg(json_build_object('name',bu.username,'course',k.course,'persons',k.persons,'ends_at',k.ends_at) order by k.ends_at),'[]'::json)
+          from app_academy_bookings k join app_users bu on bu.id=k.user_id where k.akey=a.akey and k.ends_at > now()))) from _ally_academies(v_aid) a),'[]'::json));
+end; $$;
+
+-- Lehrsaal buchen: p_duration = Grunddauer des Lehrgangs (ms), wird auf 3–7 Tage begrenzt; Verbandsakademie kostet 150.000 € (in die Kasse)
+create or replace function ally_course_book(p_token uuid, p_key text, p_course text, p_persons int, p_duration bigint)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); a record; v_mine int; v_ms bigint; v_id uuid; v_cost bigint := 0;
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  select * into a from _ally_academies(v_aid) x where x.akey=p_key;
+  if a.akey is null then return json_build_object('error','Akademie nicht (mehr) freigegeben'); end if;
+  if a.owner=v_uid then return json_build_object('error','Eigene Akademie: Lehrgang direkt dort starten'); end if;
+  perform pg_advisory_xact_lock(hashtext(p_key));
+  if (select count(*) from app_academy_bookings k where k.akey=p_key and k.ends_at > now()) + a.own_used >= a.rooms then return json_build_object('error','Alle Lehrsäle belegt'); end if;
+  if coalesce(p_persons,0) < 1 or p_persons > 10 then return json_build_object('error','1 bis 10 Personen je Lehrsaal'); end if;
+  select coalesce(sum(persons),0) into v_mine from app_academy_bookings where akey=p_key and user_id=v_uid and ends_at > now();
+  if v_mine + p_persons > a.lim then return json_build_object('error','Limit: höchstens '||a.lim||' Personen gleichzeitig (noch '||greatest(0,a.lim-v_mine)||')'); end if;
+  v_ms := round(greatest(259200000, least(604800000, coalesce(p_duration,604800000))) * a.dur);
+  if a.kind='alliance' then
+    v_cost := 150000;
+    if not _take_credits(v_uid, v_cost) then return json_build_object('error','Nicht genug Guthaben (150.000 €)'); end if;
+    update app_alliances set kasse=kasse+v_cost where id=v_aid;
+    insert into app_alliance_ledger(alliance_id, user_id, kind, amount, note) values (v_aid, v_uid, 'lehrgang', v_cost, 'Lehrgang '||left(coalesce(p_course,''),40)||' in '||a.name);
+  end if;
+  insert into app_academy_bookings(akey, user_id, course, persons, ends_at) values (p_key, v_uid, left(coalesce(p_course,''),40), p_persons, now()+make_interval(secs=>v_ms/1000.0))
+    returning id into v_id;
+  return json_build_object('ok',true,'id',v_id,'duration_ms',v_ms,'paid',v_cost,'cost_factor',a.cost);
+end; $$;
+
 grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
 revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]),
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
   _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
-  _ally_banned(uuid,uuid), _sm_tick(uuid) from public, anon, authenticated;
+  _ally_banned(uuid,uuid), _sm_tick(uuid), _ally_muted(uuid,uuid), _ally_academies(uuid) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
