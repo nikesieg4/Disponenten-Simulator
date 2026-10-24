@@ -364,6 +364,10 @@ a.dd-item{ text-decoration:none; color:var(--text); }
   background:radial-gradient(circle,#e5352b,#8f120b); border:2px solid #fff3; animation:mpulse 1.6s infinite; }
 .mk-mission.working{ background:radial-gradient(circle,#3b82f6,#1e40af); animation:none; }
 .mk-mission.done{ background:radial-gradient(circle,#22c55e,#15803d); animation:none; }
+.mk-mission.shared{ border:3px solid #a78bfa; }
+.mk-ally-veh{ position:absolute; transform:translate(-50%,-50%); white-space:nowrap; padding:1px 4px; border-radius:5px; font-family:var(--font-mono); font-size:9px; font-weight:800; color:#0d1017; background:#a78bfa; border:2px solid #0d1017; box-shadow:0 2px 6px rgba(0,0,0,.5); }
+.m-shared{ font-size:11px; color:#c4b5fd; margin-top:2px; }
+.missions-sub{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#c4b5fd; padding:10px 4px 4px; }
 @keyframes mpulse{0%{box-shadow:0 0 0 0 rgba(229,53,43,.5)}70%{box-shadow:0 0 0 12px rgba(229,53,43,0)}100%{box-shadow:0 0 0 0 rgba(229,53,43,0)}}
 .mk-veh{ position:absolute; transform:translate(-50%,-50%); white-space:nowrap; padding:1px 4px; border-radius:5px; font-family:var(--font-mono); font-size:9px; font-weight:800; color:#0d1017; border:2px solid #0d1017; box-shadow:0 2px 6px rgba(0,0,0,.5); }
 
@@ -378,12 +382,32 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .vb-form{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
 .vb-row{ display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
 .vb-sp{ flex:1; }
+.vb-post{ display:flex; flex-direction:column; gap:4px; padding:9px 11px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.vb-post.me{ border-color:color-mix(in srgb, #a78bfa 45%, var(--border)); }
+.vb-post-h{ display:flex; align-items:baseline; gap:8px; font-size:13px; }
+.vb-post-h .dim{ font-size:11px; }
+.vb-post-b{ font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+.vb-click{ cursor:pointer; }
+.cv-row{ flex-wrap:wrap; } .cv-main{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+#codes-content a{ color:var(--text); }
+.vb-row .mono{ white-space:nowrap; }
+.vb-click:hover td, .vb-click.sel td{ background:var(--panel-3); }
 .vb-role{ display:inline-block; margin:1px 4px 1px 0; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; color:var(--rc); border:1px solid var(--rc); background:color-mix(in srgb, var(--rc) 14%, transparent); }
 .vb-check{ display:inline-flex; align-items:center; gap:6px; font-size:13px; }
 .vb-det summary{ cursor:pointer; font-size:12px; color:var(--text-mut); margin-top:4px; }
 .vb-det{ display:flex; flex-direction:column; gap:3px; }
 .vb-ta, .vb-in, .vb-sel{ background:var(--panel-3); border:1px solid var(--border-2); border-radius:8px; color:var(--text); padding:7px 9px; font:inherit; font-size:13px; }
 .vb-ta{ width:100%; box-sizing:border-box; resize:vertical; }
+.vb-chat{ max-height:46vh; min-height:200px; overflow:auto; display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.vb-msg{ display:flex; flex-direction:column; gap:2px; padding:6px 9px; border-radius:9px; background:var(--panel-3); max-width:80%; align-self:flex-start; }
+.vb-msg.me{ align-self:flex-end; background:color-mix(in srgb, var(--fire) 18%, var(--panel-3)); }
+.vb-msg-h{ display:flex; align-items:center; gap:6px; font-size:12px; }
+.vb-msg-t{ font-size:14px; white-space:pre-wrap; word-break:break-word; }
+.vb-x{ margin-left:auto; background:none; border:0; color:var(--text-mut); cursor:pointer; font-size:15px; line-height:1; padding:0 2px; }
+#vb-content td.mono{ white-space:nowrap; }
+.vb-acts{ display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; }
+.funk-row.ally{ border-left:3px solid #a78bfa; }
+.funk-ally{ margin-left:auto; } .funk-ally.on{ color:#fff; border-color:#a78bfa; background:color-mix(in srgb, #a78bfa 25%, transparent); }
 /* Erweiterungen */
 .ext-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; }
 .ext-card{ border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:6px; background:var(--panel-2); }
@@ -585,6 +609,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
         <button class="dd-item" id="dd-shop">Shop</button>
         <button class="dd-item" id="dd-bank">Bank</button>
         <button class="dd-item" id="dd-verband">Verband</button>
+        <button class="dd-item" id="dd-codes">Codes einlösen</button>
         <button class="dd-item" id="dd-save">Speichern</button>
         <button class="dd-item" id="dd-settings">Einstellungen</button>
         <div class="dd-sep"></div>
@@ -658,7 +683,8 @@ a.dd-item{ text-decoration:none; color:var(--text); }
       <div class="tab-body hidden" id="tab-stations"><div class="panel-body" id="stations-list"></div></div>
       <div class="funk">
         <div class="funk-head"><span>Funkverkehr</span><span class="count zero" id="funk-count">0</span>
-          <button class="btn sm ghost" id="btn-funk-clear" style="margin-left:auto" title="Funkprotokoll leeren">Leeren</button></div>
+          <button class="btn sm ghost funk-ally" id="btn-funk-ally" title="Funkmeldungen der Verbandsmitglieder anzeigen" aria-label="Verbandsfunk an oder aus">Verband</button>
+          <button class="btn sm ghost" id="btn-funk-clear" style="margin-left:6px" title="Funkprotokoll leeren">Leeren</button></div>
         <div class="funk-body" id="funk-list"></div>
       </div>
     </div>
@@ -717,6 +743,12 @@ a.dd-item{ text-decoration:none; color:var(--text); }
   <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
 
+<div class="modal-bg" id="modal-codes"><div class="modal">
+  <h3>Codes einlösen</h3>
+  <div class="m-content" id="codes-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
+</div></div>
+
 <div class="modal-bg" id="modal-catalog"><div class="modal">
   <h3>Einsatzarten-Übersicht</h3>
   <div class="m-content" id="catalog-list"></div>
@@ -759,6 +791,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
     <label class="fld" id="build-number-wrap"><span>Wachnummer</span><input id="build-number" type="number" min="1" /></label>
     <label class="fld" id="build-bays-wrap"><span>Stellplätze direkt bauen</span><select id="build-bays"></select></label>
     <div class="build-cost" id="build-cost"></div>
+    <label class="vb-check hidden" id="build-voucher-wrap"><input type="checkbox" id="build-voucher" checked> <span id="build-voucher-txt"></span></label>
   </div>
   <div class="m-actions">
     <button class="btn ghost" data-close>Abbrechen</button>
@@ -1028,7 +1061,8 @@ function serializeObj(){ return {
   stations:state.stations.map(s=>({id:s.id,name:s.name,number:s.number,ort:s.ort,lat:s.lat,lng:s.lng,level:s.level,roster:s.roster,hireTarget:s.hireTarget,lastHireAt:s.lastHireAt,placedAt:s.placedAt||null,readyAt:s.readyAt||null,buildPaid:s.buildPaid??null,builtLevel:s.builtLevel||null,turnout:s.turnout||0,area:s.area||null,exts:s.exts||[]})),
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
-  buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null})),
+  buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null,allyShare:b.allyShare||null})),
+  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null,
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[],patients:m.patients||[],tna:!!m.tna})),
 };}
 let saveInFlight=false;
@@ -1108,13 +1142,16 @@ function applyLoaded(data){
     id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,
     status:m.status||'open', progress:m.progress||0, effMinutes:m.effMinutes||0, assigned:[], patients:Array.isArray(m.patients)?m.patients:[], tna:!!m.tna, marker:null }));
   // Zuweisungen aus den Fahrzeugen rekonstruieren
-  state.vehicles.forEach(v=>{ if(v.targetMissionId){ const m=missionById(v.targetMissionId); if(m){ if(!m.assigned.includes(v.id)) m.assigned.push(v.id); } else { v.targetMissionId=null; v.status=2; v.crew=0; v.crewIds=[]; } } });
+  sharedMissions=[]; smLoaded=false;
+  state.vehicles.forEach(v=>{ if(v.targetMissionId && !isSm(v.targetMissionId)){ const m=missionById(v.targetMissionId); if(m){ if(!m.assigned.includes(v.id)) m.assigned.push(v.id); } else { v.targetMissionId=null; v.status=2; v.crew=0; v.crewIds=[]; } } });
   state.buildings=(data.buildings||[]).filter(b=>buildingById(b.typeId)).map(b=>{ const t=buildingById(b.typeId);
     const nb={...b, marker:null};
     if(t.isAcademy){ nb.level=b.level||1; nb.courses=Array.isArray(b.courses)?b.courses:[]; }
     if(!Array.isArray(nb.exts)){                    // Umstieg: Akademie-Level wird zu Lehrsälen (Erweiterung)
       nb.exts=[]; if(t.isAcademy){ for(let i=1;i<(nb.level||1);i++) nb.exts.push({key:'saal',readyAt:0}); nb.level=1; } }
     return nb; });
+  state.allyCourses=Array.isArray(data.allyCourses)?data.allyCourses:[];
+  state.vouchers=data.vouchers&&typeof data.vouchers==='object'?data.vouchers:null;
   finishDueCourses(Date.now());
   pendingOfflineMs = data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0;
   idCounter=Date.now()%100000;
@@ -1296,7 +1333,14 @@ function syncBuildCost(){
     html=`Kosten: <b>${fmt(b.cost)} €</b>${b.buildMs?`<br>Bauzeit: <b>${fmtDur(b.buildMs)}</b>`:''}${b.desc?`<br>${b.desc}`:''}${lim?`<br>${lim.full?`<span class="warnc">${lim.text}</span>`:lim.text}`:''}`;
   }
   document.getElementById('build-cost').innerHTML=html;
+  const vn=vouchers().buildings[b.id]||0, vw=document.getElementById('build-voucher-wrap');
+  vw.classList.toggle('hidden',!vn);
+  document.getElementById('build-voucher-txt').textContent=`Gutschein einlösen: ${fmt(b.cost)} € gratis (${vn} übrig)`;
+  document.getElementById('build-voucher').onchange=syncBuildCost;
+  if(buildVoucherOn(b)){ const total=b.isStation?stationBuildQuote(parseInt(document.getElementById('build-bays').value)||1).total:b.cost;
+    document.getElementById('build-cost').innerHTML+=`<br>Mit Gutschein: <b>${fmt(Math.max(0,total-b.cost))} €</b>`; }
 }
+function buildVoucherOn(b){ return (vouchers().buildings[b.id]||0)>0 && document.getElementById('build-voucher')?.checked; }
 /* Gebäude mit Höchstzahl (Leitstelle: 1 + 1 je 15 Wachen) */
 function buildLimitInfo(b){
   if(!b.limit) return null;
@@ -1308,23 +1352,26 @@ function buildLimitInfo(b){
 function startBuildPlacement(){
   const b=buildingById(buildTypeId); if(!b) return;
   { const lim=buildLimitInfo(b); if(lim&&lim.full){ toast(lim.text,'warn'); return; } }
-  if(!canAfford(b.cost)){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
+  const vou=buildVoucherOn(b);
+  if(!vou && !canAfford(b.cost)){ toast(`Nicht genug Guthaben (${fmt(b.cost)} € nötig)`,'err'); return; }
   const name=document.getElementById('build-name').value.trim() || b.name;
   const number=b.isStation ? (parseInt(document.getElementById('build-number').value)||nextStationNumber()) : null;
   const q=b.isStation ? stationBuildQuote(parseInt(document.getElementById('build-bays').value)||1) : null;
-  const cost=q?q.total:b.cost;
+  const cost=Math.max(0,(q?q.total:b.cost)-(vou?b.cost:0));
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); return; }
-  pendingBuild={ typeId:b.id, name, number, cost, quote:q };
+  pendingBuild={ typeId:b.id, name, number, cost, quote:q, voucher:vou };
   hideModal('modal-build'); setBuildMode(true);
 }
 
 function onMapClick(e){
   if(areaEdit) return;
+  if(allyPlace){ allyPlaceAt(e.latlng); return; }
   if(!buildMode || !pendingBuild) return;
   const b=buildingById(pendingBuild.typeId); if(!b){ setBuildMode(false); return; }
   const cost=pendingBuild.cost??b.cost;
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} € nötig)`,'err'); setBuildMode(false); return; }
-  state.credits-=cost; book('gebaeude',`${pendingBuild.name} gebaut`,-cost);
+  if(pendingBuild.voucher){ const V=vouchers(); if(!(V.buildings[b.id]>0)){ toast('Kein Gutschein mehr vorhanden','err'); setBuildMode(false); pendingBuild=null; return; } V.buildings[b.id]--; }
+  state.credits-=cost; if(cost) book('gebaeude',`${pendingBuild.name} gebaut${pendingBuild.voucher?' (Gutschein)':''}`,-cost);
   const now=Date.now();
   if(b.isStation){
     const first=state.stations.length===0, q=pendingBuild.quote||stationBuildQuote(1);
@@ -1625,7 +1672,7 @@ function refreshStationMarker(st){ if(st.marker) stationLayer.removeLayer(st.mar
 function missionCls(m){ const rd=missionType(m.type)?.rd?' rd':''; return (m.status==='done'?'done':(m.status==='working'?'working':''))+rd; }
 function addMissionMarker(m){ const t=missionType(m.type);
   const fc=`f-m-${t.cat==='th'||t.cat==='rd'?t.cat:'b'} ${m.status==='open'||!m.status?'f-ms-open':'f-ms-work'}`;
-  const icon=L.divIcon({className:fc,iconSize:[32,32],iconAnchor:[16,16],html:`<div class="mk-mission ${missionCls(m)}">${t.short||t.code}</div>`});
+  const icon=L.divIcon({className:fc,iconSize:[32,32],iconAnchor:[16,16],html:`<div class="mk-mission ${missionCls(m)}${m.shared?' shared':''}">${t.short||t.code}</div>`});
   m.marker=L.marker([m.lat,m.lng],{icon}).addTo(missionLayer); m.marker.on('click',()=>openMissionModal(m.id)); }
 function refreshMissionMarker(m){ if(m.marker) missionLayer.removeLayer(m.marker); addMissionMarker(m); }
 function vehStatusColor(s){ return (getComputedStyle(document.documentElement).getPropertyValue(`--fms-${s}`)||'#888').trim(); }
@@ -1641,7 +1688,10 @@ function clearRoute(v){ if(v.routeLine){ routeLayer.removeLayer(v.routeLine); v.
 /* ------------------------- LOOKUPS ------------------------- */
 const missionType=id=> (typeof id==='string' && id.startsWith('rd:')) ? rdMissionType(id) : MISSION_TYPES.find(m=>m.id===id);
 const stationById=id=>state.stations.find(s=>s.id===id);
-const missionById=id=>state.missions.find(m=>m.id===id);
+const missionById=id=>state.missions.find(m=>m.id===id) || (isSm(id) ? sharedMissions.find(m=>m.id===id) : undefined);
+/* Geteilte Einsätze (Verband): Stand liegt auf dem Server, IDs 'sm:<uuid>'. smLoaded = erster Abgleich ist durch */
+let sharedMissions=[], smLoaded=false;
+function isSm(id){ return typeof id==='string' && id.startsWith('sm:'); }
 const vehiclesOfStation=id=>state.vehicles.filter(v=>v.stationId===id);
 
 /* ------------------------- RETTUNGSDIENST ------------------------- */
@@ -1691,9 +1741,12 @@ function rollPatients(t){
   return Array.from({length:n},()=>mk(Math.random()<f[2], f[3]));
 }
 function patientsOpen(m){ return (m.patients||[]).filter(p=>p.state!=='done'); }
-function hospitalById(id){ return HOSPITALS.find(h=>h.id===id); }
+let allyHospitals=[];                                    // Verbandskrankenhäuser (ally_assets)
+function hospitalById(id){ return HOSPITALS.find(h=>h.id===id) || allyHospitals.find(h=>h.id===id) || khSnapshot(id); }
+/* Verbandskrankenhaus nach Austritt/Abriss: Ziel aus dem laufenden Transport */
+function khSnapshot(id){ const v=state.vehicles.find(x=>x.transport && x.transport.khId===id && x.transport.kh); return v ? { id, ...v.transport.kh, dept:[] } : undefined; }
 function hospitalsFor(p, from){
-  return HOSPITALS.map(h=>({ h, km:distM(from,h)/1000, ok:h.dept.includes(p.dept) })).sort((a,b)=>(b.ok-a.ok)||(a.km-b.km));
+  return HOSPITALS.concat(allyHospitals).map(h=>({ h, km:distM(from,h)/1000, ok:h.dept.includes(p.dept) })).sort((a,b)=>(b.ok-a.ok)||(a.km-b.km));
 }
 /* Versorgung am Einsatzort, Status 5 bei Transportbereitschaft */
 function tickPatients(gm){
@@ -1748,7 +1801,7 @@ async function startTransport(m,p,khId){
   p.state='transport'; p.khId=khId;
   const nef=p.nefId&&state.vehicles.find(x=>x.id===p.nefId);
   m.assigned=m.assigned.filter(id=>id!==v.id);
-  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId, na:!!(p.na||p.stemo), fromLat:m.lat, fromLng:m.lng };
+  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId, na:!!(p.na||p.stemo), fromLat:m.lat, fromLng:m.lng, kh:h.ally?{name:h.name,lat:h.lat,lng:h.lng}:null };
   funk(v,7,`Transport → ${h.name}${p.na?' (mit Notarzt)':''}`);
   if(nef){ m.assigned=m.assigned.filter(id=>id!==nef.id); if(!patientsOpen(m).some(q=>q!==p && q.nefId===nef.id)) releaseVehicle(nef); }
   refreshVehicleMarker(v); renderVehicles(); renderMissionsThrottled();
@@ -1765,14 +1818,15 @@ function finishHandover(v){
   const pay=Math.round((CONFIG.transportBase+CONFIG.transportPerKm*km)*(tr.na?1+CONFIG.naBonus:1));
   state.earnings=(state.earnings||0)+pay; book('transport',`Patiententransport ${hospitalById(tr.khId)?.name||''}`,pay);
   if(p) p.state='done';
+  if(isSm(tr.missionId)) smPatientEvent(tr.missionId, tr.patientId, 'done');
   toast(`Patient übergeben (+${fmt(pay)} € · Auszahlung um 0 Uhr)`,'ok');
   releaseVehicle(v); renderTopbar();
-  if(m && m.status!=='done' && !patientsOpen(m).length && (missionType(m.type).rd || (m.progress||0)>=1)) completeMission(m);
+  if(m && !m.shared && m.status!=='done' && !patientsOpen(m).length && (missionType(m.type).rd || (m.progress||0)>=1)) completeMission(m);
 }
 /* Noch nicht abgedeckter Bedarf an RTW/NEF für die Patienten eines Einsatzes */
 function missionPatientNeeds(m){
   const open=patientsOpen(m).filter(p=>p.state!=='transport');
-  const coming=(...types)=>state.vehicles.filter(v=>types.includes(v.type) && v.targetMissionId===m.id && [3,4,5].includes(v.status)).length;
+  const coming=(...types)=>(m.shared?smUnits(m):state.vehicles.filter(v=>v.targetMissionId===m.id && [3,4,5].includes(v.status))).filter(v=>types.includes(v.type)).length;
   const stroke=open.filter(p=>p.stroke).length;
   return { rtw:Math.max(0,open.length-coming(...PAT_CARRIERS)),
     nef:(m.tna&&tnaEligible(m)) ? 0 : Math.max(0,open.filter(p=>p.na).length-coming('nef')-Math.min(coming('stemo'),open.filter(p=>p.na&&p.stroke).length)),
@@ -1851,7 +1905,10 @@ function settlePayday(){
 /* ------------------------- VERBAND ------------------------- */
 // Server hält den Verband; der Browser fragt alle 10 s nach (Gutschriften) und lädt die Karte der Mitglieder alle 60 s
 const ALLY_COLOR='#a78bfa';
-const ALLY_PERMS=[['members','Mitglieder verwalten'],['roles','Rollen verwalten'],['finance','Finanzen'],['moderate','News/Forum/Regeln']];
+const ALLY_PERMS=[['members','Bewerbungen & Einladungen'],['roles','Rollen verwalten'],['finance','Finanzen'],['moderate','Moderieren (Chat, News, Forum, Regeln)'],['kick','Kick'],['ban','Bann'],['timeout','Timeout (Chat)']];
+// Verbandschat und Verbandsfunk (über ally_poll alle 10 s)
+let allyChat=[], allyChatAfter=0, allyChatSeen=0, allyRadioAfter=null, allyRadioQueue=[], allyMutedUntil=null;
+let allyRadioOn=(()=>{ try{ return localStorage.getItem('leitstelle_verbandsfunk')!=='0'; }catch(e){ return true; } })();
 let allyInfo={ id:null, autoPct:0 }, allyData=null, allyTab='overview', allySearch='', allyList=[], allyLayer=null, allyMapAt=0;
 function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 function fmtDate(t){ return new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(t)); }
@@ -1862,8 +1919,14 @@ async function allyCall(fn,args,okMsg){
 async function allyPoll(){
   if(!sb||!AUTH.token||!state||simulating) return;
   try{
-    const r=await rpc('ally_poll',{p_token:AUTH.token}); if(!r||r.error) return;
+    const radio=allyRadioQueue.splice(0,30);
+    let r; try{ r=await rpc('ally_poll',{p_token:AUTH.token,p_radio:radio,p_radio_after:allyRadioAfter,p_chat_after:allyChatAfter}); }
+    catch(e){ allyRadioQueue.unshift(...radio); throw e; }
+    if(!r||r.error) return;
     const changed=(r.alliance||null)!==allyInfo.id; allyInfo.id=r.alliance||null; allyInfo.autoPct=Number(r.auto_pct||0);
+    if(changed){ allyChat=[]; allyChatAfter=0; allyChatSeen=0; allyRadioAfter=null; }
+    allyMutedUntil=r.muted_until||null;
+    allyTakeRadio(r); allyTakeChat(r.chat||[]);
     let got=0; (r.grants||[]).forEach(g=>{ const a=Math.round(g.amount||0); if(a>0){ got+=a; state.credits+=a; book('verband_in',g.note||'Gutschrift',a); } });
     if(got){ renderTopbar(); toast(`Gutschrift: +${fmt(got)} €`,'ok'); saveGame(true); }
     if(changed || Date.now()-allyMapAt>60000) allyLoadMap();
@@ -1871,22 +1934,44 @@ async function allyPoll(){
 }
 async function allyLoadMap(){
   if(!allyLayer) return; allyMapAt=Date.now();
-  if(!allyInfo.id){ allyLayer.clearLayers(); return; }
+  if(!allyInfo.id){ allyLayer.clearLayers(); allyAssets={ buildings:[], academies:[] }; allyHospitals=[]; return; }
   let data=null; try{ data=await rpc('ally_map',{p_token:AUTH.token}); }catch(e){ return; }
-  allyLayer.clearLayers(); if(!Array.isArray(data)) return;
+  await allyLoadAssets();
+  allyLayer.clearLayers(); allyDrawBuildings(); if(!Array.isArray(data)) return;
   data.forEach(m=>{
     (m.stations||[]).forEach(st=>{ if(st.lat==null) return;
       L.marker([st.lat,st.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[48,52],iconAnchor:[20,48],tooltipAnchor:[0,-44],html:allyStationPin(st)})})
         .bindTooltip(`${esc(st.name)} · ${esc(m.owner)}${st.ready?'':' (im Bau)'}`,{direction:'top'}).addTo(allyLayer); });
     (m.buildings||[]).forEach(b=>{ const t=buildingById(b.typeId); if(!t||b.lat==null) return;
       L.marker([b.lat,b.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:allyBuildingPin(b,t)})})
-        .bindTooltip(`${esc(b.name)} · ${esc(m.owner)}${b.ready?'':' (im Bau)'}`,{direction:'top'}).addTo(allyLayer); });
+        .bindTooltip(`${esc(b.name)} · ${esc(m.owner)}${b.ready?'':' (im Bau)'}${b.shared?' · für den Verband freigegeben':''}`,{direction:'top'}).addTo(allyLayer)
+        .on('click',()=>{ if(b.shared){ allyTab='academies'; openVerband(); } }); });
   });
 }
 function allyStationPin(st){ const c=st.ready?ALLY_COLOR:'#6b7280';
   return `<svg viewBox="0 0 48 52" width="48" height="52" aria-hidden="true"><path d="${PIN_PATH}" fill="#151a23" stroke="${c}" stroke-width="2"${st.ready?'':' stroke-dasharray="4 3"'}/><g transform="translate(8 11)"><path d="M3 21V10L12 4.5L21 10V21Z" fill="${c}"/><rect x="7" y="13" width="10" height="8" fill="#151a23"/><path d="M7 15.6H17M7 18.3H17" stroke="${c}" stroke-width="1.3"/></g><rect x="28" y="1" width="18" height="12" rx="4" fill="#0d1017" stroke="#3a4250" stroke-width="1"/><text x="37" y="10" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="#e6ebf2">L${Number(st.level)||1}</text></svg>`; }
 function allyBuildingPin(b,t){ const c=b.ready?ALLY_COLOR:'#6b7280', icon=PIN_ICONS[t.id];
   return `<svg viewBox="0 0 40 48" width="40" height="48" aria-hidden="true"><path d="M8 2H32A6 6 0 0 1 38 8V30A6 6 0 0 1 32 36H25L20 44L15 36H8A6 6 0 0 1 2 30V8A6 6 0 0 1 8 2Z" fill="#151a23" stroke="${c}" stroke-width="2"${b.ready?'':' stroke-dasharray="4 3"'}/>${icon?`<g transform="translate(8 7)">${icon(c)}</g>`:''}</svg>`; }
+/* Verbandsfunk: Meldungen der anderen Mitglieder im eigenen Funkprotokoll (abschaltbar) */
+function allyTakeRadio(r){
+  const first=allyRadioAfter===null; allyRadioAfter=Math.max(allyRadioAfter||0, Number(r.radio_max||0), ...(r.radio||[]).map(x=>Number(x.id)));
+  if(first||!allyRadioOn) return;
+  (r.radio||[]).forEach(x=>{ funkLog.unshift({ t:clockTimeFmt.format(new Date(x.at)), name:`${x.player} · ${x.vehicle}`, status:x.status||null, label:x.status?FMS_SHORT[x.status]:'', note:x.note||'', ally:true }); });
+  if(funkLog.length>60) funkLog.length=60; if((r.radio||[]).length) renderFunk();
+}
+function allyTakeChat(list){
+  if(!list.length) return;
+  list.forEach(m=>{ const i=allyChat.findIndex(x=>x.id===m.id); if(i>=0) allyChat[i]=m; else allyChat.push(m); });
+  allyChat.sort((a,b)=>a.id-b.id); if(allyChat.length>200) allyChat.splice(0,allyChat.length-200);
+  allyChatAfter=Math.max(allyChatAfter,...list.map(m=>Number(m.id)));
+  if(!allyChatSeen) allyChatSeen=allyChatAfter;                       // beim ersten Abruf alles als gelesen werten
+  const open=document.getElementById('modal-verband').classList.contains('show') && allyTab==='chat';
+  if(open){ allyChatSeen=allyChatAfter; renderVerband(); } else allyUnreadBadge();
+}
+function allyUnread(){ return allyChat.filter(m=>m.id>allyChatSeen && m.user_id!==allyData?.me && !m.deleted).length; }
+function allyUnreadBadge(){ const n=allyUnread(), b=document.getElementById('dd-verband'); if(b) b.textContent=n?`Verband (${n} neu)`:'Verband'; }
+function toggleAllyRadio(){ allyRadioOn=!allyRadioOn; try{ localStorage.setItem('leitstelle_verbandsfunk',allyRadioOn?'1':'0'); }catch(e){}
+  const b=document.getElementById('btn-funk-ally'); if(b) b.classList.toggle('on',allyRadioOn); toast(`Verbandsfunk ${allyRadioOn?'an':'aus'}`,'ok'); }
 /* Automatischer Anteil der Tageseinnahmen (bei der Auszahlung um 0 Uhr) */
 async function allyAutoDeposit(earned){
   const pct=allyInfo.id?allyInfo.autoPct:0; if(!(pct>0)||!(earned>0)) return;
@@ -1895,7 +1980,7 @@ async function allyAutoDeposit(earned){
   if(r){ state.credits-=amt; book('verband',`Verbandskasse: ${pct} % der Tageseinnahmen`,-amt); renderTopbar(); saveGame(true); }
 }
 
-async function openVerband(){ showModal('modal-verband'); document.getElementById('vb-content').innerHTML='<div class="empty-hint">Lade Verband …</div>'; await allyRefresh(); }
+async function openVerband(){ showModal('modal-verband'); document.getElementById('vb-content').innerHTML='<div class="empty-hint">Lade Verband …</div>'; await allyRefresh(); allyTabLoad(); }
 async function allyRefresh(){
   const r=await allyCall('ally_overview',{}); if(!r) return;
   allyData=r; allyInfo.id=r.member?r.alliance.id:null;
@@ -1910,12 +1995,16 @@ function renderVerband(){
   document.getElementById('vb-title').textContent=d.member?`${d.alliance.name} [${d.alliance.tag}]`:'Verband';
   if(!d.member){ tabs.innerHTML=''; box.innerHTML=allyNoMemberHtml(); allyBindNoMember(); return; }
   const P=d.perms, req=(d.requests||[]).filter(x=>x.kind==='apply').length;
-  const T=[['overview','Übersicht'],['members',`Mitglieder ${d.members.length}`],['roles','Rollen'],['kasse','Kasse'],['stats','Statistik']].concat(P.members?[['requests',`Anfragen${req?' '+req:''}`]]:[]);
+  if(allyTab==='chat') allyChatSeen=allyChatAfter;
+  const un=allyUnread();
+  const T=[['overview','Übersicht'],['news','News'],['chat',`Chat${un?' '+un:''}`],['forum','Forum'],['rules','Regeln'],['members',`Mitglieder ${d.members.length}`],['roles','Rollen'],['kasse','Kasse'],['stats','Statistik'],['academies','Akademien'],['buildings','Gebäude']].concat(P.members||P.ban?[['requests',`Anfragen${req?' '+req:''}`]]:[]);
+  if(allyTab==='chat'){ allyChatSeen=allyChatAfter; allyUnreadBadge(); }
   if(!T.some(t=>t[0]===allyTab)) allyTab='overview';
   tabs.innerHTML=T.map(([k,n])=>`<button class="tab${k===allyTab?' active':''}" data-vbtab="${k}">${n}</button>`).join('');
-  tabs.querySelectorAll('[data-vbtab]').forEach(b=>b.onclick=()=>{ allyTab=b.dataset.vbtab; renderVerband(); });
-  box.innerHTML=({overview:allyOverviewHtml,members:allyMembersHtml,roles:allyRolesHtml,kasse:allyKasseHtml,stats:allyStatsHtml,requests:allyRequestsHtml}[allyTab])();
-  allyBind();
+  tabs.querySelectorAll('[data-vbtab]').forEach(b=>b.onclick=()=>{ if(b.dataset.vbtab==='forum'&&allyTab==='forum'){ allyThreadId=null; allyThread=null; } allyTab=b.dataset.vbtab; renderVerband(); allyTabLoad(); });
+  box.innerHTML=({overview:allyOverviewHtml,news:allyNewsHtml,chat:allyChatHtml,forum:allyForumHtml,rules:allyRulesHtml,members:allyMembersHtml,roles:allyRolesHtml,kasse:allyKasseHtml,stats:allyStatsHtml,
+    academies:allyAcademiesHtml,buildings:allyBuildingsHtml,requests:allyRequestsHtml}[allyTab])();
+  allyBind(); allyBind3();
 }
 function allyNoMemberHtml(){
   const d=allyData, inv=d.invites||[];
@@ -1963,6 +2052,23 @@ function allyOverviewHtml(){
       <button class="btn" id="vb-transfer-btn" ${others.length?'':'disabled'}>Übertragen</button><button class="btn danger" id="vb-dissolve">Verband auflösen</button>`
       :`<button class="btn danger" id="vb-leave">Verband verlassen</button>`}</div></div>`;
 }
+function allyChatHtml(){
+  const d=allyData, me=d.me, mod=d.perms.moderate, mem=id=>d.members.find(m=>m.id===id);
+  const color=id=>{ const m=mem(id); if(!m) return 'var(--text-mut)'; if(id===d.alliance.owner) return '#f59e0b'; const r=(d.roles||[]).filter(r=>m.roles.includes(r.id)).sort((a,b)=>a.position-b.position)[0]; return r?r.color:'var(--text)'; };
+  const muted=allyMutedUntil&&new Date(allyMutedUntil).getTime()>Date.now();
+  return `<div class="vb-chat" id="vb-chat-list">${allyChat.length?allyChat.map(m=>`<div class="vb-msg${m.user_id===me?' me':''}">
+      <span class="vb-msg-h"><b style="color:${esc(color(m.user_id))}">${esc(m.name||'gelöscht')}</b><span class="dim"> ${fmtDate(m.at)}</span>
+      ${!m.deleted&&(m.user_id===me||mod)?`<button class="vb-x" data-chatdel="${m.id}" aria-label="Nachricht löschen" title="Löschen">×</button>`:''}</span>
+      <span class="vb-msg-t${m.deleted?' dim':''}">${m.deleted?'Nachricht gelöscht':esc(m.msg)}</span></div>`).join(''):'<div class="empty-hint">Noch keine Nachrichten. Schreib die erste!</div>'}</div>
+    ${muted?`<div class="pers-hint" style="color:#fbbf24">Du bist im Chat stummgeschaltet bis ${fmtDate(allyMutedUntil)}.</div>`:''}
+    <div class="vb-form"><label class="fld sm" style="flex:1"><span>Nachricht an den Verband</span><input id="vb-chat-in" type="text" maxlength="500" placeholder="Nachricht (Enter zum Senden)" ${muted?'disabled':''}></label>
+      <button class="btn primary" id="vb-chat-send" ${muted?'disabled':''}>Senden</button></div>
+    <div class="pers-hint">Nachrichten werden 7 Tage gespeichert. Neue Nachrichten kommen alle 10 Sekunden.</div>`;
+}
+async function allyChatSend(){
+  const inp=document.getElementById('vb-chat-in'), msg=(inp?.value||'').trim(); if(!msg) return;
+  if(await allyCall('ally_chat_send',{p_msg:msg})){ inp.value=''; await allyPoll(); setTimeout(()=>document.getElementById('vb-chat-in')?.focus(),30); }
+}
 function allyMembersHtml(){
   const d=allyData, P=d.perms, canEdit=m=>m.id!==d.me&&(P.owner||m.rank>P.rank);
   const roles=(d.roles||[]).filter(r=>P.owner||r.position>P.rank);
@@ -1971,7 +2077,10 @@ function allyMembersHtml(){
       <td><b>${esc(m.name)}</b>${m.id===d.alliance.owner?' <span class="vb-role" style="--rc:#f59e0b">Gründer</span>':''}<div class="pat-dept">seit ${fmtDate(m.joined_at)}</div></td>
       <td>${roleChips(m.roles)||'<span class="dim">—</span>'}${P.roles&&canEdit(m)?`<details class="vb-det"><summary>Rollen ändern</summary>${roles.map(r=>`<label class="vb-check"><input type="checkbox" data-mr="${m.id}" value="${r.id}" ${m.roles.includes(r.id)?'checked':''}> ${esc(r.name)}</label>`).join('')}<button class="btn sm" data-mrsave="${m.id}">Speichern</button></details>`:''}</td>
       <td class="mono">${fmt(m.today)} €</td><td class="mono">${fmt(m.month)} €</td><td class="mono">${fmt(m.total)} €</td>
-      <td style="text-align:right">${P.members&&canEdit(m)?`<button class="btn sm danger" data-kick="${m.id}">Entfernen</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+      <td style="text-align:right" class="vb-acts">${(d.timeouts||{})[m.id]?`<div class="pat-dept">stumm bis ${fmtDate(d.timeouts[m.id])}</div>`:''}${canEdit(m)?`
+        ${P.timeout?`<select class="vb-sel" data-timeout="${m.id}"><option value="">Timeout …</option><option value="10">10 Minuten</option><option value="60">1 Stunde</option><option value="1440">1 Tag</option><option value="10080">7 Tage</option>${(d.timeouts||{})[m.id]?'<option value="0">aufheben</option>':''}</select>`:''}
+        ${P.kick?`<button class="btn sm" data-kick="${m.id}">Kick</button>`:''}
+        ${P.ban?`<select class="vb-sel" data-ban="${m.id}"><option value="">Bann …</option><option value="1">1 Tag</option><option value="7">7 Tage</option><option value="30">30 Tage</option><option value="0">dauerhaft</option></select>`:''}`:''}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function allyRolesHtml(){
   const d=allyData, P=d.perms, mine=r=>P.owner||r.position>P.rank;
@@ -1986,7 +2095,7 @@ function allyRolesHtml(){
       <td><input class="vb-in" style="width:64px" type="number" min="1" max="999" data-k="position" value="${Math.max(P.rank+1,50)}"></td>${ALLY_PERMS.map(p=>`<td><input type="checkbox" data-perm="${p[0]}"></td>`).join('')}<td></td></tr>
     </tbody></table></div><div class="vb-form"><span class="vb-sp"></span><button class="btn primary" id="vb-roles-save">Rollen speichern</button></div>`;
 }
-const ALLY_KIND={einzahlung:'Einzahlung',auto:'Automatisch',auszahlung:'Auszahlung',gruendung:'Gründung',beitritt:'Beitritt',austritt:'Austritt'};
+const ALLY_KIND={einzahlung:'Einzahlung',auto:'Automatisch',auszahlung:'Auszahlung',gruendung:'Gründung',beitritt:'Beitritt',austritt:'Austritt',bann:'Bann',gebaeude:'Gebäude',lehrgang:'Lehrgang'};
 function allyKasseHtml(){
   const d=allyData, P=d.perms, a=d.alliance, lim=Math.min(a.payout_limit,2000000);
   const eligible=d.members.filter(m=>Date.now()-new Date(m.joined_at).getTime()>=3*86400000);
@@ -2017,8 +2126,10 @@ function allyStatsHtml(){
 function allyRequestsHtml(){
   const r=allyData.requests||[], ap=r.filter(x=>x.kind==='apply'), iv=r.filter(x=>x.kind==='invite');
   return `<div class="vb-sec"><h4>Bewerbungen</h4>${ap.length?ap.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span><span class="vb-sp"></span>
-      <button class="btn sm primary" data-req="${x.user_id}" data-acc="1">Annehmen</button><button class="btn sm ghost" data-req="${x.user_id}" data-acc="0">Ablehnen</button></div>`).join(''):'<div class="pers-hint">Keine offenen Bewerbungen.</div>'}</div>
-    <div class="vb-sec"><h4>Offene Einladungen</h4>${iv.length?iv.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span></div>`).join(''):'<div class="pers-hint">Keine.</div>'}</div>`;
+      ${allyData.perms.members?`<button class="btn sm primary" data-req="${x.user_id}" data-acc="1">Annehmen</button><button class="btn sm ghost" data-req="${x.user_id}" data-acc="0">Ablehnen</button>`:''}
+      ${allyData.perms.ban?`<select class="vb-sel" data-ban="${x.user_id}"><option value="">Sperren …</option><option value="7">7 Tage</option><option value="0">dauerhaft</option></select>`:''}</div>`).join(''):'<div class="pers-hint">Keine offenen Bewerbungen.</div>'}</div>
+    <div class="vb-sec"><h4>Offene Einladungen</h4>${iv.length?iv.map(x=>`<div class="vb-row"><b>${esc(x.name)}</b><span class="dim"> · ${fmtDate(x.created_at)}</span></div>`).join(''):'<div class="pers-hint">Keine.</div>'}</div>
+    ${allyData.perms.ban?`<div class="vb-sec"><h4>Gesperrte Spieler</h4>${(allyData.bans||[]).length?allyData.bans.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim"> · ${b.until?'bis '+fmtDate(b.until):'dauerhaft'}${b.reason?' · '+esc(b.reason):''}</span><span class="vb-sp"></span><button class="btn sm" data-unban="${b.user_id}">Entsperren</button></div>`).join(''):'<div class="pers-hint">Niemand gesperrt.</div>'}</div>`:''}`;
 }
 function allyBind(){
   const box=document.getElementById('vb-content'), q=id=>document.getElementById(id), val=id=>q(id)?.value;
@@ -2033,7 +2144,17 @@ function allyBind(){
   on('vb-transfer-btn',async()=>{ const o=q('vb-transfer'); if(!o||!confirm(`Leitung an ${o.selectedOptions[0].text} übertragen?`)) return; if(await allyCall('ally_transfer',{p_user:o.value},'Leitung übertragen')) allyRefresh(); });
   on('vb-dissolve',async()=>{ if(!confirm('Verband auflösen? Die Kasse geht verloren.')) return; if(await allyCall('ally_dissolve',{},'Verband aufgelöst')){ allyInfo.id=null; allyRefresh(); } });
   on('vb-inv-btn',async()=>{ const n=(val('vb-inv-name')||'').trim(); if(n && await allyCall('ally_invite',{p_username:n},`${n} eingeladen`)) allyRefresh(); });
-  box.querySelectorAll('[data-kick]').forEach(b=>b.onclick=async()=>{ if(!confirm('Mitglied entfernen?')) return; if(await allyCall('ally_kick',{p_user:b.dataset.kick},'Mitglied entfernt')) allyRefresh(); });
+  box.querySelectorAll('[data-kick]').forEach(b=>b.onclick=async()=>{ if(!confirm('Mitglied aus dem Verband werfen? Es kann sich neu bewerben.')) return; if(await allyCall('ally_kick',{p_user:b.dataset.kick},'Mitglied entfernt')) allyRefresh(); });
+  box.querySelectorAll('[data-ban]').forEach(sel=>sel.onchange=async()=>{ if(sel.value==='') return; const days=Number(sel.value);
+    const reason=prompt(`Grund für den Bann (${days?days+' Tage':'dauerhaft'}):`,''); if(reason===null){ sel.value=''; return; }
+    if(await allyCall('ally_ban',{p_user:sel.dataset.ban,p_days:days||null,p_reason:reason},'Spieler gesperrt')) allyRefresh(); else sel.value=''; });
+  box.querySelectorAll('[data-unban]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_unban',{p_user:b.dataset.unban},'Sperre aufgehoben')) allyRefresh(); });
+  box.querySelectorAll('[data-timeout]').forEach(sel=>sel.onchange=async()=>{ if(sel.value==='') return;
+    if(await allyCall('ally_timeout',{p_user:sel.dataset.timeout,p_minutes:Number(sel.value)},Number(sel.value)?'Timeout gesetzt':'Timeout aufgehoben')) allyRefresh(); else sel.value=''; });
+  box.querySelectorAll('[data-chatdel]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_chat_delete',{p_id:Number(b.dataset.chatdel)},'Nachricht gelöscht')){ allyChatAfter=0; await allyPoll(); renderVerband(); } });
+  on('vb-chat-send',allyChatSend);
+  const ci=q('vb-chat-in'); if(ci) ci.onkeydown=e=>{ if(e.key==='Enter') allyChatSend(); };
+  const cl=q('vb-chat-list'); if(cl) cl.scrollTop=cl.scrollHeight;
   box.querySelectorAll('[data-mrsave]').forEach(b=>b.onclick=async()=>{ const uid=b.dataset.mrsave, ids=[...box.querySelectorAll(`[data-mr="${uid}"]:checked`)].map(x=>x.value);
     if(await allyCall('ally_member_roles',{p_user:uid,p_role_ids:ids},'Rollen gespeichert')) allyRefresh(); });
   on('vb-roles-save',async()=>{ const roles=[...box.querySelectorAll('[data-role]')].map(tr=>{ const g=k=>tr.querySelector(`[data-k="${k}"]`);
@@ -2044,6 +2165,404 @@ function allyBind(){
     if(await allyCall('ally_payout',{p_user:val('vb-pay-to'),p_amount:amt,p_note:val('vb-pay-note')||''},`${fmt(amt)} € ausgezahlt`)) allyRefresh(); });
   on('vb-fin-save',async()=>{ if(await allyCall('ally_settings',{p_settings:{payout_limit:Math.floor(Number(val('vb-lim'))||0),ranking_public:q('vb-rank').checked}},'Gespeichert')) allyRefresh(); });
   box.querySelectorAll('[data-req]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_request_answer',{p_aid:allyData.alliance.id,p_user:b.dataset.req,p_accept:b.dataset.acc==='1'},b.dataset.acc==='1'?'Aufgenommen':'Abgelehnt')) allyRefresh(); });
+}
+
+/* ---------- Geteilte Einsätze (Verbände Teil 2b) ----------
+   Freigegebene Einsätze liegen auf dem Server (sm_share). Alle 10 s meldet jeder Browser seine Fahrzeuge dorthin
+   (sm_sync) und bekommt die Einsätze des Verbands zurück. Fortschritt, Patienten und Auszahlung rechnet der Server,
+   damit es weitergeht, auch wenn der Ersteller offline ist. Eigene RTW transportieren ihre Patienten selbst. */
+let smEvents=[], smBusy=false, smLocalPat={}, smUnitLayer=null;
+const SM_PSTATE=['waiting','treating','ready','transport','done'];
+function smUnits(m){                                    // alle Einheiten auf Anfahrt/vor Ort: eigene lokal, andere vom Server
+  const mine=state.vehicles.filter(v=>v.targetMissionId===m.id && [3,4,5].includes(v.status));
+  const others=(m.units||[]).filter(u=>!u.mine && u.status>=3).map(u=>({ id:`x:${u.player}/${u.vid}`, type:u.type, status:u.status, other:true,
+    player:u.player, name:u.name, lat:u.lat, lng:u.lng, mod:{ water:Number(u.water)||0, foam:Number(u.foam)||0 } }));
+  return mine.concat(others);
+}
+function smPatient(m,p){
+  const prev=(m.patients||[]).find(x=>x.id===p.id), local=smLocalPat[p.id];
+  let st=p.state;
+  if(local && SM_PSTATE.indexOf(local)>SM_PSTATE.indexOf(st)) st=local; else if(local) delete smLocalPat[p.id];   // Meldung noch unterwegs
+  const unit=(m.units||[]).find(u=>u.vid===p.rtw_vid && (u.mine===!!p.mine));
+  return { id:p.id, na:!!p.na, dept:p.dept, stroke:false, state:st, treatLeft:Number(p.treat)||0, mine:!!p.mine,
+    rtwId:p.mine&&p.rtw_vid ? p.rtw_vid : null, rtwLabel:p.rtw_vid&&!p.mine ? `${unit?unit.name:'RTW'} (${p.rtw_owner||'?'})` : '',
+    nefId:p.nef_vid ? (p.nef_mine?p.nef_vid:'x') : null, nefMine:!!p.nef_mine, khId:prev?prev.khId:null };
+}
+function smPatientEvent(mid,pid,st){ smLocalPat[pid]=st; smEvents.push({ mid:mid.slice(3), pid, state:st }); }
+function smUnitsOut(){
+  return state.vehicles.filter(v=>isSm(v.targetMissionId) && [3,4,5].includes(v.status)).map(v=>({ mid:v.targetMissionId.slice(3), vid:String(v.id), type:v.type,
+    name:vehName(v), status:v.status, lat:v.lat, lng:v.lng, water:vStat(v,'water')||0, foam:vStat(v,'foam')||0 }));
+}
+async function smSync(){
+  if(!sb||!AUTH.token||!state||simulating||smBusy) return;
+  smBusy=true; const ev=smEvents.splice(0,50);
+  try{
+    let r; try{ r=await rpc('sm_sync',{p_token:AUTH.token,p_units:smUnitsOut(),p_events:ev}); }
+    catch(e){ smEvents.unshift(...ev); throw e; }
+    if(r && !r.error) smApply(r.missions||[]);
+  }catch(e){ /* offline: nächster Versuch in 10 s */ }
+  finally{ smBusy=false; }
+}
+function smApply(list){
+  const first=!smLoaded, old=new Map(sharedMissions.map(m=>[m.id,m]));
+  sharedMissions=list.filter(x=>missionType(x.type)).map(x=>{
+    const id='sm:'+x.id, o=old.get(id), m=o||{ id, sid:x.id, shared:true, assigned:[], marker:null };
+    const was=o?o.status:null, wasProg=o?o.progress:null;
+    Object.assign(m,{ type:x.type, lat:x.lat, lng:x.lng, address:x.address||'', owner:x.owner||'', mine:!!x.mine, status:x.status,
+      progress:Number(x.progress)||0, reward:Number(x.reward)||0, payout:x.payout||null, units:x.units||[] });
+    m.patients=(x.patients||[]).map(p=>smPatient(m,p));
+    m.assigned=state.vehicles.filter(v=>v.targetMissionId===id).map(v=>v.id);
+    if(m.status==='done' && was && was!=='done') smDoneToast(m);
+    if(m.status==='done' && !m.doneAt) m.doneAt=Date.now();
+    if(!m.marker || was!==m.status) { if(m.status==='done' && Date.now()-m.doneAt>60000){ if(m.marker){ missionLayer.removeLayer(m.marker); m.marker=null; } } else refreshMissionMarker(m); }
+    m._changed = was!==m.status || wasProg!==m.progress;
+    return m; });
+  old.forEach((m,id)=>{ if(!sharedMissions.some(x=>x.id===id) && m.marker) missionLayer.removeLayer(m.marker); });
+  sharedMissions=sharedMissions.filter(m=>{ if(m.status==='done' && Date.now()-m.doneAt>60000){ if(m.marker){ missionLayer.removeLayer(m.marker); m.marker=null; } return false; } return true; });
+  smLoaded=true;
+  smActVehicles(first);
+  smDrawUnits();
+  renderMissions(); renderVehicles();
+  if(document.getElementById('modal-mission').classList.contains('show') && isSm(openMissionId)) renderMissionModal();
+}
+/* Eigene Fahrzeuge: Anfahrt fortsetzen, Patienten transportieren, nach getaner Arbeit einrücken */
+function smActVehicles(first){
+  for(const v of state.vehicles){
+    if(!isSm(v.targetMissionId)) continue;
+    const m=missionById(v.targetMissionId);
+    if(!m || m.status==='done'){ if(v.status===3) releaseVehicle(v); continue; }      // Status 4/5 gibt stepWorld frei
+    if(first && v.status===3 && !v.path) smResume(v,m);
+  }
+  for(const m of sharedMissions){
+    if(m.status==='done') continue;
+    const t=missionType(m.type);
+    for(const p of m.patients){
+      if(p.state!=='ready' || !p.mine) continue;
+      const v=state.vehicles.find(x=>String(x.id)===p.rtwId && x.targetMissionId===m.id && (x.status===4||x.status===5));
+      if(v) smTransport(m,p,v);
+    }
+    const mine=state.vehicles.filter(v=>v.targetMissionId===m.id && (v.status===3||v.status===4));
+    // Notarzt: frei, sobald kein Notarzt-Patient mehr vor Ort versorgt werden muss
+    const naOpen=m.patients.some(p=>p.na && ['waiting','treating','ready'].includes(p.state));
+    if(m.patients.some(p=>p.na) && !naOpen) mine.filter(v=>v.type==='nef'||v.type==='stemo').forEach(releaseVehicle);
+    // Brand/TH erledigt, nur noch Patienten offen: Feuerwehr rückt ein, Rettungsdienst bleibt
+    if(!t.rd && m.progress>=1 && !m.fireReleased){ m.fireReleased=true; mine.filter(v=>VEHICLES[v.type]?.category!=='rd').forEach(releaseVehicle); }
+  }
+}
+async function smResume(v,m){
+  try{ const route=await getRoute({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng});
+    if(v.status!==3 || v.targetMissionId!==m.id || v.path) return;
+    route.coords.push({lat:m.lat,lng:m.lng}); startDrive(v,route.coords,route.duration,CONFIG.outboundFactor); }catch(e){ console.error('smResume',e); }
+}
+/* Transport ins nächste geeignete Krankenhaus (bei geteilten Einsätzen immer automatisch) */
+async function smTransport(m,p,v){
+  const list=hospitalsFor(p,m), best=list.find(x=>x.ok)||list[0]; if(!best) return;
+  const h=best.h; p.state='transport'; p.khId=h.id; smPatientEvent(m.id,p.id,'transport');
+  m.assigned=m.assigned.filter(id=>id!==v.id);
+  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId:h.id, na:!!p.na, fromLat:m.lat, fromLng:m.lng, kh:h.ally?{name:h.name,lat:h.lat,lng:h.lng}:null };
+  funk(v,7,`Transport → ${h.name}${p.na?' (mit Notarzt)':''} · Verbandseinsatz`);
+  refreshVehicleMarker(v); renderVehicles();
+  const route=await getRoute({lat:v.lat,lng:v.lng},{lat:h.lat,lng:h.lng});
+  if(v.status!==7) return;
+  route.coords.push({lat:h.lat,lng:h.lng}); v.transport.km=distM({lat:v.lat,lng:v.lng},h)/1000;
+  startDrive(v,route.coords,route.duration,CONFIG.outboundFactor);
+}
+function smDoneToast(m){
+  const t=missionType(m.type), me=(m.payout||[]).find(x=>x.mine);
+  if(me) toast(`Verbandseinsatz ${t.name} erledigt: +${fmt(me.amount)} € (kommt mit der nächsten Gutschrift)`,'ok');
+  else if(m.mine) toast(`Verbandseinsatz ${t.name} erledigt`,'ok');
+}
+/* Fahrzeuge anderer Mitglieder auf dem Weg zu oder an geteilten Einsätzen */
+function smDrawUnits(){
+  if(!map) return; if(!smUnitLayer) smUnitLayer=L.layerGroup().addTo(map);
+  smUnitLayer.clearLayers();
+  for(const m of sharedMissions){ if(m.status==='done') continue;
+    for(const u of (m.units||[])){ if(u.mine || u.status<3 || u.status>4 || u.lat==null) continue;
+      const abbr=VEHICLES[u.type]?.abbr||u.type;
+      L.marker([u.lat,u.lng],{zIndexOffset:400,icon:L.divIcon({className:'f-ally',iconSize:[0,0],iconAnchor:[0,0],html:`<div class="mk-ally-veh">${esc(abbr)}</div>`})})
+        .bindTooltip(`${esc(u.name)} · ${esc(u.player)} · ${u.status===3?'Anfahrt':'vor Ort'}`,{direction:'top'}).addTo(smUnitLayer);
+    } }
+}
+function smListLine(m){
+  const others=new Set((m.units||[]).filter(u=>!u.mine && u.status>=3).map(u=>u.player));
+  if(m.status==='done'){ const me=(m.payout||[]).find(x=>x.mine); return `Verband · erledigt${me?` · dein Anteil ${fmt(me.amount)} €`:''}`; }
+  return `Verband · von ${m.mine?'dir':esc(m.owner)} geteilt${others.size?` · ${others.size} Mitglied${others.size>1?'er':''} dabei`:''}`;
+}
+/* Kopf im Einsatzfenster: freigeben bzw. Infos zum geteilten Einsatz */
+function smSharePanel(m){
+  if(m.shared){
+    const pay=m.status==='done'&&m.payout?`<div class="pat-dept" style="padding:0 12px 8px">Auszahlung: ${m.payout.map(x=>`${esc(x.name)} ${fmt(x.amount)} € (${x.vmin} Fzg-Min.)`).join(' · ')}</div>`:'';
+    return `<div class="lss-panel"><div class="lss-ph" style="color:#c4b5fd">Verbandseinsatz · von ${m.mine?'dir':esc(m.owner)} geteilt</div>
+      <div class="pat-dept" style="padding:8px 12px">Geld nach Fahrzeug-Minuten vor Ort, der Ersteller bekommt 10 % vorab. Patienten fahren automatisch ins nächste geeignete Krankenhaus.</div>${pay}</div>`;
+  }
+  if(!allyInfo.id || m.status==='done') return '';
+  return `<div class="lss-panel"><div class="lss-ph">Verband<button class="btn sm" id="mm-share" style="margin-left:auto">Im Verband freigeben</button></div>
+    <div class="pat-dept" style="padding:8px 12px">Andere Mitglieder sehen den Einsatz und können Fahrzeuge schicken. Das Geld wird nach Fahrzeug-Minuten geteilt, du bekommst 10 % vorab.</div></div>`;
+}
+function smOthersPanel(m){
+  const list=(m.units||[]).filter(u=>!u.mine && u.status>=3);
+  const rows=list.map(u=>`<tr><td><span class="fnum fnum-${u.status}">${u.status}</span></td><td class="call">${esc(u.name)}</td><td class="dim">${esc(VEHICLES[u.type]?.name||u.type)}</td><td>${esc(u.player)}</td><td class="mono">${u.vmin} min</td></tr>`).join('');
+  return `<div class="lss-panel"><div class="lss-ph" style="color:#c4b5fd">Fahrzeuge anderer Mitglieder <span class="cnt">${list.length}</span></div>${list.length
+    ? `<table class="lss-tbl"><thead><tr><th>FMS</th><th>Fahrzeug</th><th>Typ</th><th>Mitglied</th><th>vor Ort</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="lss-empty">Keine.</div>'}</div>`;
+}
+/* Eigenen Einsatz freigeben: Server übernimmt, eigene Fahrzeuge fahren weiter dorthin */
+async function shareMission(m){
+  if(!allyInfo.id || m.shared || m.status==='done') return;
+  const t=missionType(m.type); if(!t) return;
+  if(!confirm(`„${t.name}“ im Verband freigeben? Der Einsatz läuft danach über den Verband, das Geld wird nach Fahrzeug-Minuten geteilt.`)) return;
+  const p={ type:m.type, code:t.code, name:t.name, lat:m.lat, lng:m.lng, address:m.address, reward:missionReward(t), progress:m.progress||0,
+    spec:{ minutes:t.minutes||0, rd:!!t.rd, minVehicles:t.minVehicles||1, need:t.need||{}, carriers:PAT_CARRIERS,
+      req:(t.req||[]).map(r=>({ count:r.count, types:r.types, label:reqLabel(r) })) },
+    patients:(m.patients||[]).map(x=>({ id:x.id, na:!!x.na, dept:x.dept, state:x.state, treat:x.treatLeft })) };
+  const r=await allyCall('sm_share',{p},'Einsatz im Verband freigegeben'); if(!r||!r.id) return;
+  const id='sm:'+r.id;
+  // RTW mit eigenen Patienten im Transport bleiben beim lokalen Abschluss (Vergütung je Transport läuft weiter)
+  state.vehicles.forEach(v=>{
+    if(v.targetMissionId===m.id) v.targetMissionId=id;
+    if(v.nextMissionId===m.id) v.nextMissionId=id;
+    if(v.transport && v.transport.missionId===m.id) v.transport.missionId=null;
+  });
+  const i=state.missions.indexOf(m); if(i>=0) state.missions.splice(i,1);
+  if(m.marker){ missionLayer.removeLayer(m.marker); m.marker=null; }
+  const sm={ id, sid:r.id, shared:true, type:m.type, lat:m.lat, lng:m.lng, address:m.address, owner:AUTH.username||'', mine:true, status:m.status, progress:m.progress||0,
+    reward:p.reward, units:[], patients:[], assigned:state.vehicles.filter(v=>v.targetMissionId===id).map(v=>v.id), marker:null };
+  sharedMissions.push(sm); addMissionMarker(sm);
+  openMissionId=id; renderMissions(); renderMissionModal(); saveGame(true);
+  smSync();
+}
+
+/* ---------- Verbände Teil 3: News, Regeln, Forum, Akademien im Verband, Verbandsgebäude ---------- */
+const VB_BUILD={ kh:{ name:'Verbandskrankenhaus', cost:3000000, desc:'Alle Fachabteilungen. Alle Mitglieder können Patienten hierher fahren.' },
+  akademie:{ name:'Verbandsakademie', cost:2500000, roomCost:1000000, maxRooms:4, desc:'Lehrgänge für alle Mitglieder. Jeder Lehrgang kostet 150.000 €, das Geld fließt in die Verbandskasse.' } };
+const VB_COURSE_FEE=150000;
+let allyAssets={ buildings:[], academies:[] }, allyBoard=null, allyForum=null, allyThread=null, allyThreadId=null, allyPlace=null;
+let acadSel={ key:null, station:null, course:null, people:new Set() };
+async function allyLoadAssets(){
+  if(!allyInfo.id){ allyAssets={ buildings:[], academies:[] }; allyHospitals=[]; return; }
+  try{ const r=await rpc('ally_assets',{p_token:AUTH.token}); if(r && !r.error){ allyAssets=r;
+    allyHospitals=(r.buildings||[]).filter(b=>b.type==='kh').map(b=>({ id:'ah:'+b.id, name:b.name, lat:b.lat, lng:b.lng, dept:Object.keys(DEPTS), ally:true })); } }catch(e){}
+}
+function allyVbPin(type){ const icon=type==='kh'
+    ? c=>`<rect x="4" y="5" width="16" height="16" rx="1.5" fill="${c}"/><path d="M12 7.5V14.5M8.5 11H15.5" stroke="#151a23" stroke-width="2.6"/>` : PIN_ICONS.academy;
+  return `<svg viewBox="0 0 40 48" width="40" height="48" aria-hidden="true"><path d="M8 2H32A6 6 0 0 1 38 8V30A6 6 0 0 1 32 36H25L20 44L15 36H8A6 6 0 0 1 2 30V8A6 6 0 0 1 8 2Z" fill="#2a2140" stroke="${ALLY_COLOR}" stroke-width="2.5"/><g transform="translate(8 7)">${icon(ALLY_COLOR)}</g></svg>`; }
+function allyDrawBuildings(){
+  (allyAssets.buildings||[]).forEach(b=>{
+    const m=L.marker([b.lat,b.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:allyVbPin(b.type)})})
+      .bindTooltip(`${esc(b.name)} · ${VB_BUILD[b.type]?.name||''}${b.type==='akademie'?` · ${b.rooms} Lehrsaal${b.rooms>1?'e':''}`:''}`,{direction:'top'}).addTo(allyLayer);
+    m.on('click',()=>{ if(b.type==='akademie'){ acadSel.key='a:'+b.id; allyTab='academies'; } else allyTab='buildings'; openVerband(); });
+  });
+}
+/* Bau eines Verbandsgebäudes: Ort per Klick auf die Karte */
+function allyStartPlace(type,name){
+  allyPlace={ type, name }; hideModal('modal-verband');
+  const sp=document.querySelector('#buildBanner span'); if(sp){ sp.dataset.orig=sp.dataset.orig||sp.textContent; sp.textContent=`Klicke auf die Karte, um das ${VB_BUILD[type].name} zu platzieren`; }
+  setBuildMode(true);
+}
+function allyEndPlace(){ allyPlace=null; setBuildMode(false); const sp=document.querySelector('#buildBanner span'); if(sp&&sp.dataset.orig) sp.textContent=sp.dataset.orig; }
+async function allyPlaceAt(ll){
+  const p=allyPlace; allyEndPlace(); if(!p) return;
+  const r=await allyCall('ally_building_build',{p_type:p.type,p_name:p.name,p_lat:ll.lat,p_lng:ll.lng},`${VB_BUILD[p.type].name} gebaut`);
+  if(r){ await allyLoadMap(); allyTab='buildings'; openVerband(); }
+}
+/* Daten für den gewählten Reiter nachladen */
+async function allyTabLoad(){
+  const tab=allyTab; let r=null;
+  if(tab==='news'||tab==='rules'){ r=await allyCall('ally_board',{}); if(r) allyBoard=r; }
+  else if(tab==='forum'){
+    if(allyThreadId){ r=await allyCall('ally_forum_thread',{p_id:allyThreadId}); if(r) allyThread=r; else allyThreadId=null; }
+    if(!allyThreadId){ r=await allyCall('ally_forum',{}); if(r) allyForum=r; } }
+  else if(tab==='academies'||tab==='buildings') await allyLoadAssets();
+  else return;
+  if(allyTab===tab && document.getElementById('modal-verband').classList.contains('show')) renderVerband();
+}
+const vbText=s=>esc(s).replace(/\n/g,'<br>');
+function allyNewsHtml(){
+  const b=allyBoard; if(!b) return '<div class="empty-hint">Lade …</div>';
+  return `${b.can_mod?`<div class="vb-sec"><h4>News schreiben</h4><input id="vb-news-title" class="vb-in" maxlength="120" placeholder="Überschrift">
+      <textarea id="vb-news-body" class="vb-ta" rows="3" maxlength="5000" placeholder="Text"></textarea><div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-news-post">Veröffentlichen</button></div></div>`:''}
+    <div class="vb-sec"><h4>Neuigkeiten</h4>${(b.news||[]).length?b.news.map(n=>`<div class="vb-post"><div class="vb-post-h"><b>${esc(n.title)}</b><span class="dim">${esc(n.name||'')} · ${fmtDate(n.at)}</span>
+      ${b.can_mod?`<button class="vb-x" data-newsdel="${n.id}" title="Löschen" aria-label="News löschen">×</button>`:''}</div>${n.body?`<div class="vb-post-b">${vbText(n.body)}</div>`:''}</div>`).join(''):'<div class="empty-hint">Noch keine News.</div>'}</div>`;
+}
+function allyRulesHtml(){
+  const b=allyBoard; if(!b) return '<div class="empty-hint">Lade …</div>';
+  return `<div class="vb-sec"><h4>Regeln des Verbands</h4>${b.can_mod?`<textarea id="vb-rules" class="vb-ta" rows="12" maxlength="10000" placeholder="z. B. 1. Geteilte Einsätze nicht abbrechen …">${esc(b.rules||'')}</textarea>
+      <div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-rules-save">Speichern</button></div>`
+    :`<div class="vb-post"><div class="vb-post-b">${b.rules?vbText(b.rules):'<span class="dim">Noch keine Regeln festgelegt.</span>'}</div></div>`}</div>`;
+}
+function allyForumHtml(){
+  if(allyThreadId){ const t=allyThread; if(!t) return '<div class="empty-hint">Lade …</div>';
+    const mod=allyForum?.can_mod, muted=allyForum?.muted_until&&new Date(allyForum.muted_until).getTime()>Date.now();
+    return `<div class="vb-form"><button class="btn sm ghost" id="vb-forum-back">← Alle Themen</button><span class="vb-sp"></span>
+        ${mod?`<button class="btn sm" data-fmod="${t.thread.pinned?'unpin':'pin'}">${t.thread.pinned?'Lösen':'Anheften'}</button><button class="btn sm" data-fmod="${t.thread.locked?'unlock':'lock'}">${t.thread.locked?'Öffnen':'Schließen'}</button><button class="btn sm danger" data-fmod="delete">Thema löschen</button>`:''}</div>
+      <div class="vb-sec"><h4>${t.thread.pinned?'📌 ':''}${esc(t.thread.title)}${t.thread.locked?' · geschlossen':''}</h4>
+      ${t.posts.map(p=>`<div class="vb-post${p.mine?' me':''}"><div class="vb-post-h"><b>${esc(p.name||'gelöscht')}</b><span class="dim">${fmtDate(p.at)}</span>
+        ${!p.deleted&&(p.mine||mod)?`<button class="vb-x" data-postdel="${p.id}" title="Löschen" aria-label="Beitrag löschen">×</button>`:''}</div>
+        <div class="vb-post-b${p.deleted?' dim':''}">${p.deleted?'Beitrag gelöscht':vbText(p.body)}</div></div>`).join('')}</div>
+      ${t.thread.locked&&!mod?'<div class="pers-hint">Das Thema ist geschlossen.</div>':muted?'<div class="pers-hint" style="color:#fbbf24">Du bist stummgeschaltet.</div>'
+        :`<div class="vb-sec"><textarea id="vb-reply" class="vb-ta" rows="3" maxlength="5000" placeholder="Antwort schreiben"></textarea><div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-reply-send">Antworten</button></div></div>`}`; }
+  const f=allyForum; if(!f) return '<div class="empty-hint">Lade …</div>';
+  const muted=f.muted_until&&new Date(f.muted_until).getTime()>Date.now();
+  return `<div class="vb-sec"><h4>Themen</h4>${f.threads.length?`<table class="lss-tbl"><thead><tr><th>Thema</th><th>Beiträge</th><th class="hide-sm">Letzter Beitrag</th></tr></thead><tbody>${f.threads.map(t=>`<tr class="vb-click" data-thread="${t.id}">
+      <td>${t.pinned?'📌 ':''}<b>${esc(t.title)}</b>${t.locked?' <span class="dim">· geschlossen</span>':''}<div class="pat-dept">von ${esc(t.name||'?')}</div></td><td class="mono">${t.posts}</td>
+      <td class="hide-sm dim">${esc(t.last_name||'')} · ${fmtDate(t.last_at)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty-hint">Noch keine Themen.</div>'}</div>
+    ${muted?'<div class="pers-hint" style="color:#fbbf24">Du bist stummgeschaltet und kannst nichts schreiben.</div>':`<div class="vb-sec"><h4>Neues Thema</h4><input id="vb-th-title" class="vb-in" maxlength="120" placeholder="Titel">
+      <textarea id="vb-th-body" class="vb-ta" rows="3" maxlength="5000" placeholder="Erster Beitrag"></textarea><div class="vb-form"><span class="vb-sp"></span><button class="btn primary sm" id="vb-th-send">Thema erstellen</button></div></div>`}`;
+}
+/* Akademien im Verband: freigegebene der Mitglieder und Verbandsakademien */
+function allyAcademiesHtml(){
+  const list=(allyAssets.academies||[]).filter(a=>!a.mine);
+  const mine=(state.allyCourses||[]);
+  const running=mine.length?`<div class="vb-sec"><h4>Meine Lehrgänge im Verband</h4>${mine.map(c=>{ const co=courseById(c.courseId), rem=Math.max(0,c.durationMs-(Date.now()-c.startedAt));
+      return `<div class="vb-row"><b>${esc(co?co.name:c.courseId)}</b><span class="dim">${esc(c.name)}</span><span class="vb-sp"></span><span class="dim">${(c.personIds||[]).length} Pers.</span><span class="mono">${fmtDur(rem)}</span></div>`; }).join('')}</div>`:'';
+  if(!list.length) return running+`<div class="empty-hint">Keine Akademien im Verband freigegeben.<br>Besitzer geben ihre Akademie im Akademie-Fenster frei. Mit dem Recht „Finanzen“ lässt sich unter „Gebäude“ eine Verbandsakademie bauen.</div>`;
+  if(!list.some(a=>a.key===acadSel.key)) acadSel.key=list[0].key;
+  const a=list.find(x=>x.key===acadSel.key), free=Math.max(0,a.rooms-a.used), left=Math.max(0,a.limit-a.my_persons);
+  if(!stationById(acadSel.station)) acadSel.station=state.stations[0]?.id||null;
+  if(!courseById(acadSel.course)) acadSel.course=COURSES[0]?.id||null;
+  const st=stationById(acadSel.station), co=courseById(acadSel.course);
+  const avail=st?stationAvailablePeople(st).filter(p=>co&&!hasQual(p,co.id)&&(!co.requiresCourse||hasQual(p,co.requiresCourse))):[];
+  [...acadSel.people].forEach(id=>{ if(!avail.some(p=>p.id===id)) acadSel.people.delete(id); });
+  const cost=a.kind==='alliance'?VB_COURSE_FEE:Math.round(CONFIG.courseCost*a.cost), max=Math.min(CONFIG.classroomCapacity,left);
+  const can=free>0 && acadSel.people.size>0 && acadSel.people.size<=max && canAfford(cost);
+  return running+`<div class="vb-sec"><h4>Akademien</h4><table class="lss-tbl"><thead><tr><th>Akademie</th><th>Lehrsäle frei</th><th class="hide-sm">Limit je Mitglied</th><th class="hide-sm">Lehrgänge</th></tr></thead><tbody>${list.map(x=>`<tr class="vb-click${x.key===a.key?' sel':''}" data-acad="${esc(x.key)}">
+      <td><b>${esc(x.name)}</b><div class="pat-dept">${x.kind==='alliance'?'Verbandsakademie':'von '+esc(x.owner)}</div></td><td class="mono">${Math.max(0,x.rooms-x.used)}/${x.rooms}</td>
+      <td class="hide-sm mono">${x.my_persons}/${x.limit} Pers.</td><td class="hide-sm dim">${x.dur<1?'25 % kürzer':''}${x.kind==='alliance'?'150.000 € in die Kasse':x.cost<1?' · 30 % günstiger':''}</td></tr>`).join('')}</tbody></table></div>
+    <div class="vb-sec"><h4>Lehrgang in ${esc(a.name)} starten</h4>
+      <div class="vb-form"><label class="fld sm"><span>Wache</span><select id="vb-ac-st" class="vb-sel">${state.stations.map(s=>`<option value="${s.id}"${s.id===acadSel.station?' selected':''}>${esc(s.name)}</option>`).join('')}</select></label>
+      <label class="fld sm"><span>Lehrgang</span><select id="vb-ac-co" class="vb-sel">${COURSES.map(c=>`<option value="${c.id}"${c.id===acadSel.course?' selected':''}>${c.name} (${fmtDur(c.durationMs*a.dur)})</option>`).join('')}</select></label></div>
+      ${co&&co.requiresCourse?`<div class="pers-hint">Voraussetzung: „${qualLabel(co.requiresCourse)}“.</div>`:''}
+      <div class="fld"><span>Personal (${acadSel.people.size}/${max})</span><div class="ac-people-pick">${avail.length?avail.map(p=>`<label class="ac-pick"><input type="checkbox" data-acp="${p.id}" ${acadSel.people.has(p.id)?'checked':''}/> ${esc(p.name)}</label>`).join(''):'<div class="pers-hint">Kein berechtigtes Personal an dieser Wache.</div>'}</div></div>
+      <div class="vb-form"><span class="pers-hint">${free?`${free} Lehrsaal${free>1?'e':''} frei`:'Alle Lehrsäle belegt'} · du kannst noch ${left} Person${left===1?'':'en'} schicken</span><span class="vb-sp"></span>
+        <button class="btn primary" id="vb-ac-start" ${can?'':'disabled'}>Lehrgang starten · ${fmt(cost)} €</button></div></div>
+    ${a.bookings.length?`<div class="vb-sec"><h4>Belegt durch</h4>${a.bookings.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim">${esc(courseById(b.course)?.name||b.course)} · ${b.persons} Pers.</span><span class="vb-sp"></span><span class="mono">${fmtDur(new Date(b.ends_at).getTime()-Date.now())}</span></div>`).join('')}</div>`:''}`;
+}
+async function allyBookCourse(){
+  const a=(allyAssets.academies||[]).find(x=>x.key===acadSel.key), co=courseById(acadSel.course), st=stationById(acadSel.station), ids=[...acadSel.people];
+  if(!a||!co||!st||!ids.length) return;
+  const cost=a.kind==='alliance'?VB_COURSE_FEE:Math.round(CONFIG.courseCost*a.cost);
+  if(!canAfford(cost)){ toast(`Nicht genug Guthaben (${fmt(cost)} €)`,'err'); return; }
+  if(a.kind==='alliance') await saveGame(true);          // Server bucht die Gebühr vom gespeicherten Guthaben ab
+  const r=await allyCall('ally_course_book',{p_key:a.key,p_course:co.id,p_persons:ids.length,p_duration:co.durationMs},`Lehrgang „${co.name}“ in ${a.name} gestartet`);
+  if(!r) return;
+  state.credits-=cost; book('lehrgang',`Lehrgang ${co.name} (${a.name})`,-cost);
+  (state.allyCourses=state.allyCourses||[]).push({ id:r.id, akey:a.key, name:a.name, courseId:co.id, stationId:st.id, personIds:ids, startedAt:Date.now(), durationMs:r.duration_ms });
+  acadSel.people=new Set(); renderTopbar(); renderStations(); saveGame(true); await allyLoadAssets(); renderVerband();
+}
+function allyBuildingsHtml(){
+  const A=allyAssets, can=!!A.can_build, list=A.buildings||[];
+  return `<div class="vb-sec"><h4>Verbandsgebäude</h4>${list.length?list.map(b=>`<div class="vb-row"><b>${esc(b.name)}</b><span class="dim">${VB_BUILD[b.type]?.name||b.type}${b.type==='akademie'?` · ${b.rooms}/${VB_BUILD.akademie.maxRooms} Lehrsäle`:''}</span><span class="vb-sp"></span>
+      <button class="btn sm ghost" data-vbgo="${b.id}">Karte</button>
+      ${can&&b.type==='akademie'&&b.rooms<VB_BUILD.akademie.maxRooms?`<button class="btn sm" data-vbexp="${b.id}">+ Lehrsaal · ${fmt(VB_BUILD.akademie.roomCost)} €</button>`:''}
+      ${can?`<button class="btn sm danger" data-vbdel="${b.id}">Abreißen</button>`:''}</div>`).join(''):'<div class="empty-hint">Noch keine Verbandsgebäude.</div>'}</div>
+    ${can?`<div class="vb-sec"><h4>Neues Gebäude aus der Verbandskasse (${fmt(A.kasse||0)} €)</h4>
+      ${Object.entries(VB_BUILD).map(([k,t])=>`<div class="vb-row"><b>${t.name}</b><span class="dim hide-sm">${t.desc}</span><span class="vb-sp"></span><span class="mono">${fmt(t.cost)} €</span>
+        <button class="btn sm primary" data-vbbuild="${k}" ${(A.kasse||0)>=t.cost?'':'disabled'}>Platzieren</button></div>`).join('')}
+      <div class="vb-form"><label class="fld sm"><span>Name (optional)</span><input id="vb-b-name" class="vb-in" maxlength="60" placeholder="z. B. Klinikum Nord"></label>
+        <label class="fld sm" style="max-width:220px"><span>Verbandsakademie: Personen je Mitglied</span><input id="vb-aclim" class="vb-in" type="number" min="1" max="10" value="${A.academy_limit||10}"></label><button class="btn sm" id="vb-aclim-save">Übernehmen</button></div></div>`
+    :`<div class="pers-hint">Bauen und Ausbauen dürfen Mitglieder mit dem Recht „Finanzen“. Gebäude werden aus der Verbandskasse bezahlt.</div>`}`;
+}
+function allyBind3(){
+  const box=document.getElementById('vb-content'), q=id=>document.getElementById(id), on=(id,fn)=>{ const e=q(id); if(e) e.onclick=fn; };
+  on('vb-news-post',async()=>{ if(await allyCall('ally_news_post',{p_title:q('vb-news-title').value,p_body:q('vb-news-body').value},'News veröffentlicht')) allyTabLoad(); });
+  box.querySelectorAll('[data-newsdel]').forEach(b=>b.onclick=async()=>{ if(confirm('News löschen?') && await allyCall('ally_news_delete',{p_id:Number(b.dataset.newsdel)},'Gelöscht')) allyTabLoad(); });
+  on('vb-rules-save',async()=>{ if(await allyCall('ally_rules_save',{p_rules:q('vb-rules').value},'Regeln gespeichert')) allyTabLoad(); });
+  box.querySelectorAll('[data-thread]').forEach(r=>r.onclick=()=>{ allyThreadId=Number(r.dataset.thread); allyThread=null; renderVerband(); allyTabLoad(); });
+  on('vb-forum-back',()=>{ allyThreadId=null; allyThread=null; renderVerband(); allyTabLoad(); });
+  on('vb-th-send',async()=>{ const r=await allyCall('ally_forum_post',{p_thread:null,p_title:q('vb-th-title').value,p_body:q('vb-th-body').value},'Thema erstellt');
+    if(r){ allyThreadId=r.thread; allyThread=null; renderVerband(); allyTabLoad(); } });
+  on('vb-reply-send',async()=>{ if(await allyCall('ally_forum_post',{p_thread:allyThreadId,p_title:null,p_body:q('vb-reply').value})) allyTabLoad(); });
+  box.querySelectorAll('[data-postdel]').forEach(b=>b.onclick=async()=>{ if(confirm('Beitrag löschen?') && await allyCall('ally_forum_delete',{p_post:Number(b.dataset.postdel)},'Gelöscht')) allyTabLoad(); });
+  box.querySelectorAll('[data-fmod]').forEach(b=>b.onclick=async()=>{ const act=b.dataset.fmod; if(act==='delete' && !confirm('Thema mit allen Beiträgen löschen?')) return;
+    if(await allyCall('ally_forum_mod',{p_thread:allyThreadId,p_action:act},'Erledigt')){ if(act==='delete'){ allyThreadId=null; allyThread=null; } allyTabLoad(); } });
+  box.querySelectorAll('[data-acad]').forEach(r=>r.onclick=()=>{ acadSel.key=r.dataset.acad; acadSel.people=new Set(); renderVerband(); });
+  const ast=q('vb-ac-st'); if(ast) ast.onchange=()=>{ acadSel.station=ast.value; acadSel.people=new Set(); renderVerband(); };
+  const aco=q('vb-ac-co'); if(aco) aco.onchange=()=>{ acadSel.course=aco.value; acadSel.people=new Set(); renderVerband(); };
+  box.querySelectorAll('[data-acp]').forEach(cb=>cb.onchange=()=>{ cb.checked?acadSel.people.add(cb.dataset.acp):acadSel.people.delete(cb.dataset.acp); renderVerband(); });
+  on('vb-ac-start',allyBookCourse);
+  box.querySelectorAll('[data-vbbuild]').forEach(b=>b.onclick=()=>allyStartPlace(b.dataset.vbbuild,(q('vb-b-name')?.value||'').trim()));
+  box.querySelectorAll('[data-vbexp]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_building_expand',{p_id:b.dataset.vbexp},'Lehrsaal gebaut')){ await allyLoadAssets(); renderVerband(); } });
+  box.querySelectorAll('[data-vbdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Gebäude abreißen? Das Geld kommt nicht zurück.')) return;
+    if(await allyCall('ally_building_remove',{p_id:b.dataset.vbdel},'Gebäude abgerissen')){ await allyLoadMap(); renderVerband(); } });
+  box.querySelectorAll('[data-vbgo]').forEach(b=>b.onclick=()=>{ const x=(allyAssets.buildings||[]).find(y=>y.id===b.dataset.vbgo); if(x){ hideModal('modal-verband'); map.setView([x.lat,x.lng],15); } });
+  on('vb-aclim-save',async()=>{ const n=Math.max(1,Math.min(10,Math.floor(Number(q('vb-aclim').value)||10)));
+    if(await allyCall('ally_settings',{p_settings:{academy_limit:n}},`Limit: ${n} Personen je Mitglied`)){ await allyLoadAssets(); renderVerband(); } });
+}
+/* Eigene Akademie im Verband freigeben (im Akademie-Fenster) */
+function acadAllyPanel(a){
+  if(!allyInfo.id) return '';
+  const info=(allyAssets.academies||[]).find(x=>x.mine && x.key.endsWith(':'+a.id)), sh=a.allyShare;
+  return `<div class="ac-section-h">Verband</div><div class="ac-form">
+      <label class="vb-check"><input type="checkbox" id="av-share" ${sh?'checked':''}> Für den Verband freigeben: Mitglieder können freie Lehrsäle für eigenes Personal nutzen</label>
+      <label class="fld"><span>Höchstens Personen gleichzeitig je Mitglied</span><input id="av-share-lim" type="number" min="1" max="10" value="${sh?sh.limit:5}" ${sh?'':'disabled'}></label>
+      ${info&&info.bookings.length?`<div class="ac-rooms">${info.bookings.map(b=>`<div class="ac-room"><div class="ac-room-top"><span class="ac-cname">${esc(courseById(b.course)?.name||b.course)}</span><span class="ac-time">${fmtDur(new Date(b.ends_at).getTime()-Date.now())}</span></div>
+        <div class="ac-people"><span class="pchip">${esc(b.name)} · ${b.persons} Personen</span></div></div>`).join('')}</div>`:''}</div>`;
+}
+function acadExtUsed(a){ const info=(allyAssets.academies||[]).find(x=>x.mine && x.key.endsWith(':'+a.id)); return info?info.ext_used:0; }
+
+/* ---------- Codes (Belohnungen über Socials) ----------
+   Der Server prüft den Code (code_redeem) und gibt die Belohnungen zurück. Geld gibt es sofort, Personal und
+   Gebäude/Erweiterungen kommen als Gutschein in state.vouchers und werden beim Zuweisen bzw. Bauen eingelöst. */
+function vouchers(){ const v=state.vouchers=state.vouchers||{}; v.buildings=v.buildings||{}; v.ext=v.ext||{}; v.staff=v.staff||[]; return v; }
+function extDefAny(key){ for(const k of Object.keys(EXTENSIONS)){ const d=EXTENSIONS[k].find(x=>x.key===key); if(d) return { d, kind:k }; } return null; }
+const EXT_KIND_NAME={ fire:'Feuerwache', academy:'Akademie', leitstelle:'Leitstelle' };
+function rewardText(r){
+  if(r.type==='money') return `${fmt(r.amount)} €`;
+  if(r.type==='staff') return `${r.count} Person${r.count>1?'en':''}${r.qual?` mit Ausbildung „${qualLabel(r.qual)}“`:''}`;
+  if(r.type==='building') return `${r.count>1?r.count+'× ':''}Gutschein ${buildingById(r.building)?.name||r.building}`;
+  if(r.type==='extension') return `${r.count>1?r.count+'× ':''}Gutschein Erweiterung ${extDefAny(r.ext)?.d.name||r.ext}`;
+  return '';
+}
+function openCodes(){ renderCodes(); showModal('modal-codes'); setTimeout(()=>document.getElementById('code-in')?.focus(),50); }
+function renderCodes(){
+  const V=vouchers(), box=document.getElementById('codes-content');
+  const bl=Object.entries(V.buildings).filter(([,n])=>n>0), el=Object.entries(V.ext).filter(([,n])=>n>0);
+  const stOpts=state.stations.map(s=>`<option value="${s.id}">${esc(s.name)} (${staffCount(s)}/${CONFIG.maxStaff})</option>`).join('');
+  box.innerHTML=`<div class="vb-sec"><div class="vb-form"><label class="fld sm" style="flex:1"><span>Code</span><input id="code-in" class="vb-in" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="z. B. SOMMER25" style="text-transform:uppercase"></label>
+      <button class="btn primary" id="code-go">Einlösen</button></div>
+      <div class="pers-hint">Codes gibt es auf unseren <a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a>. Jeder Code lässt sich einmal pro Konto einlösen.</div></div>
+    ${V.staff.length||bl.length||el.length?`<div class="vb-sec"><h4>Deine Gutscheine</h4>
+      ${V.staff.map(s=>`<div class="vb-row cv-row"><div class="cv-main"><b>${s.count} Person${s.count>1?'en':''}</b><span class="pat-dept">${s.qual?`mit Ausbildung „${esc(qualLabel(s.qual))}“`:'ohne Ausbildung'}</span></div><span class="vb-sp"></span>
+        ${state.stations.length?`<select class="vb-sel" data-vst="${s.id}">${stOpts}</select><button class="btn sm primary" data-vstaff="${s.id}">Zuweisen</button>`:'<span class="dim">Erst eine Wache bauen</span>'}</div>`).join('')}
+      ${bl.map(([id,n])=>`<div class="vb-row cv-row"><div class="cv-main"><b>${n}× ${esc(buildingById(id)?.name||id)}</b><span class="pat-dept">Grundpreis gratis · einlösen im Menü „Gebäude bauen“</span></div></div>`).join('')}
+      ${el.map(([k,n])=>{ const x=extDefAny(k); return `<div class="vb-row cv-row"><div class="cv-main"><b>${n}× ${esc(x?x.d.name:k)}</b><span class="pat-dept">Erweiterung gratis · einlösen bei ${x?EXT_KIND_NAME[x.kind]:''} → Reiter „Erweiterungen“</span></div></div>`; }).join('')}</div>`:''}`;
+  const go=async()=>{ const code=document.getElementById('code-in').value.trim(); if(!code) return; await redeemCode(code); };
+  document.getElementById('code-go').onclick=go;
+  document.getElementById('code-in').onkeydown=e=>{ if(e.key==='Enter') go(); };
+  box.querySelectorAll('[data-vstaff]').forEach(b=>b.onclick=()=>assignStaffVoucher(b.dataset.vstaff, box.querySelector(`[data-vst="${b.dataset.vstaff}"]`).value));
+}
+async function redeemCode(code){
+  if(!sb||!AUTH.token){ toast('Codes gehen nur mit Anmeldung','warn'); return; }
+  await saveGame(true);                                   // Server braucht einen gespeicherten Spielstand
+  let r; try{ r=await rpc('code_redeem',{p_token:AUTH.token,p_code:code}); }catch(e){ toast('Code: '+errMsg(e),'err'); return; }
+  if(!r||r.error){ toast(r?.error||'Code ungültig','err'); return; }
+  const V=vouchers();
+  for(const w of (r.rewards||[])){
+    if(w.type==='money'){ state.credits+=w.amount; book('code',`Code ${r.code}`,w.amount); }
+    else if(w.type==='staff') V.staff.push({ id:nid(), count:w.count, qual:w.qual||null, code:r.code });
+    else if(w.type==='building') V.buildings[w.building]=(V.buildings[w.building]||0)+w.count;
+    else if(w.type==='extension') V.ext[w.ext]=(V.ext[w.ext]||0)+w.count;
+  }
+  renderTopbar(); saveGame(true);
+  toast(`Code ${r.code} eingelöst: ${(r.rewards||[]).map(rewardText).join(', ')}`,'ok');
+  renderCodes();
+}
+function assignStaffVoucher(id,stationId){
+  const V=vouchers(), s=V.staff.find(x=>x.id===id), st=stationById(stationId); if(!s||!st) return;
+  const n=Math.min(s.count, CONFIG.maxStaff-staffCount(st)); if(n<1){ toast(`${st.name} hat schon ${CONFIG.maxStaff} Personal`,'warn'); return; }
+  const q=s.qual && courseById(s.qual) ? s.qual : null;
+  for(let i=0;i<n;i++){ const p=makePerson(); if(q) p.quals=[q]; st.roster.push(p); }
+  s.count-=n; if(s.count<=0) V.staff=V.staff.filter(x=>x!==s);
+  renderStations(); renderCodes(); saveGame(true);
+  toast(`${n} Person${n>1?'en':''} für ${st.name}${s.count>0?` · ${s.count} noch übrig`:''}`,'ok');
+}
+/* Erweiterung per Gutschein (gleiche Bauzeit wie gekauft) */
+function useExtVoucher(o,key){
+  const d=extDef(o,key), V=vouchers(); if(!o||!d||!(V.ext[key]>0)) return;
+  if(!stationReady(o)){ toast(`${o.name} ist noch im Bau`,'warn'); return; }
+  if(extList(o).filter(e=>e.key===key).length>=(d.max||1)){ toast(`${d.name}: Höchstzahl erreicht`,'warn'); return; }
+  V.ext[key]--; (o.exts=o.exts||[]).push({ key, readyAt:Date.now()+CONFIG.extBuildMs, pending:true });
+  renderStations(); renderOpenBuildingViews(); saveGame(true);
+  toast(`${d.name} für ${o.name} per Gutschein beauftragt — fertig in ${fmtDur(CONFIG.extBuildMs)}`,'ok');
 }
 
 /* ------------------------- FUNK ------------------------- */
@@ -2057,6 +2576,7 @@ function vehAutoName(v){
 function vehName(v){ return (v.customName&&v.customName.trim()) ? v.customName.trim() : vehAutoName(v); }
 function funk(v,status,note){ if(simulating) return;
   funkLog.unshift({ t:clockTimeFmt.format(new Date()), name:vehName(v), status:status||null, label:status?FMS_SHORT[status]:'', note:note||'' });
+  if(allyInfo.id && allyRadioQueue.length<60) allyRadioQueue.push({ vehicle:vehName(v), status:status||null, note:note||'' });   // Verbandsfunk
   if(funkLog.length>60) funkLog.length=60;
   renderFunk();
 }
@@ -2071,7 +2591,7 @@ function startDrive(v,coords,osrmDuration,factor){
 /* Fahrt von AKTUELLER Position zum Einsatz (Erstalarm, Umleitung, Folgeeinsatz) */
 async function routeVehicleTo(v,m,factor,departIn){
   v.departIn=departIn||0;
-  state.missions.forEach(mm=>{ mm.assigned=mm.assigned.filter(id=>id!==v.id); }); // exklusiv zuordnen
+  state.missions.concat(sharedMissions).forEach(mm=>{ mm.assigned=mm.assigned.filter(id=>id!==v.id); }); // exklusiv zuordnen
   v.status=3; v.targetMissionId=m.id; v.nextMissionId=null; v.path=null;
   m.assigned.push(v.id);
   funk(v,3);
@@ -2190,7 +2710,7 @@ async function sendVehicleHome(v){
   if(v.status===1) return;
   const st=stationById(v.stationId); if(!st){ v.status=2; return; }
   v.status=1; v.targetMissionId=null; v.path=null; v.departIn=0;
-  state.missions.forEach(m=>{ m.assigned=m.assigned.filter(id=>id!==v.id); });
+  state.missions.concat(sharedMissions).forEach(m=>{ m.assigned=m.assigned.filter(id=>id!==v.id); });
   funk(v,1); refreshVehicleMarker(v); renderVehicles();
   const route=await getRoute({lat:v.lat,lng:v.lng},{lat:st.lat,lng:st.lng});
   if(v.status!==1) return;
@@ -2224,6 +2744,7 @@ function stepWorld(dt){
         else { const st=stationById(v.stationId); if(st){ v.lat=st.lat; v.lng=st.lng; } v.status=2; v.crew=0; v.crewIds=[]; funk(v,2); refreshVehicleMarker(v); renderStations(); renderVehicles(); if(svStationId===v.stationId) renderStationView(); }
       }
     } else if(v.status===4||v.status===5){
+      if(isSm(v.targetMissionId) && !smLoaded) continue;
       const m=missionById(v.targetMissionId);
       if(!m||m.status==='done'){ releaseVehicle(v); }
     }
@@ -2292,13 +2813,14 @@ function effMissionMinutes(t, vehCount){
    coverage = kleinster Deckungsgrad (Wasser bzw. Schaum). Fortschritt läuft nur bis dahin. */
 function missionSupply(m){
   const t=missionType(m.type);
-  const veh=m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id);
+  const veh=onSceneVehicles(m);
   let sumW=0,sumF=0; veh.forEach(v=>{ sumW+=vStat(v,'water')||0; sumF+=vStat(v,'foam')||0; });
   const needW=(t&&t.need.water)||0, needF=(t&&t.need.foam)||0;
   const coverW=needW>0?Math.min(1,sumW/needW):1, coverF=needF>0?Math.min(1,sumF/needF):1;
   return { onScene:veh.length, sumW, sumF, needW, needF, coverW, coverF, coverage:Math.min(coverW,coverF) };
 }
-function onSceneVehicles(m){ return m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id); }
+function onSceneVehicles(m){ if(m.shared) return smUnits(m).filter(v=>v.status===4||v.status===5);
+  return m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id); }
 function reqLabel(r){ if(r.label) return r.label; if(r.types.length===1){ const v=VEHICLES[r.types[0]]; return v?(v.abbr||v.name):r.types[0]; } return 'Lösch-/Kleinfzg'; }
 /* Prüft, ob die benötigten Fahrzeugtypen vor Ort sind (greedy, spezifische zuerst). */
 function missionReqStatus(m){
@@ -2409,7 +2931,7 @@ const BOOK_CATS={
   fahrzeug:{name:'Fahrzeuge',kind:'out'}, gebaeude:{name:'Gebäude',kind:'out'}, ausbau:{name:'Ausbau',kind:'out'},
   personal:{name:'Personal',kind:'out'}, lehrgang:{name:'Lehrgänge',kind:'out'}, zinsen:{name:'Dispo-Zinsen',kind:'out'},
   korrektur:{name:'Korrektur (Server)',kind:'out'}, erweiterung:{name:'Erweiterungen',kind:'out'},
-  verband:{name:'Verband (Einzahlungen)',kind:'out'}, verband_in:{name:'Verband (Auszahlungen)',kind:'in'},
+  verband:{name:'Verband (Einzahlungen)',kind:'out'}, verband_in:{name:'Verband (Auszahlungen)',kind:'in'}, code:{name:'Codes',kind:'in'},
   auszahlung:{name:'Auszahlung Tageskasse',kind:'transfer'} };
 const LEDGER_MAX=500;
 function book(cat,text,amt){
@@ -2516,7 +3038,8 @@ function inTransit(p){ return !!(p && p.transitUntil && p.transitUntil>Date.now(
 function poolPeople(st){ return (st.roster||[]).filter(p=>!p.vehicleId); }
 function fixedPeople(st,v){ return (st.roster||[]).filter(p=>p.vehicleId===v.id); }
 function deployedIdSet(st){ const s=new Set(); state.vehicles.filter(v=>v.stationId===st.id&&v.status!==2).forEach(v=>(v.crewIds||[]).forEach(id=>s.add(id))); return s; }
-function trainingSet(){ const s=new Set(); (state.buildings||[]).forEach(b=>{ if(b.courses) b.courses.forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); }); return s; }
+function trainingSet(){ const s=new Set(); (state.buildings||[]).forEach(b=>{ if(b.courses) b.courses.forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); });
+  (state.allyCourses||[]).forEach(c=>(c.personIds||[]).forEach(id=>s.add(id))); return s; }
 function poolFreePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return poolPeople(st).filter(p=>!dep.has(p.id)&&!tr.has(p.id)&&!inTransit(p)); }
 function stationAvailablePeople(st){ const dep=deployedIdSet(st), tr=trainingSet(); return (st.roster||[]).filter(p=>!dep.has(p.id)&&!tr.has(p.id)&&!inTransit(p)); }
 function trainingCountOf(st){ const tr=trainingSet(); return (st.roster||[]).filter(p=>tr.has(p.id)).length; }
@@ -2794,8 +3317,10 @@ function renderExtTab(box,o,rerender){
       const unl=d.unlock?`<div class="ext-desc">Fahrzeuge: ${d.unlock.map(id=>VEHICLES[id]?.name||id).join(', ')}</div>`:'';
       return `<div class="ext-card${done?' have':''}"><div class="ext-head"><span class="ext-name">${d.name}</span>${max>1?`<span class="ext-count">${(d.included||0)+done}${building.length?` (+${building.length})`:''} / ${(d.included||0)+max}</span>`:''}</div>
         <div class="ext-desc">${d.desc}</div>${unl}${state_}
-        ${full?'':`<button class="btn sm ${canAfford(cost)&&stationReady(o)?'primary':''}" data-extbuy="${d.key}" ${canAfford(cost)&&stationReady(o)?'':'disabled'}>Kaufen · ${fmt(cost)} € · ${fmtDur(CONFIG.extBuildMs)}</button>`}</div>`; }).join('')}</div>`).join('');
+        ${full?'':`<button class="btn sm ${canAfford(cost)&&stationReady(o)?'primary':''}" data-extbuy="${d.key}" ${canAfford(cost)&&stationReady(o)?'':'disabled'}>Kaufen · ${fmt(cost)} € · ${fmtDur(CONFIG.extBuildMs)}</button>`}
+        ${!full&&vouchers().ext[d.key]>0?`<button class="btn sm" data-extvou="${d.key}" ${stationReady(o)?'':'disabled'}>Gutschein einlösen (${vouchers().ext[d.key]})</button>`:''}</div>`; }).join('')}</div>`).join('');
   box.querySelectorAll('[data-extbuy]').forEach(b=>b.onclick=()=>{ buyExtension(o,b.dataset.extbuy); rerender(); });
+  box.querySelectorAll('[data-extvou]').forEach(b=>b.onclick=()=>{ useExtVoucher(o,b.dataset.extvou); rerender(); });
 }
 /* Übungsplatz: Anteil der Fahrzeuge vor Ort aus Wachen mit Übungsplatz → bis zu 10 % schneller */
 function uebungFactor(m){
@@ -2861,6 +3386,10 @@ function finishDueCourses(now){ let changed=false;
       changed=true;
     });
     a.courses=keep; });
+  if(state.allyCourses && state.allyCourses.length){                 // Lehrgänge in Akademien des Verbands
+    const keep=state.allyCourses.filter(c=>(now-(c.startedAt||now)) < (c.durationMs||0));
+    state.allyCourses.filter(c=>!keep.includes(c)).forEach(c=>{ (c.personIds||[]).forEach(id=>{ const r=personById(id); if(r){ r.p.quals=r.p.quals||[]; if(!r.p.quals.includes(c.courseId)) r.p.quals.push(c.courseId); } }); changed=true; });
+    state.allyCourses=keep; }
   return changed;
 }
 function courseTick(){ if(finishDueCourses(Date.now())){ if(avId) renderAcademyView(); renderStations(); if(svStationId) renderStationView(); saveGame(true); toast('Lehrgang abgeschlossen','ok'); } }
@@ -2872,10 +3401,10 @@ let avTab='courses';
 function renderAcademyView(){
   const a=academyById(avId); if(!a){ hideModal('modal-academy'); return; }
   finishDueCourses(Date.now());
-  const rooms=academyRooms(a), used=(a.courses||[]).length, free=rooms-used;
+  const rooms=academyRooms(a), ext=acadExtUsed(a), used=(a.courses||[]).length+ext, free=rooms-used;
   const boni=[extCount(a,'sim')?'Lehrgänge 25 % kürzer':'', extCount(a,'hof')?'Lehrgänge 30 % günstiger':''].filter(Boolean);
   document.getElementById('av-title').textContent=`${a.name}`;
-  document.getElementById('av-sub').innerHTML=(stationReady(a)?'':`<span style="color:#fbbf24">Im Bau — fertig in ${fmtDur(a.readyAt-Date.now())}. Lehrgänge sind erst danach möglich.</span><br>`)+`Lehrsäle ${used}/${rooms} belegt · je Saal max. ${CONFIG.classroomCapacity} Personen (gleicher Lehrgang)${boni.length?' · '+boni.join(' · '):''}`;
+  document.getElementById('av-sub').innerHTML=(stationReady(a)?'':`<span style="color:#fbbf24">Im Bau — fertig in ${fmtDur(a.readyAt-Date.now())}. Lehrgänge sind erst danach möglich.</span><br>`)+`Lehrsäle ${used}/${rooms} belegt${ext?` (${ext} durch den Verband)`:''} · je Saal max. ${CONFIG.classroomCapacity} Personen (gleicher Lehrgang)${boni.length?' · '+boni.join(' · '):''}`;
   document.querySelectorAll('#modal-academy [data-avtab]').forEach(b=>{ b.classList.toggle('active',b.dataset.avtab===avTab); b.onclick=()=>{ avTab=b.dataset.avtab; renderAcademyView(); }; });
   if(avTab==='ext'){ renderExtTab(document.getElementById('av-content'), a, renderAcademyView); return; }
 
@@ -2913,7 +3442,12 @@ function renderAcademyView(){
       <div class="fld"><span>Personal (<span id="av-count">${avSelected.size}</span>/${CONFIG.classroomCapacity})</span><div class="ac-people-pick">${people}</div></div>
       <button class="btn primary" id="av-start" ${canStart?'':'disabled'}>${free<=0?'Alle Lehrsäle belegt':(COURSES.length===0?'Keine Lehrgänge verfügbar':(!canAfford(cc)?`Zu wenig Guthaben (${fmt(cc)} €)`:`Lehrgang starten · ${fmt(cc)} €`))}</button>
     </div>
-    <div class="pers-hint">Weitere Lehrsäle gibt es im Reiter <b>Erweiterungen</b>.</div>`;
+    <div class="pers-hint">Weitere Lehrsäle gibt es im Reiter <b>Erweiterungen</b>.</div>
+    ${acadAllyPanel(a)}`;
+  const shc=document.getElementById('av-share'), shl=document.getElementById('av-share-lim');
+  const shSave=async()=>{ a.allyShare=shc.checked?{ limit:Math.max(1,Math.min(10,Math.floor(Number(shl.value)||5))) }:null;
+    await saveGame(true); await allyLoadAssets(); renderAcademyView(); toast(a.allyShare?`${a.name} für den Verband freigegeben`:`Freigabe von ${a.name} beendet`,'ok'); };
+  if(shc){ shc.onchange=shSave; shl.onchange=()=>{ if(shc.checked) shSave(); }; }
 
   document.getElementById('av-station').onchange=e=>{ avStationId=e.target.value; avSelected=new Set(); renderAcademyView(); };
   document.getElementById('av-course').onchange=e=>{ avCourseId=e.target.value; avSelected=new Set(); renderAcademyView(); };
@@ -2927,7 +3461,7 @@ function renderAcademyView(){
 function updateAcademyStart(){
   const a=academyById(avId); if(!a) return;
   const st=avStationId?stationById(avStationId):null;
-  const free=academyRooms(a)-(a.courses||[]).length;
+  const free=academyRooms(a)-(a.courses||[]).length-acadExtUsed(a);
   const cnt=document.getElementById('av-count'); if(cnt) cnt.textContent=avSelected.size;
   const canStart = free>0 && COURSES.length>0 && avSelected.size>0 && avSelected.size<=CONFIG.classroomCapacity && st && canAfford(courseCostFor(a)) && stationReady(a);
   const b=document.getElementById('av-start'); if(b) b.disabled=!canStart;
@@ -2935,7 +3469,7 @@ function updateAcademyStart(){
 function startCourse(){
   { const a=academyById(avId); if(a&&!stationReady(a)){ toast(`${a.name} ist noch im Bau (fertig in ${fmtDur(a.readyAt-Date.now())})`,'warn'); return; } }
   const a=academyById(avId); if(!a) return;
-  const rooms=academyRooms(a); if((a.courses||[]).length>=rooms){ toast('Alle Klassenräume belegt','warn'); return; }
+  const rooms=academyRooms(a); if((a.courses||[]).length+acadExtUsed(a)>=rooms){ toast('Alle Klassenräume belegt','warn'); return; }
   const co=courseById(avCourseId); if(!co){ toast('Kein Lehrgang gewählt','warn'); return; }
   const ids=[...avSelected]; if(!ids.length){ toast('Kein Personal gewählt','warn'); return; }
   if(ids.length>CONFIG.classroomCapacity){ toast(`Max. ${CONFIG.classroomCapacity} pro Klassenraum`,'warn'); return; }
@@ -3039,14 +3573,14 @@ let openMissionId=null, mmSel=new Set(), mmCat='all', mmShowBusy=false;
 function openMissionModal(id){ const m=missionById(id); if(!m) return;
   if(openMissionId!==id){ mmSel=new Set(); }
   openMissionId=id;
-  const t=missionType(m.type); document.getElementById('mm-title').textContent=`${t.code} · ${t.name}`;
+  const t=missionType(m.type); document.getElementById('mm-title').textContent=`${t.code} · ${t.name}${m.shared?' · Verbandseinsatz':''}`;
   renderMissionModal(); showModal('modal-mission'); }
 /* Fahrzeuge, die zu diesem Einsatz unterwegs oder vor Ort sind */
 function missionVehicles(m){ return state.vehicles.filter(v=>v.targetMissionId===m.id && (v.status===3||v.status===4||v.status===5)); }
 /* Noch fehlende Fahrzeuge (vor Ort + Anfahrt zählen bereits) */
 function missingReqs(m){
   const t=missionType(m.type); const reqs=(t&&t.req&&t.req.length&&!(m.progress>=1&&!t.rd))?t.req.slice().sort((a,b)=>a.types.length-b.types.length):[];   // Arbeit erledigt: nur noch Patientenbedarf
-  const veh=missionVehicles(m); const used=new Set(); const out=[];
+  const veh=m.shared?smUnits(m):missionVehicles(m); const used=new Set(); const out=[];
   for(const r of reqs){ let have=0;
     if(m.tna && tnaEligible(m) && r.types.includes('nef')) continue;   // Notarzt kommt per Telemedizin
     for(const v of veh){ if(have>=r.count) break; if(used.has(v.id)) continue; if(r.types.includes(v.type)){ used.add(v.id); have++; } }
@@ -3077,7 +3611,7 @@ function mmSignature(m){
   const statuses=mmShowBusy?[1,2,3,4,5,6,7,8]:[1,2];
   return [m.status, m.tna?1:0, tnaFree(), missingReqs(m).length, Math.round(missionSupply(m).coverage*100),
     state.vehicles.filter(v=>v.targetMissionId===m.id||v.nextMissionId===m.id||statuses.includes(v.status)).map(v=>v.id+':'+v.status+':'+(v.targetMissionId===m.id?1:0)+(v.nextMissionId===m.id?1:0)+(v.abId?1:0)).join(','),
-    (m.patients||[]).map(p=>p.state+(p.rtwId||'')+(p.nefId||'')).join(',')].join('|');
+    (m.patients||[]).map(p=>p.state+(p.rtwId||'')+(p.nefId||'')).join(','), m.shared?smUnits(m).map(u=>u.id+':'+u.status).join(','):'', allyInfo.id?1:0].join('|');
 }
 function liveMissionModal(){
   if(simulating || !document.getElementById('modal-mission').classList.contains('show')) return;
@@ -3129,14 +3663,16 @@ function renderMissionModal(){
     : `<tr><td colspan="7" class="lss-empty">${state.vehicles.length?'Keine verfügbaren Fahrzeuge in dieser Kategorie.':'Noch keine Fahrzeuge. Beschaffe an einer Wache ein Fahrzeug.'}</td></tr>`;
 
   box.innerHTML=`
-    <div class="lss-addr"><span><b>${m.address}</b></span><span>Belohnung ${fmt(missionReward(t))} €</span>
+    <div class="lss-addr"><span><b>${esc(m.address)}</b></span><span>Belohnung ${fmt(m.shared?m.reward:missionReward(t))} €${m.shared?' · geteilt nach Fahrzeug-Minuten':''}</span>
       ${t.rd?`<span>Rettungsdienst · ${t.complaint}</span>`:`<span>Dauer ${mmss(t.minutes)} → ${mmss(effMissionMinutes(t,CONFIG.usefulVehicleCap))}</span>`}
       ${t.need.water>0?`<span>Wasser ${t.need.water} L</span>`:''}${t.need.foam>0?`<span>Schaum ${t.need.foam} L</span>`:''}
       <span>Löschmittel-Deckung <b style="color:${sup.coverage>=1?'var(--ok)':'var(--warn)'}">${Math.round(sup.coverage*100)} %</b></span></div>
     ${alert}
+    ${smSharePanel(m)}
     <div id="mm-prog">${missionProgressHTML(m)}</div>
     ${patientPanel(m)}
-    ${tnaPanel(m)}
+    ${m.shared?'':tnaPanel(m)}
+    ${m.shared?smOthersPanel(m):''}
     <div class="lss-panel"><div class="lss-ph">Fahrzeuge auf Anfahrt <span class="cnt">${enRoute.length}</span></div>${sceneRows(enRoute,true)}</div>
     <div class="lss-panel"><div class="lss-ph">Fahrzeuge vor Ort <span class="cnt">${onScene.length}</span></div>${sceneRows(onScene,false)}</div>
     ${queued.length?`<div class="lss-panel"><div class="lss-ph">Als Folgeeinsatz eingeplant <span class="cnt">${queued.length}</span></div><table class="lss-tbl"><tbody>${
@@ -3153,6 +3689,7 @@ function renderMissionModal(){
   mmSig=mmSignature(m);
 
   box.querySelectorAll('[data-khpick]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openHospitalPick(m.id,b.dataset.khpick); });
+  const shb=document.getElementById('mm-share'); if(shb) shb.onclick=()=>shareMission(m);
   const tb=document.getElementById('mm-tna'); if(tb) tb.onclick=()=>{ m.tna=!m.tna; funkLogTna(m); renderMissionModal(); renderMissions(); saveGame(true); };
   box.querySelectorAll('[data-pick]').forEach(r=>r.onclick=()=>{ const id=r.dataset.pick; mmSel.has(id)?mmSel.delete(id):mmSel.add(id); renderMissionModal(); });
   box.querySelectorAll('[data-mmcat]').forEach(b=>b.onclick=()=>{ mmCat=b.dataset.mmcat; renderMissionModal(); });
@@ -3180,8 +3717,8 @@ function patientPanel(m){
   const t=missionType(m.type);
   const rows=m.patients.map((p,i)=>{ const r=p.rtwId&&state.vehicles.find(v=>v.id===p.rtwId);
     return `<tr><td class="mono">P${i+1}</td><td>${DEPTS[p.dept]||p.dept}${p.na?'<span class="pat-na">NA</span>':''}${p.stemo?'<span class="pat-na" style="color:#a5b4fc;border-color:#6366f1">STEMO</span>':''}${p.nefId==='tna'?'<span class="pat-na" style="color:#5eead4;border-color:#14b8a6">TNA</span>':''}</td>
-      <td class="dim">${r?vehName(r):'—'}</td><td>${patientState(p)}</td>
-      <td style="text-align:right">${p.state==='ready'?`<button class="btn sm primary" data-khpick="${p.id}">Krankenhaus</button>`:''}</td></tr>`; }).join('');
+      <td class="dim">${r?vehName(r):(p.rtwLabel?esc(p.rtwLabel):'—')}</td><td>${patientState(p)}</td>
+      <td style="text-align:right">${p.state==='ready'&&!m.shared?`<button class="btn sm primary" data-khpick="${p.id}">Krankenhaus</button>`:''}</td></tr>`; }).join('');
   return `<div class="lss-panel"><div class="lss-ph">Patienten <span class="cnt">${m.patients.length}</span>${t.rd?`<span style="text-transform:none;letter-spacing:0;font-weight:400">AMPDS ${t.ampds} · ${t.kat.replace('.','')} · ${t.complaint}</span>`:''}</div>
     <table class="lss-tbl"><thead><tr><th></th><th>Fachabteilung</th><th>RTW</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -3266,11 +3803,14 @@ function missionProgressHTML(m){
 function renderMissions(){ if(simulating) return;
   const list=document.getElementById('missions-list'), cnt=document.getElementById('missions-count');
   const active=state.missions.filter(m=>m.status!=='done');
-  cnt.textContent=active.length; cnt.classList.toggle('zero',active.length===0);
-  if(state.missions.length===0){ list.innerHTML=`<div class="empty-hint">Keine Einsätze.<br>Sobald eine Wache steht, treten automatisch Einsätze auf.</div>`;
+  const shared=sharedMissions.filter(m=>missionType(m.type)), nAct=active.length+shared.filter(m=>m.status!=='done').length;
+  cnt.textContent=nAct; cnt.classList.toggle('zero',nAct===0);
+  if(state.missions.length===0 && !shared.length){ list.innerHTML=`<div class="empty-hint">Keine Einsätze.<br>Sobald eine Wache steht, treten automatisch Einsätze auf.</div>`;
     if(document.getElementById('modal-mission').classList.contains('show')) renderMissionModal(); return; }
   list.innerHTML='';
-  for(const m of state.missions){
+  const all=state.missions.concat(shared);
+  for(const m of all){
+    if(m===shared[0]){ const h=document.createElement('div'); h.className='missions-sub'; h.textContent=`Verbandseinsätze (${shared.filter(x=>x.status!=='done').length})`; list.appendChild(h); }
     const t=missionType(m.type);
     const talk=(m.patients||[]).some(p=>p.state==='ready');
     const badge= talk?'<span class="m-badge talk">Sprechwunsch</span>' : m.status==='done'?'<span class="m-badge done">fertig</span>'
@@ -3280,7 +3820,7 @@ function renderMissions(){ if(simulating) return;
     const body=t.rd?missionProgressHTML(m):`<div class="tags"><span class="tag time">Dauer ${mmss(t.minutes)}</span></div>${missionProgressHTML(m)}`;
     const el=document.createElement('div'); el.className='mission '+missionCls(m);
     el.innerHTML=`<div class="m-top"><span class="mcode ${t.cat}">${t.code}</span><span class="m-name">${t.name}</span>${badge}</div>
-      <div class="m-addr">${m.address}</div>${body}`;
+      <div class="m-addr">${esc(m.address)}</div>${m.shared?`<div class="m-shared">${smListLine(m)}</div>`:''}${body}`;
     el.onclick=()=>{ map.panTo([m.lat,m.lng]); openMissionModal(m.id); };
     list.appendChild(el);
   }
@@ -3377,7 +3917,7 @@ function goToFollowUp(id){
 /* Fahrzeug einem (anderen) Einsatz zuweisen */
 function openRedispatch(vehicleId){
   const v=state.vehicles.find(x=>x.id===vehicleId); if(!v) return;
-  const active=state.missions.filter(m=>m.status!=='done');
+  const active=state.missions.concat(sharedMissions).filter(m=>m.status!=='done' && missionType(m.type));
   const box=document.getElementById('rd-content');
   document.getElementById('rd-title').textContent=`${vehName(v)} — Einsatz zuweisen`;
   if(!active.length && ![3,4].includes(v.status)){ box.innerHTML=`<div class="empty-hint">Aktuell keine offenen Einsätze.</div>`; showModal('modal-redispatch'); return; }
@@ -3390,7 +3930,7 @@ function openRedispatch(vehicleId){
   box.innerHTML = hint + recallRow + active.map(m=>{ const t=missionType(m.type);
     const already = v.targetMissionId===m.id||v.nextMissionId===m.id;
     return `<div class="veh-pick"><span class="mcode ${t.cat}">${t.code}</span>
-      <span class="vp-name">${t.name}</span><span class="vp-meta">${m.address}</span>
+      <span class="vp-name">${t.name}${m.shared?' <span class="m-shared">· Verband</span>':''}</span><span class="vp-meta">${esc(m.address)}</span>
       <button class="btn sm primary" data-rd="${m.id}" ${already?'disabled':''}>${already?'zugewiesen':'Alarm'}</button></div>`; }).join('');
   box.querySelectorAll('[data-rd]').forEach(b=> b.onclick=()=>{ dispatch(vehicleId,b.dataset.rd); hideModal('modal-redispatch'); });
   const rb=box.querySelector('[data-recall-rd]'); if(rb) rb.onclick=()=>{ recallVehicle(vehicleId); hideModal('modal-redispatch'); };
@@ -3404,8 +3944,8 @@ function renderFunk(){ if(simulating) return;
   cnt.textContent=funkLog.length; cnt.classList.toggle('zero',funkLog.length===0);
   if(!funkLog.length){ list.innerHTML=`<div class="funk-empty">Noch kein Funkverkehr.</div>`; return; }
   list.innerHTML=funkLog.map(e=> e.status
-    ? `<div class="funk-row"><span class="f-time">${e.t}</span><span class="f-txt"><b>${e.name}</b> meldet sich Status <span class="fbox fbox-${e.status}">${e.status}</span> ${e.label}${e.note?' · '+e.note:''}</span></div>`
-    : `<div class="funk-row"><span class="f-time">${e.t}</span><span class="f-txt"><b>${e.name}</b>: ${e.note}</span></div>`
+    ? `<div class="funk-row${e.ally?' ally':''}"><span class="f-time">${e.t}</span><span class="f-txt"><b>${esc(e.name)}</b> meldet sich Status <span class="fbox fbox-${e.status}">${e.status}</span> ${e.label}${e.note?' · '+esc(e.note):''}</span></div>`
+    : `<div class="funk-row${e.ally?' ally':''}"><span class="f-time">${e.t}</span><span class="f-txt"><b>${esc(e.name)}</b>: ${esc(e.note)}</span></div>`
   ).join('');
 }
 
@@ -3459,6 +3999,7 @@ async function resumeDriving(){
   for(const v of state.vehicles){
     try{
       if(v.status===3){
+        if(isSm(v.targetMissionId)) continue;               // nach dem ersten Verbands-Abgleich (smApply)
         const m=missionById(v.targetMissionId);
         if(!m || m.status==='done'){ sendVehicleHome(v); continue; }
         const route=await getRoute({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng});
@@ -3509,7 +4050,7 @@ document.getElementById('search').addEventListener('keydown',async e=>{
 
 /* UI-Events */
 document.getElementById('btn-build').onclick=openBuildMenu;
-document.getElementById('btn-build-cancel').onclick=()=>{ setBuildMode(false); pendingBuild=null; };
+document.getElementById('btn-build-cancel').onclick=()=>{ if(allyPlace) allyEndPlace(); setBuildMode(false); pendingBuild=null; };
 document.getElementById('build-start').onclick=startBuildPlacement;
 document.getElementById('btn-catalog').onclick=renderCatalog;
 function toggleMenu(force){ const m=document.getElementById('topbar-menu'); m.classList.toggle('hidden', force===undefined?undefined:!force); }
@@ -3521,6 +4062,8 @@ document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-w
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
 document.getElementById('dd-bank').onclick=()=>{ closeMenu(); renderBank(); showModal('modal-bank'); };
 document.getElementById('dd-verband').onclick=()=>{ closeMenu(); openVerband(); };
+document.getElementById('dd-codes').onclick=()=>{ closeMenu(); openCodes(); };
+document.getElementById('btn-funk-ally').onclick=toggleAllyRadio; document.getElementById('btn-funk-ally').classList.toggle('on',allyRadioOn);
 document.getElementById('dd-save').onclick=()=>{ closeMenu(); saveGame(); };
 document.getElementById('dd-settings').onclick=()=>{ closeMenu(); openSettings(); };
 document.getElementById('dd-logout').onclick=()=>{ closeMenu(); doLogout(); };
@@ -3622,6 +4165,7 @@ async function startGame(){
     document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });   // zurück im Tab: sofort nachholen
     setInterval(liveMissionModal,500);
     setInterval(allyPoll,10000); setTimeout(allyPoll,2000);
+    setInterval(smSync,10000); setTimeout(smSync,3000);
     gameStarted=true;
   } else { rebuildEverything(); }
   const off=pendingOfflineMs; pendingOfflineMs=0; lastTick=Date.now();
