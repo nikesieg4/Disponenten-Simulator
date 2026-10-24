@@ -811,11 +811,191 @@ begin
     'auto_pct',(select auto_pct from app_alliance_members where user_id=v_uid));
 end; $$;
 
+/* ---------- Verbände Teil 2b: geteilte Einsätze ----------
+   Der Einsatz liegt auf dem Server. Jeder Browser meldet alle 10 s seine Fahrzeuge (sm_sync);
+   dabei rechnet der Server alle offenen Einsätze des Verbands weiter (Anforderungen, Löschmittel,
+   Patienten) und zählt Fahrzeug-Minuten vor Ort. Abschluss: 10 % Bonus an den Ersteller, Rest nach
+   Fahrzeug-Minuten; höchstens 10.000 € je Fahrzeug-Minute (doppelter Spielwert) (Schutz gegen manipulierte Einsatzwerte). */
+create table if not exists app_shared_missions (
+  id uuid primary key default gen_random_uuid(), alliance_id uuid not null references app_alliances(id) on delete cascade,
+  owner uuid references app_users(id) on delete set null, type text not null, code text not null default '', name text not null default '',
+  lat double precision not null, lng double precision not null, address text not null default '', spec jsonb not null default '{}',
+  reward bigint not null default 0, progress numeric not null default 0, status text not null default 'open',
+  patients jsonb not null default '[]', missing jsonb not null default '[]', payout jsonb,
+  created_at timestamptz not null default now(), ticked_at timestamptz not null default now(), done_at timestamptz );
+create index if not exists app_shared_missions_a on app_shared_missions(alliance_id, status);
+create table if not exists app_shared_units (
+  mission_id uuid not null references app_shared_missions(id) on delete cascade, user_id uuid not null references app_users(id) on delete cascade,
+  vid text not null, vtype text not null, name text not null default '', status int not null default 3,
+  lat double precision, lng double precision, water numeric not null default 0, foam numeric not null default 0,
+  vmin numeric not null default 0, updated_at timestamptz not null default now(), primary key (mission_id, user_id, vid) );
+alter table app_shared_missions enable row level security; alter table app_shared_units enable row level security;
+revoke all on app_shared_missions, app_shared_units from anon, authenticated;
+
+create or replace function _sm_tick(p_mid uuid) returns void language plpgsql security definer set search_path=public, extensions as $$
+declare
+  m app_shared_missions; dt numeric; n int; sw numeric; sf numeric; nw numeric; nf numeric; cov numeric; ok boolean := true;
+  r jsonb; have int; need int; used text[] := '{}'; k text; v_miss jsonb := '[]'; rd boolean; eff numeric; st text;
+  pats jsonb := '[]'; p jsonb; carriers text[]; taken text[] := '{}'; ntaken text[] := '{}'; unit record; ndone int := 0; npat int := 0;
+  c_cap constant numeric := 10000; total numeric; bonus numeric; rest numeric; sumv numeric; v_pay jsonb := '[]'; g record;
+begin
+  select * into m from app_shared_missions where id=p_mid for update;
+  if m.id is null or m.status='done' then return; end if;
+  dt := least(1440, greatest(0, extract(epoch from now()-m.ticked_at)/60));
+  update app_shared_units set vmin=vmin+dt where mission_id=p_mid and status in (4,5);
+  select count(*), coalesce(sum(water),0), coalesce(sum(foam),0) into n, sw, sf from app_shared_units where mission_id=p_mid and status in (4,5);
+  rd := coalesce((m.spec->>'rd')::boolean,false);
+  -- Anforderungen (gierig, spezifische Gruppen zuerst – wie im Spiel)
+  for r in select value from jsonb_array_elements(case when jsonb_typeof(m.spec->'req')='array' then m.spec->'req' else '[]'::jsonb end) order by jsonb_array_length(coalesce(value->'types','[]')) loop
+    have := 0; need := greatest(1, coalesce((r->>'count')::int,1));
+    for k in select user_id::text||'/'||vid from app_shared_units where mission_id=p_mid and status in (4,5)
+        and vtype in (select jsonb_array_elements_text(coalesce(r->'types','[]'))) loop
+      exit when have >= need;
+      if not (k = any(used)) then used := used || k; have := have + 1; end if;
+    end loop;
+    if have < need then ok := false; v_miss := v_miss || jsonb_build_object('label',coalesce(r->>'label','Fahrzeug'),'missing',need-have); end if;
+  end loop;
+  if jsonb_array_length(case when jsonb_typeof(m.spec->'req')='array' then m.spec->'req' else '[]'::jsonb end)=0 and n < coalesce((m.spec->>'minVehicles')::int,1) then
+    ok := false; v_miss := v_miss || jsonb_build_object('label','Fahrzeuge','missing',coalesce((m.spec->>'minVehicles')::int,1)-n); end if;
+  nw := coalesce((m.spec->'need'->>'water')::numeric,0); nf := coalesce((m.spec->'need'->>'foam')::numeric,0);
+  cov := least(case when nw>0 then least(1,sw/nw) else 1 end, case when nf>0 then least(1,sf/nf) else 1 end);
+  st := m.status;
+  if not rd then
+    if ok and n>0 and m.progress < 1 then
+      eff := greatest(0.5, coalesce((m.spec->>'minutes')::numeric,10) * (1 - 0.25*(least(n,2)-1)));
+      m.progress := least(cov, m.progress + dt/eff); st := 'working';
+    elsif m.progress >= 1 then st := 'working';
+    elsif n>0 then st := 'waiting'; else st := 'open'; end if;
+  end if;
+  -- Patienten: Träger (RTW usw.) und Notarzt (NEF/STEMO) vor Ort zuweisen, Behandlung herunterzählen
+  carriers := array(select jsonb_array_elements_text(coalesce(m.spec->'carriers','["rtw","nktw","itw"]'::jsonb)));
+  for p in select value from jsonb_array_elements(m.patients) loop          -- 1) verlorene Zuweisungen lösen, belegte merken
+    if p->>'state' in ('treating','ready') and not exists(select 1 from app_shared_units where mission_id=p_mid and user_id::text||'/'||vid = p->>'rtw' and status in (4,5)) then
+      p := p || jsonb_build_object('state','waiting','rtw',null,'treat',6);
+    end if;
+    if p->>'nef' is not null and p->>'state' not in ('transport','done') and not exists(select 1 from app_shared_units where mission_id=p_mid and user_id::text||'/'||vid = p->>'nef' and status in (4,5)) then
+      p := p || jsonb_build_object('nef',null);
+    end if;
+    if p->>'state' not in ('done','transport') then
+      if p->>'rtw' is not null then taken := taken || (p->>'rtw'); end if;
+      if p->>'nef' is not null then ntaken := ntaken || (p->>'nef'); end if;
+    end if;
+    pats := pats || jsonb_build_array(p);
+  end loop;
+  m.patients := '[]';
+  for p in select value from jsonb_array_elements(pats) loop                 -- 2) zuweisen und behandeln
+    if p->>'state'='waiting' then
+      select user_id::text||'/'||vid as k, user_id into unit from app_shared_units where mission_id=p_mid and status=4 and vtype = any(carriers)
+        and not (user_id::text||'/'||vid = any(taken)) and (vtype<>'nktw' or not coalesce((p->>'na')::boolean,false)) order by updated_at limit 1;
+      if unit.k is not null then taken := taken || unit.k; p := p || jsonb_build_object('state','treating','rtw',unit.k,'treat',coalesce((p->>'treat')::numeric,6)); end if;
+    end if;
+    if coalesce((p->>'na')::boolean,false) and p->>'nef' is null and p->>'state' in ('waiting','treating') then
+      select user_id::text||'/'||vid as k into unit from app_shared_units where mission_id=p_mid and status in (4,5) and vtype in ('nef','stemo')
+        and not (user_id::text||'/'||vid = any(ntaken)) order by updated_at limit 1;
+      if unit.k is not null then ntaken := ntaken || unit.k; p := p || jsonb_build_object('nef',unit.k); end if;
+    end if;
+    if p->>'state'='treating' and (not coalesce((p->>'na')::boolean,false) or p->>'nef' is not null) then
+      p := p || jsonb_build_object('treat', coalesce((p->>'treat')::numeric,6) - dt);
+      if (p->>'treat')::numeric <= 0 then p := p || jsonb_build_object('state','ready'); end if;
+    end if;
+    npat := npat + 1; if p->>'state'='done' then ndone := ndone + 1; end if;
+    m.patients := m.patients || jsonb_build_array(p);
+  end loop;
+  if rd then m.progress := case when npat>0 then ndone::numeric/npat else 0 end;
+    st := case when exists(select 1 from app_shared_units where mission_id=p_mid and status in (4,5)) or ndone>0 then 'working' else 'open' end; end if;
+  -- Abschluss und Auszahlung
+  if ndone = npat and (rd or m.progress >= 1) then
+    select coalesce(sum(vmin),0) into sumv from app_shared_units where mission_id=p_mid;
+    total := floor(least(m.reward, sumv*c_cap));
+    bonus := case when m.owner is not null and total > 0 then floor(total*0.1) else 0 end; rest := total - bonus;
+    for g in select user_id, sum(vmin) as v from app_shared_units where mission_id=p_mid group by user_id having sum(vmin) > 0 loop
+      insert into app_grants(user_id, amount, note) values (g.user_id, floor(rest*g.v/sumv) + case when g.user_id=m.owner then bonus else 0 end, 'Verbandseinsatz: '||m.name);
+      v_pay := v_pay || jsonb_build_object('user',g.user_id,'amount',floor(rest*g.v/sumv) + case when g.user_id=m.owner then bonus else 0 end,'vmin',round(g.v,1));
+    end loop;
+    if bonus > 0 and not exists(select 1 from app_shared_units where mission_id=p_mid and user_id=m.owner and vmin>0) then
+      insert into app_grants(user_id, amount, note) values (m.owner, bonus, 'Bonus für geteilten Einsatz: '||m.name);
+      v_pay := v_pay || jsonb_build_object('user',m.owner,'amount',bonus,'vmin',0);
+    end if;
+    update app_shared_missions set status='done', progress=1, patients=m.patients, missing='[]', payout=v_pay, done_at=now(), ticked_at=now() where id=p_mid;
+    return;
+  end if;
+  update app_shared_missions set progress=m.progress, status=st, patients=m.patients, missing=v_miss, ticked_at=now() where id=p_mid;
+end; $$;
+
+-- Einsatz freigeben: p {type, code, name, lat, lng, address, spec, reward, patients, progress, units:[...]}
+create or replace function sm_share(p_token uuid, p jsonb)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); v_id uuid; v_pats jsonb := '[]'; x jsonb;
+begin
+  if v_aid is null then return json_build_object('error','Kein Verband'); end if;
+  if (select count(*) from app_shared_missions where owner=v_uid and status<>'done') >= 50 then return json_build_object('error','Höchstens 50 geteilte Einsätze gleichzeitig'); end if;
+  for x in select value from jsonb_array_elements(case when jsonb_typeof(p->'patients')='array' then p->'patients' else '[]'::jsonb end) limit 20 loop
+    v_pats := v_pats || jsonb_build_array(jsonb_build_object('id',left(coalesce(x->>'id',''),40),'na',coalesce((x->>'na')::boolean,false),'dept',left(coalesce(x->>'dept','inn'),8),
+      'state',case when x->>'state' in ('transport','done') then 'done' else 'waiting' end,'rtw',null,'nef',null,'treat',greatest(0,least(60,coalesce((x->>'treat')::numeric,6))))); end loop;
+  insert into app_shared_missions(alliance_id, owner, type, code, name, lat, lng, address, spec, reward, progress, patients)
+    values (v_aid, v_uid, left(coalesce(p->>'type',''),40), left(coalesce(p->>'code',''),20), left(coalesce(p->>'name',''),80),
+      (p->>'lat')::double precision, (p->>'lng')::double precision, left(coalesce(p->>'address',''),80), coalesce(p->'spec','{}'),
+      greatest(0,least(50000000,coalesce((p->>'reward')::bigint,0))), greatest(0,least(0.99,coalesce((p->>'progress')::numeric,0))), v_pats)
+    returning id into v_id;
+  insert into app_alliance_radio(alliance_id, user_id, vehicle, status, note) values (v_aid, v_uid, 'Leitstelle', null, 'Einsatz freigegeben: '||left(coalesce(p->>'code',''),20)||' '||left(coalesce(p->>'name',''),80));
+  return json_build_object('ok',true,'id',v_id);
+end; $$;
+
+-- Abgleich (alle 10 s): eigene Fahrzeuge melden, Patienten-Ereignisse, alle Einsätze weiterrechnen, Liste zurück
+create or replace function sm_sync(p_token uuid, p_units jsonb, p_events jsonb)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_aid uuid := _ally_of(v_uid); x jsonb; v_mid uuid; v_list jsonb := '[]'; mm record; v_veh jsonb;
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  if v_aid is null then return json_build_object('ok',true,'missions','[]'::json); end if;
+  -- erst bis jetzt weiterrechnen (mit dem bisherigen Stand), dann neue Meldungen übernehmen
+  for mm in select id from app_shared_missions where alliance_id=v_aid and status<>'done' loop perform _sm_tick(mm.id); end loop;
+  select _jarr(data,'vehicles') into v_veh from app_saves where user_id=v_uid;
+  -- eigene Fahrzeuge: gemeldete aktualisieren, nicht mehr gemeldete gelten als abgerückt (Fahrzeug-Minuten bleiben).
+  -- Wer offline ist, meldet nichts: seine Fahrzeuge bleiben vor Ort und zählen weiter.
+  update app_shared_units u set status=0, updated_at=now() where u.user_id=v_uid and u.status<>0
+    and not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(p_units)='array' then p_units else '[]'::jsonb end) e where e->>'mid'=u.mission_id::text and e->>'vid'=u.vid);
+  for x in select value from jsonb_array_elements(case when jsonb_typeof(p_units)='array' then p_units else '[]'::jsonb end) limit 200 loop
+    begin v_mid := (x->>'mid')::uuid; exception when others then continue; end;
+    if not exists(select 1 from app_shared_missions where id=v_mid and alliance_id=v_aid and status<>'done') then continue; end if;
+    -- nur Fahrzeuge aus dem eigenen Spielstand, jedes nur in einem Einsatz
+    if not exists(select 1 from jsonb_array_elements(coalesce(v_veh,'[]')) v where v->>'id'=x->>'vid' and v->>'type'=x->>'type') then continue; end if;
+    update app_shared_units set status=0, updated_at=now() where user_id=v_uid and vid=x->>'vid' and mission_id<>v_mid and status<>0;
+    insert into app_shared_units(mission_id, user_id, vid, vtype, name, status, lat, lng, water, foam, updated_at)
+      values (v_mid, v_uid, left(x->>'vid',40), left(coalesce(x->>'type',''),30), left(coalesce(x->>'name',''),60),
+        case when (x->>'status') ~ '^[345]$' then (x->>'status')::int else 3 end, (x->>'lat')::double precision, (x->>'lng')::double precision,
+        greatest(0,least(20000,coalesce((x->>'water')::numeric,0))), greatest(0,least(20000,coalesce((x->>'foam')::numeric,0))), now())
+      on conflict (mission_id,user_id,vid) do update set status=excluded.status, lat=excluded.lat, lng=excluded.lng, water=excluded.water, foam=excluded.foam, vtype=excluded.vtype, name=excluded.name, updated_at=now();
+  end loop;
+  -- Patienten-Ereignisse vom Besitzer des RTW: transport (ab ready) und done (ab transport)
+  for x in select value from jsonb_array_elements(case when jsonb_typeof(p_events)='array' then p_events else '[]'::jsonb end) limit 50 loop
+    begin v_mid := (x->>'mid')::uuid; exception when others then continue; end;
+    update app_shared_missions s set patients=(select jsonb_agg(case when q->>'id'=x->>'pid' and split_part(coalesce(q->>'rtw',q->>'by',''),'/',1)=v_uid::text
+          and ((x->>'state'='transport' and q->>'state'='ready') or (x->>'state'='done' and q->>'state'='transport'))
+        then q || jsonb_build_object('state',x->>'state','by',coalesce(q->>'rtw',q->>'by')) else q end) from jsonb_array_elements(s.patients) q)
+      where s.id=v_mid and s.alliance_id=v_aid and s.status<>'done';
+  end loop;
+  for mm in select id from app_shared_missions where alliance_id=v_aid and status<>'done' loop perform _sm_tick(mm.id); end loop;
+  delete from app_shared_missions where alliance_id=v_aid and ((status='done' and done_at < now()-interval '10 minutes')
+    or (status<>'done' and created_at < now()-interval '48 hours'));
+  select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'owner',ou.username,'mine',s.owner=v_uid,'type',s.type,'code',s.code,'name',s.name,'lat',s.lat,'lng',s.lng,'address',s.address,
+      'status',s.status,'progress',round(s.progress,4),'reward',s.reward,'missing',s.missing,'created_at',s.created_at,
+      'payout',case when s.status='done' then (select jsonb_agg(jsonb_build_object('name',pu.username,'amount',(e->>'amount')::bigint,'vmin',e->'vmin','mine',(e->>'user')=v_uid::text)) from jsonb_array_elements(coalesce(s.payout,'[]')) e left join app_users pu on pu.id=(e->>'user')::uuid) end,
+      'patients',(select coalesce(jsonb_agg(q || jsonb_build_object('mine',split_part(coalesce(q->>'rtw',q->>'by',''),'/',1)=v_uid::text,'rtw_vid',split_part(coalesce(q->>'rtw',q->>'by',''),'/',2),
+          'rtw_owner',(select username from app_users where id::text=split_part(coalesce(q->>'rtw',q->>'by',''),'/',1)),
+          'nef_mine',split_part(coalesce(q->>'nef',''),'/',1)=v_uid::text,'nef_vid',nullif(split_part(coalesce(q->>'nef',''),'/',2),''))),'[]') from jsonb_array_elements(s.patients) q),
+      'units',(select coalesce(jsonb_agg(jsonb_build_object('vid',u.vid,'type',u.vtype,'name',u.name,'status',u.status,'lat',u.lat,'lng',u.lng,'water',u.water,'foam',u.foam,'vmin',round(u.vmin,1),'player',uu.username,'mine',u.user_id=v_uid) order by u.status desc),'[]')
+          from app_shared_units u join app_users uu on uu.id=u.user_id where u.mission_id=s.id and (u.status<>0 or u.vmin>0)))
+    order by s.created_at), '[]') into v_list
+  from app_shared_missions s left join app_users ou on ou.id=s.owner where s.alliance_id=v_aid;
+  return json_build_object('ok',true,'missions',v_list);
+end; $$;
+
 grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
 revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]),
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
   _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
-  _ally_banned(uuid,uuid) from public, anon, authenticated;
+  _ally_banned(uuid,uuid), _sm_tick(uuid) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';

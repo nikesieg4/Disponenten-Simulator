@@ -364,6 +364,10 @@ a.dd-item{ text-decoration:none; color:var(--text); }
   background:radial-gradient(circle,#e5352b,#8f120b); border:2px solid #fff3; animation:mpulse 1.6s infinite; }
 .mk-mission.working{ background:radial-gradient(circle,#3b82f6,#1e40af); animation:none; }
 .mk-mission.done{ background:radial-gradient(circle,#22c55e,#15803d); animation:none; }
+.mk-mission.shared{ border:3px solid #a78bfa; }
+.mk-ally-veh{ position:absolute; transform:translate(-50%,-50%); white-space:nowrap; padding:1px 4px; border-radius:5px; font-family:var(--font-mono); font-size:9px; font-weight:800; color:#0d1017; background:#a78bfa; border:2px solid #0d1017; box-shadow:0 2px 6px rgba(0,0,0,.5); }
+.m-shared{ font-size:11px; color:#c4b5fd; margin-top:2px; }
+.missions-sub{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#c4b5fd; padding:10px 4px 4px; }
 @keyframes mpulse{0%{box-shadow:0 0 0 0 rgba(229,53,43,.5)}70%{box-shadow:0 0 0 12px rgba(229,53,43,0)}100%{box-shadow:0 0 0 0 rgba(229,53,43,0)}}
 .mk-veh{ position:absolute; transform:translate(-50%,-50%); white-space:nowrap; padding:1px 4px; border-radius:5px; font-family:var(--font-mono); font-size:9px; font-weight:800; color:#0d1017; border:2px solid #0d1017; box-shadow:0 2px 6px rgba(0,0,0,.5); }
 
@@ -1119,7 +1123,8 @@ function applyLoaded(data){
     id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,
     status:m.status||'open', progress:m.progress||0, effMinutes:m.effMinutes||0, assigned:[], patients:Array.isArray(m.patients)?m.patients:[], tna:!!m.tna, marker:null }));
   // Zuweisungen aus den Fahrzeugen rekonstruieren
-  state.vehicles.forEach(v=>{ if(v.targetMissionId){ const m=missionById(v.targetMissionId); if(m){ if(!m.assigned.includes(v.id)) m.assigned.push(v.id); } else { v.targetMissionId=null; v.status=2; v.crew=0; v.crewIds=[]; } } });
+  sharedMissions=[]; smLoaded=false;
+  state.vehicles.forEach(v=>{ if(v.targetMissionId && !isSm(v.targetMissionId)){ const m=missionById(v.targetMissionId); if(m){ if(!m.assigned.includes(v.id)) m.assigned.push(v.id); } else { v.targetMissionId=null; v.status=2; v.crew=0; v.crewIds=[]; } } });
   state.buildings=(data.buildings||[]).filter(b=>buildingById(b.typeId)).map(b=>{ const t=buildingById(b.typeId);
     const nb={...b, marker:null};
     if(t.isAcademy){ nb.level=b.level||1; nb.courses=Array.isArray(b.courses)?b.courses:[]; }
@@ -1636,7 +1641,7 @@ function refreshStationMarker(st){ if(st.marker) stationLayer.removeLayer(st.mar
 function missionCls(m){ const rd=missionType(m.type)?.rd?' rd':''; return (m.status==='done'?'done':(m.status==='working'?'working':''))+rd; }
 function addMissionMarker(m){ const t=missionType(m.type);
   const fc=`f-m-${t.cat==='th'||t.cat==='rd'?t.cat:'b'} ${m.status==='open'||!m.status?'f-ms-open':'f-ms-work'}`;
-  const icon=L.divIcon({className:fc,iconSize:[32,32],iconAnchor:[16,16],html:`<div class="mk-mission ${missionCls(m)}">${t.short||t.code}</div>`});
+  const icon=L.divIcon({className:fc,iconSize:[32,32],iconAnchor:[16,16],html:`<div class="mk-mission ${missionCls(m)}${m.shared?' shared':''}">${t.short||t.code}</div>`});
   m.marker=L.marker([m.lat,m.lng],{icon}).addTo(missionLayer); m.marker.on('click',()=>openMissionModal(m.id)); }
 function refreshMissionMarker(m){ if(m.marker) missionLayer.removeLayer(m.marker); addMissionMarker(m); }
 function vehStatusColor(s){ return (getComputedStyle(document.documentElement).getPropertyValue(`--fms-${s}`)||'#888').trim(); }
@@ -1652,7 +1657,10 @@ function clearRoute(v){ if(v.routeLine){ routeLayer.removeLayer(v.routeLine); v.
 /* ------------------------- LOOKUPS ------------------------- */
 const missionType=id=> (typeof id==='string' && id.startsWith('rd:')) ? rdMissionType(id) : MISSION_TYPES.find(m=>m.id===id);
 const stationById=id=>state.stations.find(s=>s.id===id);
-const missionById=id=>state.missions.find(m=>m.id===id);
+const missionById=id=>state.missions.find(m=>m.id===id) || (isSm(id) ? sharedMissions.find(m=>m.id===id) : undefined);
+/* Geteilte Einsätze (Verband): Stand liegt auf dem Server, IDs 'sm:<uuid>'. smLoaded = erster Abgleich ist durch */
+let sharedMissions=[], smLoaded=false;
+function isSm(id){ return typeof id==='string' && id.startsWith('sm:'); }
 const vehiclesOfStation=id=>state.vehicles.filter(v=>v.stationId===id);
 
 /* ------------------------- RETTUNGSDIENST ------------------------- */
@@ -1776,14 +1784,15 @@ function finishHandover(v){
   const pay=Math.round((CONFIG.transportBase+CONFIG.transportPerKm*km)*(tr.na?1+CONFIG.naBonus:1));
   state.earnings=(state.earnings||0)+pay; book('transport',`Patiententransport ${hospitalById(tr.khId)?.name||''}`,pay);
   if(p) p.state='done';
+  if(isSm(tr.missionId)) smPatientEvent(tr.missionId, tr.patientId, 'done');
   toast(`Patient übergeben (+${fmt(pay)} € · Auszahlung um 0 Uhr)`,'ok');
   releaseVehicle(v); renderTopbar();
-  if(m && m.status!=='done' && !patientsOpen(m).length && (missionType(m.type).rd || (m.progress||0)>=1)) completeMission(m);
+  if(m && !m.shared && m.status!=='done' && !patientsOpen(m).length && (missionType(m.type).rd || (m.progress||0)>=1)) completeMission(m);
 }
 /* Noch nicht abgedeckter Bedarf an RTW/NEF für die Patienten eines Einsatzes */
 function missionPatientNeeds(m){
   const open=patientsOpen(m).filter(p=>p.state!=='transport');
-  const coming=(...types)=>state.vehicles.filter(v=>types.includes(v.type) && v.targetMissionId===m.id && [3,4,5].includes(v.status)).length;
+  const coming=(...types)=>(m.shared?smUnits(m):state.vehicles.filter(v=>v.targetMissionId===m.id && [3,4,5].includes(v.status))).filter(v=>types.includes(v.type)).length;
   const stroke=open.filter(p=>p.stroke).length;
   return { rtw:Math.max(0,open.length-coming(...PAT_CARRIERS)),
     nef:(m.tna&&tnaEligible(m)) ? 0 : Math.max(0,open.filter(p=>p.na).length-coming('nef')-Math.min(coming('stemo'),open.filter(p=>p.na&&p.stroke).length)),
@@ -2121,6 +2130,170 @@ function allyBind(){
   box.querySelectorAll('[data-req]').forEach(b=>b.onclick=async()=>{ if(await allyCall('ally_request_answer',{p_aid:allyData.alliance.id,p_user:b.dataset.req,p_accept:b.dataset.acc==='1'},b.dataset.acc==='1'?'Aufgenommen':'Abgelehnt')) allyRefresh(); });
 }
 
+/* ---------- Geteilte Einsätze (Verbände Teil 2b) ----------
+   Freigegebene Einsätze liegen auf dem Server (sm_share). Alle 10 s meldet jeder Browser seine Fahrzeuge dorthin
+   (sm_sync) und bekommt die Einsätze des Verbands zurück. Fortschritt, Patienten und Auszahlung rechnet der Server,
+   damit es weitergeht, auch wenn der Ersteller offline ist. Eigene RTW transportieren ihre Patienten selbst. */
+let smEvents=[], smBusy=false, smLocalPat={}, smUnitLayer=null;
+const SM_PSTATE=['waiting','treating','ready','transport','done'];
+function smUnits(m){                                    // alle Einheiten auf Anfahrt/vor Ort: eigene lokal, andere vom Server
+  const mine=state.vehicles.filter(v=>v.targetMissionId===m.id && [3,4,5].includes(v.status));
+  const others=(m.units||[]).filter(u=>!u.mine && u.status>=3).map(u=>({ id:`x:${u.player}/${u.vid}`, type:u.type, status:u.status, other:true,
+    player:u.player, name:u.name, lat:u.lat, lng:u.lng, mod:{ water:Number(u.water)||0, foam:Number(u.foam)||0 } }));
+  return mine.concat(others);
+}
+function smPatient(m,p){
+  const prev=(m.patients||[]).find(x=>x.id===p.id), local=smLocalPat[p.id];
+  let st=p.state;
+  if(local && SM_PSTATE.indexOf(local)>SM_PSTATE.indexOf(st)) st=local; else if(local) delete smLocalPat[p.id];   // Meldung noch unterwegs
+  const unit=(m.units||[]).find(u=>u.vid===p.rtw_vid && (u.mine===!!p.mine));
+  return { id:p.id, na:!!p.na, dept:p.dept, stroke:false, state:st, treatLeft:Number(p.treat)||0, mine:!!p.mine,
+    rtwId:p.mine&&p.rtw_vid ? p.rtw_vid : null, rtwLabel:p.rtw_vid&&!p.mine ? `${unit?unit.name:'RTW'} (${p.rtw_owner||'?'})` : '',
+    nefId:p.nef_vid ? (p.nef_mine?p.nef_vid:'x') : null, nefMine:!!p.nef_mine, khId:prev?prev.khId:null };
+}
+function smPatientEvent(mid,pid,st){ smLocalPat[pid]=st; smEvents.push({ mid:mid.slice(3), pid, state:st }); }
+function smUnitsOut(){
+  return state.vehicles.filter(v=>isSm(v.targetMissionId) && [3,4,5].includes(v.status)).map(v=>({ mid:v.targetMissionId.slice(3), vid:String(v.id), type:v.type,
+    name:vehName(v), status:v.status, lat:v.lat, lng:v.lng, water:vStat(v,'water')||0, foam:vStat(v,'foam')||0 }));
+}
+async function smSync(){
+  if(!sb||!AUTH.token||!state||simulating||smBusy) return;
+  smBusy=true; const ev=smEvents.splice(0,50);
+  try{
+    let r; try{ r=await rpc('sm_sync',{p_token:AUTH.token,p_units:smUnitsOut(),p_events:ev}); }
+    catch(e){ smEvents.unshift(...ev); throw e; }
+    if(r && !r.error) smApply(r.missions||[]);
+  }catch(e){ /* offline: nächster Versuch in 10 s */ }
+  finally{ smBusy=false; }
+}
+function smApply(list){
+  const first=!smLoaded, old=new Map(sharedMissions.map(m=>[m.id,m]));
+  sharedMissions=list.filter(x=>missionType(x.type)).map(x=>{
+    const id='sm:'+x.id, o=old.get(id), m=o||{ id, sid:x.id, shared:true, assigned:[], marker:null };
+    const was=o?o.status:null, wasProg=o?o.progress:null;
+    Object.assign(m,{ type:x.type, lat:x.lat, lng:x.lng, address:x.address||'', owner:x.owner||'', mine:!!x.mine, status:x.status,
+      progress:Number(x.progress)||0, reward:Number(x.reward)||0, payout:x.payout||null, units:x.units||[] });
+    m.patients=(x.patients||[]).map(p=>smPatient(m,p));
+    m.assigned=state.vehicles.filter(v=>v.targetMissionId===id).map(v=>v.id);
+    if(m.status==='done' && was && was!=='done') smDoneToast(m);
+    if(m.status==='done' && !m.doneAt) m.doneAt=Date.now();
+    if(!m.marker || was!==m.status) { if(m.status==='done' && Date.now()-m.doneAt>60000){ if(m.marker){ missionLayer.removeLayer(m.marker); m.marker=null; } } else refreshMissionMarker(m); }
+    m._changed = was!==m.status || wasProg!==m.progress;
+    return m; });
+  old.forEach((m,id)=>{ if(!sharedMissions.some(x=>x.id===id) && m.marker) missionLayer.removeLayer(m.marker); });
+  sharedMissions=sharedMissions.filter(m=>{ if(m.status==='done' && Date.now()-m.doneAt>60000){ if(m.marker){ missionLayer.removeLayer(m.marker); m.marker=null; } return false; } return true; });
+  smLoaded=true;
+  smActVehicles(first);
+  smDrawUnits();
+  renderMissions(); renderVehicles();
+  if(document.getElementById('modal-mission').classList.contains('show') && isSm(openMissionId)) renderMissionModal();
+}
+/* Eigene Fahrzeuge: Anfahrt fortsetzen, Patienten transportieren, nach getaner Arbeit einrücken */
+function smActVehicles(first){
+  for(const v of state.vehicles){
+    if(!isSm(v.targetMissionId)) continue;
+    const m=missionById(v.targetMissionId);
+    if(!m || m.status==='done'){ if(v.status===3) releaseVehicle(v); continue; }      // Status 4/5 gibt stepWorld frei
+    if(first && v.status===3 && !v.path) smResume(v,m);
+  }
+  for(const m of sharedMissions){
+    if(m.status==='done') continue;
+    const t=missionType(m.type);
+    for(const p of m.patients){
+      if(p.state!=='ready' || !p.mine) continue;
+      const v=state.vehicles.find(x=>String(x.id)===p.rtwId && x.targetMissionId===m.id && (x.status===4||x.status===5));
+      if(v) smTransport(m,p,v);
+    }
+    const mine=state.vehicles.filter(v=>v.targetMissionId===m.id && (v.status===3||v.status===4));
+    // Notarzt: frei, sobald kein Notarzt-Patient mehr vor Ort versorgt werden muss
+    const naOpen=m.patients.some(p=>p.na && ['waiting','treating','ready'].includes(p.state));
+    if(m.patients.some(p=>p.na) && !naOpen) mine.filter(v=>v.type==='nef'||v.type==='stemo').forEach(releaseVehicle);
+    // Brand/TH erledigt, nur noch Patienten offen: Feuerwehr rückt ein, Rettungsdienst bleibt
+    if(!t.rd && m.progress>=1 && !m.fireReleased){ m.fireReleased=true; mine.filter(v=>VEHICLES[v.type]?.category!=='rd').forEach(releaseVehicle); }
+  }
+}
+async function smResume(v,m){
+  try{ const route=await getRoute({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng});
+    if(v.status!==3 || v.targetMissionId!==m.id || v.path) return;
+    route.coords.push({lat:m.lat,lng:m.lng}); startDrive(v,route.coords,route.duration,CONFIG.outboundFactor); }catch(e){ console.error('smResume',e); }
+}
+/* Transport ins nächste geeignete Krankenhaus (bei geteilten Einsätzen immer automatisch) */
+async function smTransport(m,p,v){
+  const list=hospitalsFor(p,m), best=list.find(x=>x.ok)||list[0]; if(!best) return;
+  const h=best.h; p.state='transport'; p.khId=h.id; smPatientEvent(m.id,p.id,'transport');
+  m.assigned=m.assigned.filter(id=>id!==v.id);
+  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId:h.id, na:!!p.na, fromLat:m.lat, fromLng:m.lng };
+  funk(v,7,`Transport → ${h.name}${p.na?' (mit Notarzt)':''} · Verbandseinsatz`);
+  refreshVehicleMarker(v); renderVehicles();
+  const route=await getRoute({lat:v.lat,lng:v.lng},{lat:h.lat,lng:h.lng});
+  if(v.status!==7) return;
+  route.coords.push({lat:h.lat,lng:h.lng}); v.transport.km=distM({lat:v.lat,lng:v.lng},h)/1000;
+  startDrive(v,route.coords,route.duration,CONFIG.outboundFactor);
+}
+function smDoneToast(m){
+  const t=missionType(m.type), me=(m.payout||[]).find(x=>x.mine);
+  if(me) toast(`Verbandseinsatz ${t.name} erledigt: +${fmt(me.amount)} € (kommt mit der nächsten Gutschrift)`,'ok');
+  else if(m.mine) toast(`Verbandseinsatz ${t.name} erledigt`,'ok');
+}
+/* Fahrzeuge anderer Mitglieder auf dem Weg zu oder an geteilten Einsätzen */
+function smDrawUnits(){
+  if(!map) return; if(!smUnitLayer) smUnitLayer=L.layerGroup().addTo(map);
+  smUnitLayer.clearLayers();
+  for(const m of sharedMissions){ if(m.status==='done') continue;
+    for(const u of (m.units||[])){ if(u.mine || u.status<3 || u.status>4 || u.lat==null) continue;
+      const abbr=VEHICLES[u.type]?.abbr||u.type;
+      L.marker([u.lat,u.lng],{zIndexOffset:400,icon:L.divIcon({className:'f-ally',iconSize:[0,0],iconAnchor:[0,0],html:`<div class="mk-ally-veh">${esc(abbr)}</div>`})})
+        .bindTooltip(`${esc(u.name)} · ${esc(u.player)} · ${u.status===3?'Anfahrt':'vor Ort'}`,{direction:'top'}).addTo(smUnitLayer);
+    } }
+}
+function smListLine(m){
+  const others=new Set((m.units||[]).filter(u=>!u.mine && u.status>=3).map(u=>u.player));
+  if(m.status==='done'){ const me=(m.payout||[]).find(x=>x.mine); return `Verband · erledigt${me?` · dein Anteil ${fmt(me.amount)} €`:''}`; }
+  return `Verband · von ${m.mine?'dir':esc(m.owner)} geteilt${others.size?` · ${others.size} Mitglied${others.size>1?'er':''} dabei`:''}`;
+}
+/* Kopf im Einsatzfenster: freigeben bzw. Infos zum geteilten Einsatz */
+function smSharePanel(m){
+  if(m.shared){
+    const pay=m.status==='done'&&m.payout?`<div class="pat-dept" style="padding:0 12px 8px">Auszahlung: ${m.payout.map(x=>`${esc(x.name)} ${fmt(x.amount)} € (${x.vmin} Fzg-Min.)`).join(' · ')}</div>`:'';
+    return `<div class="lss-panel"><div class="lss-ph" style="color:#c4b5fd">Verbandseinsatz · von ${m.mine?'dir':esc(m.owner)} geteilt</div>
+      <div class="pat-dept" style="padding:8px 12px">Geld nach Fahrzeug-Minuten vor Ort, der Ersteller bekommt 10 % vorab. Patienten fahren automatisch ins nächste geeignete Krankenhaus.</div>${pay}</div>`;
+  }
+  if(!allyInfo.id || m.status==='done') return '';
+  return `<div class="lss-panel"><div class="lss-ph">Verband<button class="btn sm" id="mm-share" style="margin-left:auto">Im Verband freigeben</button></div>
+    <div class="pat-dept" style="padding:8px 12px">Andere Mitglieder sehen den Einsatz und können Fahrzeuge schicken. Das Geld wird nach Fahrzeug-Minuten geteilt, du bekommst 10 % vorab.</div></div>`;
+}
+function smOthersPanel(m){
+  const list=(m.units||[]).filter(u=>!u.mine && u.status>=3);
+  const rows=list.map(u=>`<tr><td><span class="fnum fnum-${u.status}">${u.status}</span></td><td class="call">${esc(u.name)}</td><td class="dim">${esc(VEHICLES[u.type]?.name||u.type)}</td><td>${esc(u.player)}</td><td class="mono">${u.vmin} min</td></tr>`).join('');
+  return `<div class="lss-panel"><div class="lss-ph" style="color:#c4b5fd">Fahrzeuge anderer Mitglieder <span class="cnt">${list.length}</span></div>${list.length
+    ? `<table class="lss-tbl"><thead><tr><th>FMS</th><th>Fahrzeug</th><th>Typ</th><th>Mitglied</th><th>vor Ort</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="lss-empty">Keine.</div>'}</div>`;
+}
+/* Eigenen Einsatz freigeben: Server übernimmt, eigene Fahrzeuge fahren weiter dorthin */
+async function shareMission(m){
+  if(!allyInfo.id || m.shared || m.status==='done') return;
+  const t=missionType(m.type); if(!t) return;
+  if(!confirm(`„${t.name}“ im Verband freigeben? Der Einsatz läuft danach über den Verband, das Geld wird nach Fahrzeug-Minuten geteilt.`)) return;
+  const p={ type:m.type, code:t.code, name:t.name, lat:m.lat, lng:m.lng, address:m.address, reward:missionReward(t), progress:m.progress||0,
+    spec:{ minutes:t.minutes||0, rd:!!t.rd, minVehicles:t.minVehicles||1, need:t.need||{}, carriers:PAT_CARRIERS,
+      req:(t.req||[]).map(r=>({ count:r.count, types:r.types, label:reqLabel(r) })) },
+    patients:(m.patients||[]).map(x=>({ id:x.id, na:!!x.na, dept:x.dept, state:x.state, treat:x.treatLeft })) };
+  const r=await allyCall('sm_share',{p},'Einsatz im Verband freigegeben'); if(!r||!r.id) return;
+  const id='sm:'+r.id;
+  // RTW mit eigenen Patienten im Transport bleiben beim lokalen Abschluss (Vergütung je Transport läuft weiter)
+  state.vehicles.forEach(v=>{
+    if(v.targetMissionId===m.id) v.targetMissionId=id;
+    if(v.nextMissionId===m.id) v.nextMissionId=id;
+    if(v.transport && v.transport.missionId===m.id) v.transport.missionId=null;
+  });
+  const i=state.missions.indexOf(m); if(i>=0) state.missions.splice(i,1);
+  if(m.marker){ missionLayer.removeLayer(m.marker); m.marker=null; }
+  const sm={ id, sid:r.id, shared:true, type:m.type, lat:m.lat, lng:m.lng, address:m.address, owner:AUTH.username||'', mine:true, status:m.status, progress:m.progress||0,
+    reward:p.reward, units:[], patients:[], assigned:state.vehicles.filter(v=>v.targetMissionId===id).map(v=>v.id), marker:null };
+  sharedMissions.push(sm); addMissionMarker(sm);
+  openMissionId=id; renderMissions(); renderMissionModal(); saveGame(true);
+  smSync();
+}
+
 /* ------------------------- FUNK ------------------------- */
 let funkLog=[];
 function vehAbbr(v){ const t=VEHICLES[v.type]; return (t&&t.abbr)||(t&&t.name.split(' ')[0])||v.type; }
@@ -2147,7 +2320,7 @@ function startDrive(v,coords,osrmDuration,factor){
 /* Fahrt von AKTUELLER Position zum Einsatz (Erstalarm, Umleitung, Folgeeinsatz) */
 async function routeVehicleTo(v,m,factor,departIn){
   v.departIn=departIn||0;
-  state.missions.forEach(mm=>{ mm.assigned=mm.assigned.filter(id=>id!==v.id); }); // exklusiv zuordnen
+  state.missions.concat(sharedMissions).forEach(mm=>{ mm.assigned=mm.assigned.filter(id=>id!==v.id); }); // exklusiv zuordnen
   v.status=3; v.targetMissionId=m.id; v.nextMissionId=null; v.path=null;
   m.assigned.push(v.id);
   funk(v,3);
@@ -2266,7 +2439,7 @@ async function sendVehicleHome(v){
   if(v.status===1) return;
   const st=stationById(v.stationId); if(!st){ v.status=2; return; }
   v.status=1; v.targetMissionId=null; v.path=null; v.departIn=0;
-  state.missions.forEach(m=>{ m.assigned=m.assigned.filter(id=>id!==v.id); });
+  state.missions.concat(sharedMissions).forEach(m=>{ m.assigned=m.assigned.filter(id=>id!==v.id); });
   funk(v,1); refreshVehicleMarker(v); renderVehicles();
   const route=await getRoute({lat:v.lat,lng:v.lng},{lat:st.lat,lng:st.lng});
   if(v.status!==1) return;
@@ -2300,6 +2473,7 @@ function stepWorld(dt){
         else { const st=stationById(v.stationId); if(st){ v.lat=st.lat; v.lng=st.lng; } v.status=2; v.crew=0; v.crewIds=[]; funk(v,2); refreshVehicleMarker(v); renderStations(); renderVehicles(); if(svStationId===v.stationId) renderStationView(); }
       }
     } else if(v.status===4||v.status===5){
+      if(isSm(v.targetMissionId) && !smLoaded) continue;
       const m=missionById(v.targetMissionId);
       if(!m||m.status==='done'){ releaseVehicle(v); }
     }
@@ -2368,13 +2542,14 @@ function effMissionMinutes(t, vehCount){
    coverage = kleinster Deckungsgrad (Wasser bzw. Schaum). Fortschritt läuft nur bis dahin. */
 function missionSupply(m){
   const t=missionType(m.type);
-  const veh=m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id);
+  const veh=onSceneVehicles(m);
   let sumW=0,sumF=0; veh.forEach(v=>{ sumW+=vStat(v,'water')||0; sumF+=vStat(v,'foam')||0; });
   const needW=(t&&t.need.water)||0, needF=(t&&t.need.foam)||0;
   const coverW=needW>0?Math.min(1,sumW/needW):1, coverF=needF>0?Math.min(1,sumF/needF):1;
   return { onScene:veh.length, sumW, sumF, needW, needF, coverW, coverF, coverage:Math.min(coverW,coverF) };
 }
-function onSceneVehicles(m){ return m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id); }
+function onSceneVehicles(m){ if(m.shared) return smUnits(m).filter(v=>v.status===4||v.status===5);
+  return m.assigned.map(id=>state.vehicles.find(v=>v.id===id)).filter(v=>v&&v.status===4&&v.targetMissionId===m.id); }
 function reqLabel(r){ if(r.label) return r.label; if(r.types.length===1){ const v=VEHICLES[r.types[0]]; return v?(v.abbr||v.name):r.types[0]; } return 'Lösch-/Kleinfzg'; }
 /* Prüft, ob die benötigten Fahrzeugtypen vor Ort sind (greedy, spezifische zuerst). */
 function missionReqStatus(m){
@@ -3115,14 +3290,14 @@ let openMissionId=null, mmSel=new Set(), mmCat='all', mmShowBusy=false;
 function openMissionModal(id){ const m=missionById(id); if(!m) return;
   if(openMissionId!==id){ mmSel=new Set(); }
   openMissionId=id;
-  const t=missionType(m.type); document.getElementById('mm-title').textContent=`${t.code} · ${t.name}`;
+  const t=missionType(m.type); document.getElementById('mm-title').textContent=`${t.code} · ${t.name}${m.shared?' · Verbandseinsatz':''}`;
   renderMissionModal(); showModal('modal-mission'); }
 /* Fahrzeuge, die zu diesem Einsatz unterwegs oder vor Ort sind */
 function missionVehicles(m){ return state.vehicles.filter(v=>v.targetMissionId===m.id && (v.status===3||v.status===4||v.status===5)); }
 /* Noch fehlende Fahrzeuge (vor Ort + Anfahrt zählen bereits) */
 function missingReqs(m){
   const t=missionType(m.type); const reqs=(t&&t.req&&t.req.length&&!(m.progress>=1&&!t.rd))?t.req.slice().sort((a,b)=>a.types.length-b.types.length):[];   // Arbeit erledigt: nur noch Patientenbedarf
-  const veh=missionVehicles(m); const used=new Set(); const out=[];
+  const veh=m.shared?smUnits(m):missionVehicles(m); const used=new Set(); const out=[];
   for(const r of reqs){ let have=0;
     if(m.tna && tnaEligible(m) && r.types.includes('nef')) continue;   // Notarzt kommt per Telemedizin
     for(const v of veh){ if(have>=r.count) break; if(used.has(v.id)) continue; if(r.types.includes(v.type)){ used.add(v.id); have++; } }
@@ -3153,7 +3328,7 @@ function mmSignature(m){
   const statuses=mmShowBusy?[1,2,3,4,5,6,7,8]:[1,2];
   return [m.status, m.tna?1:0, tnaFree(), missingReqs(m).length, Math.round(missionSupply(m).coverage*100),
     state.vehicles.filter(v=>v.targetMissionId===m.id||v.nextMissionId===m.id||statuses.includes(v.status)).map(v=>v.id+':'+v.status+':'+(v.targetMissionId===m.id?1:0)+(v.nextMissionId===m.id?1:0)+(v.abId?1:0)).join(','),
-    (m.patients||[]).map(p=>p.state+(p.rtwId||'')+(p.nefId||'')).join(',')].join('|');
+    (m.patients||[]).map(p=>p.state+(p.rtwId||'')+(p.nefId||'')).join(','), m.shared?smUnits(m).map(u=>u.id+':'+u.status).join(','):'', allyInfo.id?1:0].join('|');
 }
 function liveMissionModal(){
   if(simulating || !document.getElementById('modal-mission').classList.contains('show')) return;
@@ -3205,14 +3380,16 @@ function renderMissionModal(){
     : `<tr><td colspan="7" class="lss-empty">${state.vehicles.length?'Keine verfügbaren Fahrzeuge in dieser Kategorie.':'Noch keine Fahrzeuge. Beschaffe an einer Wache ein Fahrzeug.'}</td></tr>`;
 
   box.innerHTML=`
-    <div class="lss-addr"><span><b>${m.address}</b></span><span>Belohnung ${fmt(missionReward(t))} €</span>
+    <div class="lss-addr"><span><b>${esc(m.address)}</b></span><span>Belohnung ${fmt(m.shared?m.reward:missionReward(t))} €${m.shared?' · geteilt nach Fahrzeug-Minuten':''}</span>
       ${t.rd?`<span>Rettungsdienst · ${t.complaint}</span>`:`<span>Dauer ${mmss(t.minutes)} → ${mmss(effMissionMinutes(t,CONFIG.usefulVehicleCap))}</span>`}
       ${t.need.water>0?`<span>Wasser ${t.need.water} L</span>`:''}${t.need.foam>0?`<span>Schaum ${t.need.foam} L</span>`:''}
       <span>Löschmittel-Deckung <b style="color:${sup.coverage>=1?'var(--ok)':'var(--warn)'}">${Math.round(sup.coverage*100)} %</b></span></div>
     ${alert}
+    ${smSharePanel(m)}
     <div id="mm-prog">${missionProgressHTML(m)}</div>
     ${patientPanel(m)}
-    ${tnaPanel(m)}
+    ${m.shared?'':tnaPanel(m)}
+    ${m.shared?smOthersPanel(m):''}
     <div class="lss-panel"><div class="lss-ph">Fahrzeuge auf Anfahrt <span class="cnt">${enRoute.length}</span></div>${sceneRows(enRoute,true)}</div>
     <div class="lss-panel"><div class="lss-ph">Fahrzeuge vor Ort <span class="cnt">${onScene.length}</span></div>${sceneRows(onScene,false)}</div>
     ${queued.length?`<div class="lss-panel"><div class="lss-ph">Als Folgeeinsatz eingeplant <span class="cnt">${queued.length}</span></div><table class="lss-tbl"><tbody>${
@@ -3229,6 +3406,7 @@ function renderMissionModal(){
   mmSig=mmSignature(m);
 
   box.querySelectorAll('[data-khpick]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openHospitalPick(m.id,b.dataset.khpick); });
+  const shb=document.getElementById('mm-share'); if(shb) shb.onclick=()=>shareMission(m);
   const tb=document.getElementById('mm-tna'); if(tb) tb.onclick=()=>{ m.tna=!m.tna; funkLogTna(m); renderMissionModal(); renderMissions(); saveGame(true); };
   box.querySelectorAll('[data-pick]').forEach(r=>r.onclick=()=>{ const id=r.dataset.pick; mmSel.has(id)?mmSel.delete(id):mmSel.add(id); renderMissionModal(); });
   box.querySelectorAll('[data-mmcat]').forEach(b=>b.onclick=()=>{ mmCat=b.dataset.mmcat; renderMissionModal(); });
@@ -3256,8 +3434,8 @@ function patientPanel(m){
   const t=missionType(m.type);
   const rows=m.patients.map((p,i)=>{ const r=p.rtwId&&state.vehicles.find(v=>v.id===p.rtwId);
     return `<tr><td class="mono">P${i+1}</td><td>${DEPTS[p.dept]||p.dept}${p.na?'<span class="pat-na">NA</span>':''}${p.stemo?'<span class="pat-na" style="color:#a5b4fc;border-color:#6366f1">STEMO</span>':''}${p.nefId==='tna'?'<span class="pat-na" style="color:#5eead4;border-color:#14b8a6">TNA</span>':''}</td>
-      <td class="dim">${r?vehName(r):'—'}</td><td>${patientState(p)}</td>
-      <td style="text-align:right">${p.state==='ready'?`<button class="btn sm primary" data-khpick="${p.id}">Krankenhaus</button>`:''}</td></tr>`; }).join('');
+      <td class="dim">${r?vehName(r):(p.rtwLabel?esc(p.rtwLabel):'—')}</td><td>${patientState(p)}</td>
+      <td style="text-align:right">${p.state==='ready'&&!m.shared?`<button class="btn sm primary" data-khpick="${p.id}">Krankenhaus</button>`:''}</td></tr>`; }).join('');
   return `<div class="lss-panel"><div class="lss-ph">Patienten <span class="cnt">${m.patients.length}</span>${t.rd?`<span style="text-transform:none;letter-spacing:0;font-weight:400">AMPDS ${t.ampds} · ${t.kat.replace('.','')} · ${t.complaint}</span>`:''}</div>
     <table class="lss-tbl"><thead><tr><th></th><th>Fachabteilung</th><th>RTW</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -3342,11 +3520,14 @@ function missionProgressHTML(m){
 function renderMissions(){ if(simulating) return;
   const list=document.getElementById('missions-list'), cnt=document.getElementById('missions-count');
   const active=state.missions.filter(m=>m.status!=='done');
-  cnt.textContent=active.length; cnt.classList.toggle('zero',active.length===0);
-  if(state.missions.length===0){ list.innerHTML=`<div class="empty-hint">Keine Einsätze.<br>Sobald eine Wache steht, treten automatisch Einsätze auf.</div>`;
+  const shared=sharedMissions.filter(m=>missionType(m.type)), nAct=active.length+shared.filter(m=>m.status!=='done').length;
+  cnt.textContent=nAct; cnt.classList.toggle('zero',nAct===0);
+  if(state.missions.length===0 && !shared.length){ list.innerHTML=`<div class="empty-hint">Keine Einsätze.<br>Sobald eine Wache steht, treten automatisch Einsätze auf.</div>`;
     if(document.getElementById('modal-mission').classList.contains('show')) renderMissionModal(); return; }
   list.innerHTML='';
-  for(const m of state.missions){
+  const all=state.missions.concat(shared);
+  for(const m of all){
+    if(m===shared[0]){ const h=document.createElement('div'); h.className='missions-sub'; h.textContent=`Verbandseinsätze (${shared.filter(x=>x.status!=='done').length})`; list.appendChild(h); }
     const t=missionType(m.type);
     const talk=(m.patients||[]).some(p=>p.state==='ready');
     const badge= talk?'<span class="m-badge talk">Sprechwunsch</span>' : m.status==='done'?'<span class="m-badge done">fertig</span>'
@@ -3356,7 +3537,7 @@ function renderMissions(){ if(simulating) return;
     const body=t.rd?missionProgressHTML(m):`<div class="tags"><span class="tag time">Dauer ${mmss(t.minutes)}</span></div>${missionProgressHTML(m)}`;
     const el=document.createElement('div'); el.className='mission '+missionCls(m);
     el.innerHTML=`<div class="m-top"><span class="mcode ${t.cat}">${t.code}</span><span class="m-name">${t.name}</span>${badge}</div>
-      <div class="m-addr">${m.address}</div>${body}`;
+      <div class="m-addr">${esc(m.address)}</div>${m.shared?`<div class="m-shared">${smListLine(m)}</div>`:''}${body}`;
     el.onclick=()=>{ map.panTo([m.lat,m.lng]); openMissionModal(m.id); };
     list.appendChild(el);
   }
@@ -3453,7 +3634,7 @@ function goToFollowUp(id){
 /* Fahrzeug einem (anderen) Einsatz zuweisen */
 function openRedispatch(vehicleId){
   const v=state.vehicles.find(x=>x.id===vehicleId); if(!v) return;
-  const active=state.missions.filter(m=>m.status!=='done');
+  const active=state.missions.concat(sharedMissions).filter(m=>m.status!=='done' && missionType(m.type));
   const box=document.getElementById('rd-content');
   document.getElementById('rd-title').textContent=`${vehName(v)} — Einsatz zuweisen`;
   if(!active.length && ![3,4].includes(v.status)){ box.innerHTML=`<div class="empty-hint">Aktuell keine offenen Einsätze.</div>`; showModal('modal-redispatch'); return; }
@@ -3466,7 +3647,7 @@ function openRedispatch(vehicleId){
   box.innerHTML = hint + recallRow + active.map(m=>{ const t=missionType(m.type);
     const already = v.targetMissionId===m.id||v.nextMissionId===m.id;
     return `<div class="veh-pick"><span class="mcode ${t.cat}">${t.code}</span>
-      <span class="vp-name">${t.name}</span><span class="vp-meta">${m.address}</span>
+      <span class="vp-name">${t.name}${m.shared?' <span class="m-shared">· Verband</span>':''}</span><span class="vp-meta">${esc(m.address)}</span>
       <button class="btn sm primary" data-rd="${m.id}" ${already?'disabled':''}>${already?'zugewiesen':'Alarm'}</button></div>`; }).join('');
   box.querySelectorAll('[data-rd]').forEach(b=> b.onclick=()=>{ dispatch(vehicleId,b.dataset.rd); hideModal('modal-redispatch'); });
   const rb=box.querySelector('[data-recall-rd]'); if(rb) rb.onclick=()=>{ recallVehicle(vehicleId); hideModal('modal-redispatch'); };
@@ -3535,6 +3716,7 @@ async function resumeDriving(){
   for(const v of state.vehicles){
     try{
       if(v.status===3){
+        if(isSm(v.targetMissionId)) continue;               // nach dem ersten Verbands-Abgleich (smApply)
         const m=missionById(v.targetMissionId);
         if(!m || m.status==='done'){ sendVehicleHome(v); continue; }
         const route=await getRoute({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng});
@@ -3699,6 +3881,7 @@ async function startGame(){
     document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tick(); });   // zurück im Tab: sofort nachholen
     setInterval(liveMissionModal,500);
     setInterval(allyPoll,10000); setTimeout(allyPoll,2000);
+    setInterval(smSync,10000); setTimeout(smSync,3000);
     gameStarted=true;
   } else { rebuildEverything(); }
   const off=pendingOfflineMs; pendingOfflineMs=0; lastTick=Date.now();
