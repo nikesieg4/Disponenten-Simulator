@@ -376,6 +376,8 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .search-wrap{ position:absolute; top:12px; left:12px; z-index:1050; width:300px; max-width:45vw; }
 .search-wrap input{ width:100%; padding:10px 14px; border-radius:30px; border:1px solid var(--border); background:var(--panel); color:var(--text); font-family:var(--font-ui); font-size:13px; box-shadow:var(--shadow); }
 .search-wrap input::placeholder{ color:var(--text-dim); }
+.search-wrap input{ -webkit-appearance:none; appearance:none; }
+.search-wrap input::-webkit-search-cancel-button, .search-wrap input::-webkit-search-decoration{ -webkit-appearance:none; }
 /* Verband */
 .vb-sec{ display:flex; flex-direction:column; gap:8px; }
 .vb-sec h4{ margin:6px 0 0; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); }
@@ -627,7 +629,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 
   <div id="main">
     <div id="map"></div>
-    <div class="search-wrap"><input id="search" type="text" placeholder="Ort suchen (Enter)…" autocomplete="off" /></div>
+    <div class="search-wrap"><input id="search" name="ortssuche" type="search" enterkeyhint="search" placeholder="Ort suchen (Enter)…" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore="true" data-form-type="other" /></div>
     <div class="mapfilter">
       <button class="mapfilter-btn" id="mf-btn" aria-expanded="false" aria-controls="mf-panel">Filter<span class="mf-count hidden" id="mf-count">0</span></button>
       <div class="mapfilter-panel hidden" id="mf-panel">
@@ -888,7 +890,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 <div class="modal-bg" id="modal-settings"><div class="modal">
   <h3>Einstellungen</h3>
   <div class="m-content">
-    <label class="fld"><span>Benutzername ändern</span><input id="set-user" type="text" maxlength="30" /></label>
+    <label class="fld"><span>Benutzername ändern</span><input id="set-user" name="username" type="text" maxlength="30" autocomplete="username" /></label>
     <button class="btn" id="set-user-save">Benutzername speichern</button>
     <label class="fld"><span>Aktuelles Passwort</span><input id="set-pass-old" type="password" maxlength="60" autocomplete="current-password" placeholder="bei Google-Konto ohne Passwort leer lassen" /></label>
     <label class="fld"><span>Neues Passwort</span><input id="set-pass" type="password" maxlength="60" autocomplete="new-password" placeholder="mind. 8 Zeichen" /></label>
