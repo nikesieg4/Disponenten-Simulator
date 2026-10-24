@@ -1162,11 +1162,21 @@ function initMap(){
   mc.addEventListener('pointerup',areaPointerUp); mc.addEventListener('pointercancel',areaPointerUp);
   applyMapFilter();
 }
+/* Akademie (Doktorhut) und Leitstelle (Headset): Marker wie die Wache, in Blau; im Bau grau und gestrichelt */
+const PIN_ICONS={
+  academy:c=>`<path d="M12 5L2 10L12 15L22 10Z" fill="${c}"/><path d="M6 12.2V16.5Q12 20.5 18 16.5V12.2L12 15.2Z" fill="${c}"/><path d="M20.2 11V17.5" stroke="${c}" stroke-width="1.5"/><circle cx="20.2" cy="18.2" r="1.3" fill="${c}"/>`,
+  leitstelle:c=>`<path d="M5 13V12A7 7 0 0 1 19 12V13" fill="none" stroke="${c}" stroke-width="2"/><rect x="3.5" y="12" width="4.5" height="7.5" rx="1.6" fill="${c}"/><rect x="16" y="12" width="4.5" height="7.5" rx="1.6" fill="${c}"/><path d="M18.2 19.5Q18 22 13.8 22" fill="none" stroke="${c}" stroke-width="1.5"/><rect x="10.5" y="20.8" width="3.6" height="2.4" rx="1" fill="${c}"/>`,
+};
+function buildingPinHtml(b,t){
+  const ready=stationReady(b), c=ready?'#3987e5':'#6b7280', icon=PIN_ICONS[t.id];
+  return `<svg viewBox="0 0 40 48" width="40" height="48" aria-hidden="true"><path d="M8 2H32A6 6 0 0 1 38 8V30A6 6 0 0 1 32 36H25L20 44L15 36H8A6 6 0 0 1 2 30V8A6 6 0 0 1 8 2Z" fill="#151a23" stroke="${c}" stroke-width="2"${ready?'':' stroke-dasharray="4 3"'}/>`+
+    (icon?`<g transform="translate(8 7)">${icon(c)}</g>`:`<text x="20" y="24" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" font-weight="700" fill="${c}">${t.icon}</text>`)+`</svg>`;
+}
 function addBuildingMarker(b){
   const t=buildingById(b.typeId); if(!t) return;
-  const icon=L.divIcon({className:'f-ac',iconSize:[34,34],iconAnchor:[17,17],html:`<div class="mk-building${stationReady(b)?'':' building'}">${stationReady(b)?t.icon:'BAU'}</div>`});
+  const icon=L.divIcon({className:'f-ac mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:buildingPinHtml(b,t)});
   b.marker=L.marker([b.lat,b.lng],{icon}).addTo(buildingLayer);
-  b.marker.bindTooltip(`${b.name}`,{direction:'top'});
+  b.marker.bindTooltip(stationReady(b)?b.name:`${b.name} (im Bau)`,{direction:'top'});
   b.marker.on('click',()=>{ if(t.isAcademy) openAcademyView(b.id); else if(t.isLeitstelle) openLeitstelleView(b.id); else toast(`${b.name}${t.desc?' — '+t.desc:''}`,'ok'); });
 }
 
