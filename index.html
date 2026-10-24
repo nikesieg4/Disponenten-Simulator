@@ -2517,7 +2517,7 @@ function renderCodes(){
   const V=vouchers(), box=document.getElementById('codes-content');
   const bl=Object.entries(V.buildings).filter(([,n])=>n>0), el=Object.entries(V.ext).filter(([,n])=>n>0);
   const stOpts=state.stations.map(s=>`<option value="${s.id}">${esc(s.name)} (${staffCount(s)}/${CONFIG.maxStaff})</option>`).join('');
-  box.innerHTML=`<div class="vb-sec"><div class="vb-form"><label class="fld sm" style="flex:1"><span>Code</span><input id="code-in" class="vb-in" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="z. B. SOMMER25" style="text-transform:uppercase"></label>
+  box.innerHTML=`<div class="vb-sec"><div class="vb-form"><label class="fld sm" style="flex:1"><span>Code</span><input id="code-in" name="reward-code" class="vb-in" type="text" maxlength="32" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore="true" data-form-type="other" placeholder="z. B. SOMMER25" style="text-transform:uppercase"></label>
       <button class="btn primary" id="code-go">Einlösen</button></div>
       <div class="pers-hint">Codes gibt es auf unseren <a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a>. Jeder Code lässt sich einmal pro Konto einlösen.</div></div>
     ${V.staff.length||bl.length||el.length?`<div class="vb-sec"><h4>Deine Gutscheine</h4>
@@ -2534,7 +2534,7 @@ async function redeemCode(code){
   if(!sb||!AUTH.token){ toast('Codes gehen nur mit Anmeldung','warn'); return; }
   await saveGame(true);                                   // Server braucht einen gespeicherten Spielstand
   let r; try{ r=await rpc('code_redeem',{p_token:AUTH.token,p_code:code}); }catch(e){ toast('Code: '+errMsg(e),'err'); return; }
-  if(!r||r.error){ toast(r?.error||'Code ungültig','err'); return; }
+  if(!r||r.error){ const e=r?.error||'Code ungültig'; toast(e==='Code ungültig'?`Code „${code.toUpperCase()}“ ist ungültig`:e,'err'); return; }
   const V=vouchers();
   for(const w of (r.rewards||[])){
     if(w.type==='money'){ state.credits+=w.amount; book('code',`Code ${r.code}`,w.amount); }
