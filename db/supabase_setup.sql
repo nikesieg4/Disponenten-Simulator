@@ -234,6 +234,7 @@ insert into app_prices(kind, id, price) values
   ('vehicle','kdow_lna',120000),
   ('vehicle','nktw',150000),
   ('vehicle','gw_san',250000),
+  ('vehicle','gw_rettmat',150000),
   ('vehicle','kdow',90000),
   ('vehicle','ab_manv',200000),
   ('station','L1',5000000),
