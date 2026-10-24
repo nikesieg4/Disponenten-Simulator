@@ -3811,6 +3811,7 @@ function liveMissionModal(){
   const box=document.getElementById('mm-content'), veh=id=>state.vehicles.find(x=>x.id===id);
   box.querySelectorAll('[data-eta-arr]').forEach(td=>{ const v=veh(td.dataset.etaArr); if(v) td.textContent=arrivalText(v,m); });
   box.querySelectorAll('[data-eta-av]').forEach(td=>{ const v=veh(td.dataset.etaAv); if(v) td.textContent=etaText(v,m); });
+  box.querySelectorAll('[data-pworse]').forEach(el=>{ const p=(m.patients||[]).find(x=>x.id===el.dataset.pworse); if(p) el.textContent=condTimerText(p); });   // Countdown bis zur Verschlechterung
   const pg=document.getElementById('mm-prog'); if(pg){ const h=missionProgressHTML(m); if(pg.innerHTML!==h) pg.innerHTML=h; }
 }
 function renderMissionModal(){
@@ -3922,8 +3923,11 @@ function condTimer(m,p){
   if(p.dead||p.state==='done'||p.state==='transport'||p.state==='ready') return '';
   if(m.dueAt && Date.now()<m.dueAt) return '<div class="pat-dept">Klinik hält stabil</div>';
   const untreated=p.state==='waiting' || ((p.cond??0)>=COND_NA && !p.nefId); if(!untreated) return '';
+  return `<div class="pat-dept" data-pworse="${p.id}" style="color:${(p.cond??0)>=2?'#fca5a5':'inherit'}">${condTimerText(p)}</div>`;
+}
+function condTimerText(p){
   const left=Math.max(0,CONFIG.patWorseMin[Math.min(3,p.cond??1)]-(p.worse||0));
-  return `<div class="pat-dept" style="color:${(p.cond??0)>=2?'#fca5a5':'inherit'}">${(p.cond??0)>=COND_NA?'verstirbt':'verschlechtert sich'} in ${mmss(left)}</div>`;
+  return `${(p.cond??0)>=COND_NA?'verstirbt':'verschlechtert sich'} in ${mmss(left)}`;
 }
 /* Krankenhaus wählen (Sprechwunsch) */
 let khPickCtx=null;
