@@ -1776,12 +1776,40 @@ begin
   insert into app_ep_ledger(user_id, amount, kind, note) values (v_uid, p_amount, 'admin', left(coalesce(p_note,''),200));
   return json_build_object('ok',true,'ep',(select ep from app_wallet where user_id=v_uid));
 end; $$;
+-- Admin: EP, Forschungspunkte (RP) oder Premium-Tage schenken bzw. abziehen (negativer Betrag)
+create or replace function admin_grant(p_token uuid, p_username text, p_kind text, p_amount int, p_note text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid; v_note text := left(btrim(coalesce(p_note,'')),200); v_max int := case p_kind when 'premium' then 3650 else 100000 end; w app_wallet;
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  select id into v_uid from app_users where lower(username)=lower(btrim(coalesce(p_username,'')));
+  if v_uid is null then return json_build_object('error','Spieler nicht gefunden'); end if;
+  if p_kind not in ('ep','rp','premium') then return json_build_object('error','Unbekannte Art'); end if;
+  if coalesce(p_amount,0)=0 or abs(p_amount) > v_max then
+    return json_build_object('error', case p_kind when 'premium' then 'Tage: ±1 bis 3650' else 'Betrag: ±1 bis 100.000' end); end if;
+  insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
+  if p_kind='ep' then
+    update app_wallet set ep=greatest(0,ep+p_amount), updated_at=now() where user_id=v_uid;
+    insert into app_ep_ledger(user_id, amount, kind, note) values (v_uid, p_amount, 'admin', v_note);
+  elsif p_kind='rp' then
+    update app_wallet set rp=greatest(0,rp+p_amount), updated_at=now() where user_id=v_uid;
+  elsif p_amount > 0 then
+    update app_wallet set premium_until=greatest(now(),coalesce(premium_until,now()))+make_interval(days=>p_amount), updated_at=now() where user_id=v_uid;
+    insert into app_ep_ledger(user_id, amount, kind, note) values (v_uid, 0, 'admin', left('Premium +'||p_amount||' Tage geschenkt'||case when v_note<>'' then ' · '||v_note else '' end,200));
+  else
+    -- Abziehen: endet höchstens jetzt (keine automatische Verlängerung ausgelöst, solange premium_until in der Vergangenheit bleibt)
+    update app_wallet set premium_until=case when premium_until is null or premium_until <= now() then premium_until
+      else greatest(now(), premium_until+make_interval(days=>p_amount)) end, updated_at=now() where user_id=v_uid;
+  end if;
+  select * into w from app_wallet where user_id=v_uid;
+  return json_build_object('ok',true,'ep',w.ep,'rp',w.rp,'premium_until',w.premium_until);
+end; $$;
 create or replace function admin_premium_list(p_token uuid)
 returns json language plpgsql security definer set search_path=public, extensions as $$
 begin
   if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
-  return json_build_object('ok',true,'list',coalesce((select json_agg(json_build_object('name',u.username,'ep',w.ep,'premium_until',w.premium_until,'auto',w.premium_auto,'discord_id',w.discord_id)
-    order by w.premium_until desc nulls last) from app_wallet w join app_users u on u.id=w.user_id where w.premium_until is not null or w.ep > 0 or w.discord_id is not null),'[]'::json));
+  return json_build_object('ok',true,'list',coalesce((select json_agg(json_build_object('name',u.username,'ep',w.ep,'rp',w.rp,'premium_until',w.premium_until,'auto',w.premium_auto,'discord_id',w.discord_id)
+    order by w.premium_until desc nulls last) from app_wallet w join app_users u on u.id=w.user_id where w.premium_until is not null or w.ep > 0 or w.rp > 0 or w.discord_id is not null),'[]'::json));
 end; $$;
 
 /* ---------- Stripe: EP-Käufe ----------
