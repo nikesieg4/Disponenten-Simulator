@@ -671,6 +671,8 @@ a.dd-item{ text-decoration:none; color:var(--text); }
         <a class="dd-item" href="seiten/socials.html" target="_blank" rel="noopener">Socials</a>
         <a class="dd-item" href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a>
         <a class="dd-item" href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a>
+        <a class="dd-item" href="seiten/agb.html" target="_blank" rel="noopener">AGB</a>
+        <a class="dd-item" href="seiten/widerruf.html" target="_blank" rel="noopener">Widerrufsbelehrung</a>
         <div class="dd-sep"></div>
         <button class="dd-item danger" id="dd-logout">Abmelden</button>
       </div>
@@ -901,7 +903,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
       Mit Google anmelden
     </button>
     <div class="auth-hint" style="font-size:12px">Mit der Anmeldung gilt die <a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a>.</div>
-    <div class="legal-links"><a href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a><a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a></div>
+    <div class="legal-links"><a href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a><a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="seiten/agb.html" target="_blank" rel="noopener">AGB</a><a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a></div>
   </div>
 </div>
 
@@ -927,7 +929,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
       <button class="btn" onclick="location.reload()">Erneut versuchen</button>
       <button class="btn ghost" id="maint-logout">Abmelden</button>
     </div>
-    <div class="legal-links"><a href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a><a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a></div>
+    <div class="legal-links"><a href="seiten/impressum.html" target="_blank" rel="noopener">Impressum</a><a href="seiten/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="seiten/agb.html" target="_blank" rel="noopener">AGB</a><a href="seiten/socials.html" target="_blank" rel="noopener">Socials</a></div>
   </div>
 </div>
 
@@ -2899,14 +2901,15 @@ function shopPremiumHtml(){
 }
 function shopEpHtml(){
   const base=EP_PACKAGES[0].ep/EP_PACKAGES[0].cents, can=epConsent && !!wallet?.user_id;
-  return `<div class="pers-hint">Einsatzpunkte (EP) sind die Premium-Währung. 50 EP = 30 Tage Premium. Alle Preise inklusive MwSt.</div>
+  return `<div class="pers-hint">Einsatzpunkte (EP) sind die Premium-Währung. 50 EP = 30 Tage Premium. Alle Preise sind Endpreise. Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.</div>
     <div class="ep-grid">${EP_PACKAGES.map(p=>{ const more=Math.round((p.ep/p.cents/base-1)*100);
       return `<div class="ep-card${p.tag?' hl':''}">${p.tag?`<span class="ep-tag">${p.tag}</span>`:''}<div class="ep-amt">${fmt(p.ep)} <small>EP</small></div>
         <div class="ep-bonus">${fmt(p.ep-p.bonus)} + ${fmt(p.bonus)} gratis</div><div class="ep-price">${(p.cents/100).toFixed(2).replace('.',',')} €</div>
         <div class="ep-more">${more>0?`+${more} % mehr EP je Euro`:'&nbsp;'}</div><div class="ep-months">≈ ${Math.floor(p.ep/PREMIUM_EP)} Monate Premium</div>
         <button class="btn ${p.tag?'primary':''}" data-epbuy="${p.id}" ${can&&p.link?'':'disabled'}>${p.link?'Kaufen':'Bald verfügbar'}</button></div>`; }).join('')}</div>
     <label class="vb-check ep-consent"><input type="checkbox" id="ep-consent" ${epConsent?'checked':''}> Ich verlange ausdrücklich, dass die Einsatzpunkte sofort nach der Zahlung gutgeschrieben werden, und mir ist bekannt, dass ich damit mein Widerrufsrecht verliere.</label>
-    <div class="pers-hint">Bezahlt wird sicher über Stripe. Unter 18 nur mit Zustimmung der Eltern. Die EP sind wenige Sekunden nach der Zahlung da.</div>`;
+    <div class="pers-hint">Bezahlt wird sicher über Stripe. Unter 18 nur mit Zustimmung der Eltern. Die EP sind wenige Sekunden nach der Zahlung da.
+      Es gelten die <a href="seiten/agb.html" target="_blank" rel="noopener">AGB</a> und die <a href="seiten/widerruf.html" target="_blank" rel="noopener">Widerrufsbelehrung</a>.</div>`;
 }
 /* Kauf: Stripe Payment Link mit Spieler-ID (client_reference_id), Gutschrift kommt über den Webhook */
 function buyEp(id){
