@@ -2849,14 +2849,18 @@ const PREMIUM_FEATURES=[
   ['Eigene Fahrzeuggrafiken','Links, rechts, mit und ohne Blaulicht'],
   ['Eigene Gebäudegrafiken','Normal, im Bau und Verband'],
 ];
+/* EP-Verkauf an/aus. Bei false sind Shop-Menü und Kaufen versteckt; Premium lässt sich mit vorhandenen EP
+   (Codes, Admin) weiter im Premium-Fenster unter „Aktivieren“ freischalten. */
+const SHOP_OPEN=false;
 /* Ein Fenster für Shop, Premium, Quests und Forschung; jeder Bereich hat eigene Reiter (der erste ist der Start) */
 const SHOP_SECS={
   shop:{ title:'Shop', tabs:[['ep','Einsatzpunkte',()=>shopEpHtml()],['kauf','Premium kaufen',()=>shopPremiumBuyHtml()]] },
-  premium:{ title:'Premium', tabs:[['vorteile','Vorteile',()=>shopPremiumHtml()],['grafiken','Grafiken',()=>shopGfxHtml()]] },
+  premium:{ title:'Premium', tabs:[['vorteile','Vorteile',()=>shopPremiumHtml()],...(SHOP_OPEN?[]:[['kauf','Aktivieren',()=>shopPremiumBuyHtml()]]),['grafiken','Grafiken',()=>shopGfxHtml()]] },
   quests:{ title:'Quests', tabs:[['quests','Quests',()=>shopQuestsHtml()]] },
   forschung:{ title:'Forschung', tabs:[['forschung','Forschung',()=>shopResearchHtml()]] },
 };
-async function openShop(sec='shop',tab){ shopSec=SHOP_SECS[sec]?sec:'shop'; const T=SHOP_SECS[shopSec].tabs; shopTab=T.some(t=>t[0]===tab)?tab:T[0][0];
+async function openShop(sec='shop',tab){ if(sec==='shop' && !SHOP_OPEN){ sec='premium'; if(tab!=='kauf') tab=null; }
+  shopSec=SHOP_SECS[sec]?sec:'shop'; const T=SHOP_SECS[shopSec].tabs; shopTab=T.some(t=>t[0]===tab)?tab:T[0][0];
   showModal('modal-shop'); renderShop(); await loadWallet(); }
 function renderShop(){
   const box=document.getElementById('shop-content'), tabs=document.getElementById('shop-tabs'); if(!box) return;
@@ -2882,15 +2886,15 @@ function shopPremiumBuyHtml(){
     <div class="vb-sec"><h4>Premium</h4><div class="vb-form">
       <button class="btn primary" id="shop-prem" ${wallet.ep>=PREMIUM_EP?'':'disabled'}>${on?'Um 30 Tage verlängern':'Premium aktivieren'} · ${PREMIUM_EP} EP</button>
       <label class="vb-check"><input type="checkbox" id="shop-auto" ${wallet.premium_auto?'checked':''}> Jeden Monat automatisch verlängern, solange genug EP da sind</label></div>
-      ${wallet.ep<PREMIUM_EP?'<div class="pers-hint">Zu wenig Einsatzpunkte. EP-Pakete findest du im Reiter „Einsatzpunkte“.</div>':''}</div>
-    <div class="vb-sec"><h4>Das bringt Premium</h4><div class="prem-grid">${PREMIUM_FEATURES.map(([a])=>`<div class="prem-feat"><b>${a}</b></div>`).join('')}</div>
-      <div class="vb-form"><button class="btn ghost" id="shop-go-prem">Alle Vorteile und Einstellungen (Menü → Premium)</button></div></div>`;
+      ${wallet.ep<PREMIUM_EP?`<div class="pers-hint">Zu wenig Einsatzpunkte.${SHOP_OPEN?' EP-Pakete findest du im Reiter „Einsatzpunkte“.':''}</div>`:''}</div>
+    ${SHOP_OPEN?`<div class="vb-sec"><h4>Das bringt Premium</h4><div class="prem-grid">${PREMIUM_FEATURES.map(([a])=>`<div class="prem-feat"><b>${a}</b></div>`).join('')}</div>
+      <div class="vb-form"><button class="btn ghost" id="shop-go-prem">Alle Vorteile und Einstellungen (Menü → Premium)</button></div></div>`:''}`;
 }
 function shopPremiumHtml(){
   const on=isPremium();
   return `${premiumStatusHtml()}
-    <div class="vb-sec"><div class="vb-form"><button class="btn ${on?'':'primary'}" id="shop-go-buy">${on?'Premium verlängern':'Premium kaufen'}</button>
-      <span class="pers-hint">${on?'Verlängern und automatische Verlängerung im Shop.':'Premium gibt es im Shop für 50 EP je 30 Tage.'} Die Grafiken findest du im Reiter „Grafiken“.</span></div></div>
+    <div class="vb-sec"><div class="vb-form"><button class="btn ${on?'':'primary'}" id="shop-go-buy">${on?'Premium verlängern':SHOP_OPEN?'Premium kaufen':'Premium aktivieren'}</button>
+      <span class="pers-hint">${on?`Verlängern und automatische Verlängerung ${SHOP_OPEN?'im Shop':'im Reiter „Aktivieren“'}.`:SHOP_OPEN?'Premium gibt es im Shop für 50 EP je 30 Tage.':'Premium kostet 50 EP je 30 Tage.'} Die Grafiken findest du im Reiter „Grafiken“.</span></div></div>
     <div class="vb-sec"><h4>Das bringt Premium</h4><div class="prem-grid">${PREMIUM_FEATURES.map(([a,b])=>`<div class="prem-feat"><b>${a}</b><span>${b}</span></div>`).join('')}</div></div>
     <div class="vb-sec"><h4>Discord-Rolle VIP</h4><div class="vb-form"><label class="fld sm" style="flex:1"><span>Discord-User-ID</span>
       <input id="shop-discord" class="vb-in" inputmode="numeric" maxlength="20" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value="${esc(wallet.discord_id||'')}" placeholder="z. B. 123456789012345678"></label>
@@ -2910,7 +2914,7 @@ function shopEpHtml(){
 }
 /* Kauf: Stripe Payment Link mit Spieler-ID (client_reference_id), Gutschrift kommt über den Webhook */
 function buyEp(id){
-  const p=EP_PACKAGES.find(x=>x.id===id); if(!p||!p.link) return;
+  const p=EP_PACKAGES.find(x=>x.id===id); if(!SHOP_OPEN||!p||!p.link) return;
   if(!epConsent){ toast('Bitte erst die Checkbox zum Widerrufsrecht bestätigen','warn'); return; }
   if(!wallet?.user_id){ toast('Kauf nur mit Anmeldung möglich','warn'); return; }
   saveGame(true);
@@ -4597,6 +4601,7 @@ function openShopQuick(){ const st = (svStationId&&stationById(svStationId)) || 
 document.getElementById('btn-menu').onclick=(e)=>{ e.stopPropagation(); document.getElementById('topbar-menu').classList.toggle('hidden'); };
 document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-wrap'); if(w && !w.contains(e.target)) closeMenu(); });
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop('shop'); };
+if(!SHOP_OPEN) document.getElementById('dd-shop').style.display='none';
 document.getElementById('dd-premium').onclick=()=>{ closeMenu(); openShop('premium'); };
 document.getElementById('dd-quests').onclick=()=>{ closeMenu(); openShop('quests'); };
 document.getElementById('dd-forschung').onclick=()=>{ closeMenu(); openShop('forschung'); };
