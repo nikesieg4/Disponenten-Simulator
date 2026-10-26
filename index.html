@@ -409,6 +409,8 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .ep-bonus{ font-size:12px; color:#86efac; } .ep-price{ font-size:18px; font-weight:700; margin-top:4px; }
 .ep-more{ font-size:12px; color:#fbbf24; min-height:16px; } .ep-months{ font-size:11px; color:var(--text-mut); margin-bottom:6px; }
 .quest.claimed{ opacity:.6; }
+.ep-card .btn{ margin-top:auto; }
+.ep-consent{ align-items:flex-start; margin-top:12px; font-size:13px; line-height:1.4; } .ep-consent input{ margin-top:3px; }
 .q-bar{ height:6px; border-radius:3px; background:var(--panel-3); overflow:hidden; margin:5px 0 2px; } .q-bar div{ height:100%; background:var(--ok); }
 .res-top{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .res-view{ height:min(54vh,460px); border:1px solid var(--border); border-radius:12px; background:radial-gradient(circle at 1px 1px,#ffffff10 1px,transparent 0) 0 0/22px 22px, var(--panel-2); overflow:hidden; touch-action:none; cursor:grab; }
@@ -1754,7 +1756,9 @@ function clearRoute(v){ if(v.routeLine){ routeLayer.removeLayer(v.routeLine); v.
 
 /* ---------- Shop & Premium: Daten (Server-Kopie erzeugt werkzeuge/preise_sql.cjs) ---------- */
 const PREMIUM_EP = 50;                // Premium kostet 50 Einsatzpunkte je 30 Tage
-const EP_PACKAGES = [{"id": "ep110", "ep": 110, "bonus": 10, "cents": 999, "tag": ""}, {"id": "ep220", "ep": 220, "bonus": 20, "cents": 1999, "tag": ""}, {"id": "ep340", "ep": 340, "bonus": 40, "cents": 2999, "tag": "Beliebt"}, {"id": "ep575", "ep": 575, "bonus": 75, "cents": 4999, "tag": ""}, {"id": "ep1100", "ep": 1100, "bonus": 100, "cents": 8499, "tag": "Bester Deal"}];
+// EP-Pakete: link = Stripe Payment Link (Testmodus bis zum Start). Gutschrift nur über den Webhook (supabase/functions/stripe-webhook),
+// der Betrag in Cent muss zu den Preisen in der Edge Function passen.
+const EP_PACKAGES = [{"id": "ep110", "ep": 110, "bonus": 10, "cents": 999, "tag": "", "link": "https://buy.stripe.com/test_14A00i0Znd0tefZ91SbV600"}, {"id": "ep220", "ep": 220, "bonus": 20, "cents": 1999, "tag": "", "link": "https://buy.stripe.com/test_eVq28qcI5d0t4Fpce4bV601"}, {"id": "ep340", "ep": 340, "bonus": 40, "cents": 2999, "tag": "Beliebt", "link": "https://buy.stripe.com/test_4gM28q6jHd0t0p991SbV602"}, {"id": "ep575", "ep": 575, "bonus": 75, "cents": 4999, "tag": "", "link": "https://buy.stripe.com/test_cNi4gy8rP1hL0p96TKbV603"}, {"id": "ep1100", "ep": 1100, "bonus": 100, "cents": 8499, "tag": "Bester Deal", "link": "https://buy.stripe.com/test_3cI8wOgYl5y1c7Ra5WbV604"}];
 const QUESTS = [{"id": "d_einsaetze", "period": "d", "premium": false, "counter": "missions", "goal": 10, "money": 50000, "rp": 5, "text": "Erledige 10 Einsätze"}, {"id": "d_transporte", "period": "d", "premium": false, "counter": "transports", "goal": 5, "money": 40000, "rp": 5, "text": "Bringe 5 Patienten ins Krankenhaus"}, {"id": "d_rd", "period": "d", "premium": false, "counter": "rd", "goal": 3, "money": 30000, "rp": 3, "text": "Erledige 3 Rettungsdienst-Einsätze"}, {"id": "d_einsaetze_p", "period": "d", "premium": true, "counter": "missions", "goal": 25, "money": 150000, "rp": 15, "text": "Erledige 25 Einsätze"}, {"id": "d_verlegung_p", "period": "d", "premium": true, "counter": "iv", "goal": 2, "money": 100000, "rp": 10, "text": "Erledige 2 Intensivverlegungen"}, {"id": "w_einsaetze", "period": "w", "premium": false, "counter": "missions", "goal": 75, "money": 300000, "rp": 30, "text": "Erledige 75 Einsätze"}, {"id": "w_transporte", "period": "w", "premium": false, "counter": "transports", "goal": 40, "money": 250000, "rp": 25, "text": "Bringe 40 Patienten ins Krankenhaus"}, {"id": "w_einsaetze_p", "period": "w", "premium": true, "counter": "missions", "goal": 200, "money": 1000000, "rp": 80, "text": "Erledige 200 Einsätze"}, {"id": "w_brand_p", "period": "w", "premium": true, "counter": "fire_big", "goal": 10, "money": 600000, "rp": 60, "text": "Erledige 10 Einsätze ab BRAND 3"}];
 const RESEARCH = [{"id": "lohn_fw", "branch": "einsatz", "name": "Einsatzhonorar", "desc": "Feuerwehr-Einsätze bringen mehr Geld", "per": 5, "max": 5, "premiumFrom": 4, "rp": 10, "min": 60, "req": null, "x": 0, "y": 0}, {"id": "ausrueck", "branch": "einsatz", "name": "Alarmübungen", "desc": "Kürzere Ausrückezeit", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "lohn_fw", "x": 0, "y": 1}, {"id": "fahrt", "branch": "einsatz", "name": "Fahrsicherheitstraining", "desc": "Kürzere Fahrzeiten", "per": 4, "max": 5, "premiumFrom": 4, "rp": 20, "min": 180, "req": "ausrueck", "x": 0, "y": 2}, {"id": "loesch", "branch": "einsatz", "name": "Taktikschulung", "desc": "Feuerwehr-Einsätze dauern kürzer", "per": 5, "max": 3, "premiumFrom": null, "rp": 30, "min": 360, "req": "fahrt", "x": 0, "y": 3}, {"id": "lohn_rd", "branch": "rd", "name": "RD-Honorar", "desc": "Rettungsdienst-Einsätze bringen mehr Geld", "per": 5, "max": 5, "premiumFrom": 4, "rp": 10, "min": 60, "req": null, "x": 1, "y": 0}, {"id": "transport", "branch": "rd", "name": "Transportabrechnung", "desc": "Höhere Transportvergütung", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "lohn_rd", "x": 1, "y": 1}, {"id": "behandlung", "branch": "rd", "name": "Notfallsanitäter", "desc": "Kürzere Versorgung vor Ort", "per": 10, "max": 3, "premiumFrom": null, "rp": 20, "min": 180, "req": "transport", "x": 1, "y": 2}, {"id": "stabil", "branch": "rd", "name": "Erweiterte Maßnahmen", "desc": "Patienten verschlechtern sich langsamer", "per": 20, "max": 3, "premiumFrom": null, "rp": 30, "min": 360, "req": "behandlung", "x": 1, "y": 3}, {"id": "erw_kosten", "branch": "wirtschaft", "name": "Einkauf", "desc": "Günstigere Erweiterungen", "per": 5, "max": 3, "premiumFrom": null, "rp": 10, "min": 60, "req": null, "x": 2, "y": 0}, {"id": "erw_bau", "branch": "wirtschaft", "name": "Baukoordination", "desc": "Erweiterungen sind schneller fertig", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "erw_kosten", "x": 2, "y": 1}, {"id": "personal_kosten", "branch": "wirtschaft", "name": "Personalverwaltung", "desc": "Günstigeres Anwerben", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "erw_kosten", "x": 3, "y": 1}, {"id": "zinsen", "branch": "wirtschaft", "name": "Finanzplanung", "desc": "Weniger Dispo-Zinsen", "per": 20, "max": 2, "premiumFrom": null, "rp": 25, "min": 240, "req": "erw_bau", "x": 2, "y": 2}, {"id": "lehrgang_dauer", "branch": "personal", "name": "Ausbildungsplanung", "desc": "Lehrgänge dauern kürzer", "per": 10, "max": 3, "premiumFrom": null, "rp": 10, "min": 60, "req": null, "x": 4, "y": 0}, {"id": "lehrgang_kosten", "branch": "personal", "name": "Fördermittel", "desc": "Günstigere Lehrgänge", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "lehrgang_dauer", "x": 4, "y": 1}, {"id": "anwerben", "branch": "personal", "name": "Nachwuchswerbung", "desc": "Personal wird schneller eingestellt", "per": 25, "max": 2, "premiumFrom": null, "rp": 20, "min": 180, "req": "lehrgang_kosten", "x": 4, "y": 2}, {"id": "manv", "branch": "grosslage", "name": "MANV-Konzept", "desc": "Schnellere Versorgung ab 4 Patienten", "per": 10, "max": 3, "premiumFrom": 0, "rp": 25, "min": 240, "req": null, "x": 5, "y": 0}, {"id": "grosslage", "branch": "grosslage", "name": "Führungsstab", "desc": "Große Einsätze (ab BRAND 4 / TH 3) dauern kürzer", "per": 5, "max": 3, "premiumFrom": 0, "rp": 35, "min": 480, "req": "manv", "x": 5, "y": 1}, {"id": "verlegung", "branch": "grosslage", "name": "Verlegungsdienst", "desc": "Intensivverlegungen bringen mehr Geld", "per": 20, "max": 2, "premiumFrom": 0, "rp": 30, "min": 360, "req": "manv", "x": 6, "y": 1}, {"id": "notruf", "branch": "leitstelle", "name": "Notrufabfrage", "desc": "Mehr offene Einsätze gleichzeitig (+1 je Stufe)", "per": 1, "max": 5, "premiumFrom": 0, "rp": 20, "min": 180, "req": null, "x": 7, "y": 0}, {"id": "takt", "branch": "leitstelle", "name": "Einsatzaufkommen", "desc": "Einsätze kommen häufiger", "per": 5, "max": 3, "premiumFrom": 0, "rp": 30, "min": 360, "req": "notruf", "x": 7, "y": 1}, {"id": "telemedizin", "branch": "leitstelle", "name": "Telemedizin", "desc": "Telenotarzt-Behandlung geht schneller", "per": 10, "max": 2, "premiumFrom": 0, "rp": 30, "min": 360, "req": "notruf", "x": 8, "y": 1}];
 /* ------------------------- LOOKUPS ------------------------- */
@@ -2794,7 +2798,7 @@ function useExtVoucher(o,key){
 /* ---------- Shop & Premium ----------
    Einsatzpunkte (EP), Forschungspunkte (RP), Premium, Forschungen und abgeholte Quests liegen auf dem Server (wallet).
    Premium kostet 50 EP je 30 Tage. EP-Pakete werden später über Stripe verkauft (hier noch ohne Kauf-Link). */
-let wallet=null, walletImgs={}, shopTab='premium', resSel=null, resView={ x:40, y:30, k:1 }, gfxSel={ v:null, b:'fire' };
+let wallet=null, walletImgs={}, shopTab='premium', epConsent=false, resSel=null, resView={ x:40, y:30, k:1 }, gfxSel={ v:null, b:'fire' };
 const missionLevel=t=>parseInt(String(t?.code||'').replace(/\D+/g,''))||0;
 function isPremium(){ return !!(wallet && wallet.premium_until && new Date(wallet.premium_until).getTime()>Date.now()); }
 const resNode=id=>RESEARCH.find(r=>r.id===id);
@@ -2869,14 +2873,32 @@ function shopPremiumHtml(){
       <div class="pers-hint">Die ID findest du in Discord unter Einstellungen → Erweitert → Entwicklermodus an, dann Rechtsklick auf deinen Namen → „User-ID kopieren“. Solange Premium aktiv ist, bekommst du die Rolle VIP.</div></div>`;
 }
 function shopEpHtml(){
-  const base=EP_PACKAGES[0].ep/EP_PACKAGES[0].cents;
-  return `<div class="pers-hint">Einsatzpunkte (EP) sind die Premium-Währung. 50 EP = 30 Tage Premium.</div>
+  const base=EP_PACKAGES[0].ep/EP_PACKAGES[0].cents, can=epConsent && !!wallet?.user_id;
+  return `<div class="pers-hint">Einsatzpunkte (EP) sind die Premium-Währung. 50 EP = 30 Tage Premium. Alle Preise inklusive MwSt.</div>
     <div class="ep-grid">${EP_PACKAGES.map(p=>{ const more=Math.round((p.ep/p.cents/base-1)*100);
       return `<div class="ep-card${p.tag?' hl':''}">${p.tag?`<span class="ep-tag">${p.tag}</span>`:''}<div class="ep-amt">${fmt(p.ep)} <small>EP</small></div>
         <div class="ep-bonus">${fmt(p.ep-p.bonus)} + ${fmt(p.bonus)} gratis</div><div class="ep-price">${(p.cents/100).toFixed(2).replace('.',',')} €</div>
         <div class="ep-more">${more>0?`+${more} % mehr EP je Euro`:'&nbsp;'}</div><div class="ep-months">≈ ${Math.floor(p.ep/PREMIUM_EP)} Monate Premium</div>
-        <button class="btn ${p.tag?'primary':''}" disabled title="Zahlung folgt">Bald verfügbar</button></div>`; }).join('')}</div>
-    <div class="pers-hint">Der Kauf ist noch nicht freigeschaltet.</div>`;
+        <button class="btn ${p.tag?'primary':''}" data-epbuy="${p.id}" ${can&&p.link?'':'disabled'}>${p.link?'Kaufen':'Bald verfügbar'}</button></div>`; }).join('')}</div>
+    <label class="vb-check ep-consent"><input type="checkbox" id="ep-consent" ${epConsent?'checked':''}> Ich verlange ausdrücklich, dass die Einsatzpunkte sofort nach der Zahlung gutgeschrieben werden, und mir ist bekannt, dass ich damit mein Widerrufsrecht verliere.</label>
+    <div class="pers-hint">Bezahlt wird sicher über Stripe. Unter 18 nur mit Zustimmung der Eltern. Die EP sind wenige Sekunden nach der Zahlung da.</div>`;
+}
+/* Kauf: Stripe Payment Link mit Spieler-ID (client_reference_id), Gutschrift kommt über den Webhook */
+function buyEp(id){
+  const p=EP_PACKAGES.find(x=>x.id===id); if(!p||!p.link) return;
+  if(!epConsent){ toast('Bitte erst die Checkbox zum Widerrufsrecht bestätigen','warn'); return; }
+  if(!wallet?.user_id){ toast('Kauf nur mit Anmeldung möglich','warn'); return; }
+  saveGame(true);
+  location.href=`${p.link}?client_reference_id=${encodeURIComponent(wallet.user_id)}`;
+}
+/* Rückkehr von Stripe (?kauf=ok): Hinweis anzeigen und auf die Gutschrift warten */
+async function checkPurchaseReturn(){
+  const u=new URL(location.href); if(u.searchParams.get('kauf')!=='ok') return;
+  u.searchParams.delete('kauf'); history.replaceState(null,'',u.pathname+(u.search||'')+u.hash);
+  const before=wallet?.ep??null; toast('Danke für deinen Kauf! Die Einsatzpunkte werden gutgeschrieben …','ok');
+  for(let i=0;i<10;i++){ await new Promise(r=>setTimeout(r,3000)); await loadWallet();
+    if(wallet && before!=null && wallet.ep>before){ toast(`+${fmt(wallet.ep-before)} EP gutgeschrieben`,'ok'); shopTab='premium'; openShop(); return; } }
+  toast('Die Gutschrift dauert länger als üblich. Sie erscheint automatisch, sobald die Zahlung bestätigt ist.','warn');
 }
 function shopQuestsHtml(){
   const sect=(period,title)=>`<div class="vb-sec"><h4>${title}</h4>${QUESTS.filter(x=>x.period===period).map(x=>{
@@ -2967,6 +2989,8 @@ function shopBind(){
   const q=id=>document.getElementById(id), on=(id,fn)=>{ const e=q(id); if(e) e.onclick=fn; };
   on('shop-prem',async()=>{ if(confirm(`Premium für 30 Tage aktivieren? Es werden ${PREMIUM_EP} EP abgezogen.`) && await shopCall('premium_activate',{},'Premium aktiviert')) loadWallet(); });
   const au=q('shop-auto'); if(au) au.onchange=async()=>{ if(await shopCall('premium_auto',{p_on:au.checked},au.checked?'Automatische Verlängerung an':'Automatische Verlängerung aus')) loadWallet(); };
+  const ec=q('ep-consent'); if(ec) ec.onchange=()=>{ epConsent=ec.checked; renderShop(); };
+  document.querySelectorAll('[data-epbuy]').forEach(b=>b.onclick=()=>buyEp(b.dataset.epbuy));
   on('shop-discord-save',async()=>{ if(await shopCall('wallet_discord',{p_id:q('shop-discord').value},'Discord-ID gespeichert')) loadWallet(); });
   document.querySelectorAll('[data-qclaim]').forEach(b=>b.onclick=()=>claimQuest(b.dataset.qclaim));
   resBind();
@@ -4652,7 +4676,7 @@ async function startGame(){
     setInterval(liveMissionModal,500);
     setInterval(allyPoll,10000); setTimeout(allyPoll,2000);
     setInterval(smSync,10000); setTimeout(smSync,3000);
-    setInterval(loadWallet,60000); setTimeout(loadWallet,1500);
+    setInterval(loadWallet,60000); setTimeout(async()=>{ await loadWallet(); checkPurchaseReturn(); },1500);
     gameStarted=true;
   } else { rebuildEverything(); }
   const off=pendingOfflineMs; pendingOfflineMs=0; lastTick=Date.now();

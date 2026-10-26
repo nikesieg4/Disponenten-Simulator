@@ -1650,7 +1650,7 @@ begin
   if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
   v_prem := _premium(v_uid);
   select * into w from app_wallet where user_id=v_uid;
-  return json_build_object('ok',true,'ep',w.ep,'rp',w.rp,'premium',v_prem,'premium_until',w.premium_until,'premium_auto',w.premium_auto,'discord_id',w.discord_id,
+  return json_build_object('ok',true,'user_id',v_uid,'ep',w.ep,'rp',w.rp,'premium',v_prem,'premium_until',w.premium_until,'premium_auto',w.premium_auto,'discord_id',w.discord_id,
     'day',_period_key('d'),'week',_period_key('w'),
     'research',coalesce((select json_agg(json_build_object('node',node,'level',level,'started_at',started_at,'done_at',done_at)) from app_research where user_id=v_uid),'[]'::json),
     'claimed',coalesce((select json_agg(quest) from app_quest_claims c join app_quests q on q.id=c.quest where c.user_id=v_uid and c.period_key=_period_key(q.period)),'[]'::json),
@@ -1784,12 +1784,34 @@ begin
     order by w.premium_until desc nulls last) from app_wallet w join app_users u on u.id=w.user_id where w.premium_until is not null or w.ep > 0 or w.discord_id is not null),'[]'::json));
 end; $$;
 
+/* ---------- Stripe: EP-Käufe ----------
+   Die Edge Function supabase/functions/stripe-webhook prüft die Stripe-Signatur und ruft ep_credit_purchase mit dem
+   Service-Role-Key auf. Jede Checkout-Session wird nur einmal gutgeschrieben. Aus dem Browser (anon) nicht aufrufbar. */
+create table if not exists app_payments ( session_id text primary key, user_id uuid references app_users(id) on delete set null,
+  ep int not null, cents int not null, at timestamptz not null default now() );
+alter table app_payments enable row level security;
+revoke all on app_payments from anon, authenticated;
+create or replace function ep_credit_purchase(p_session text, p_user uuid, p_ep int, p_cents int)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+begin
+  if coalesce(p_session,'') = '' or coalesce(p_ep,0) <= 0 or p_ep > 100000 then return json_build_object('error','Ungültiger Kauf'); end if;
+  if not exists(select 1 from app_users where id=p_user) then return json_build_object('error','Spieler nicht gefunden'); end if;
+  insert into app_payments(session_id, user_id, ep, cents) values (p_session, p_user, p_ep, coalesce(p_cents,0)) on conflict do nothing;
+  if not found then return json_build_object('ok',true,'duplicate',true); end if;
+  insert into app_wallet(user_id) values (p_user) on conflict do nothing;
+  update app_wallet set ep=ep+p_ep, updated_at=now() where user_id=p_user;
+  insert into app_ep_ledger(user_id, amount, kind, note) values (p_user, p_ep, 'kauf', 'Stripe '||left(p_session,80)||' · '||round(coalesce(p_cents,0)/100.0,2)||' €');
+  return json_build_object('ok',true,'ep',(select ep from app_wallet where user_id=p_user));
+end; $$;
+
 grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
 revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]),
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
   _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
   _ally_banned(uuid,uuid), _sm_tick(uuid), _ally_muted(uuid,uuid), _ally_academies(uuid),
-  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text), _premium(uuid), _period_key(text), _quest_track(uuid,jsonb,numeric) from public, anon, authenticated;
+  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text), _premium(uuid), _period_key(text), _quest_track(uuid,jsonb,numeric),
+  ep_credit_purchase(text,uuid,int,int) from public, anon, authenticated;
+grant execute on function ep_credit_purchase(text,uuid,int,int) to service_role;   -- nur die Edge Function (Service-Role-Key)
 
 notify pgrst, 'reload schema';
