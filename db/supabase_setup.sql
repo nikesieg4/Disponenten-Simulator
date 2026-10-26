@@ -1349,7 +1349,7 @@ returns json language plpgsql security definer set search_path=public, extension
 begin
   if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
   return json_build_object('ok',true,'codes',coalesce((select json_agg(json_build_object('code',c.code,'rewards',c.rewards,'note',c.note,'expires_at',c.expires_at,
-      'max_uses',c.max_uses,'new_days',c.new_days,'active',c.active,'created_at',c.created_at,
+      'max_uses',c.max_uses,'new_days',c.new_days,'active',c.active,'premium_only',c.premium_only,'created_at',c.created_at,
       'uses',(select count(*) from app_code_redemptions r where r.code=c.code)) order by c.created_at desc) from app_codes c),'[]'::json));
 end; $$;
 -- Anlegen oder ändern: p {code, rewards, note, expires_at, max_uses, new_days, active}
@@ -1360,11 +1360,12 @@ begin
   if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
   if v_code !~ '^[A-Z0-9_-]{3,32}$' then return json_build_object('error','Code: 3–32 Zeichen, nur A–Z, 0–9, - und _'); end if;
   begin v_rw := _code_rewards(p->'rewards'); exception when others then return json_build_object('error',sqlerrm); end;
-  insert into app_codes(code, rewards, note, expires_at, max_uses, new_days, active)
+  insert into app_codes(code, rewards, note, expires_at, max_uses, new_days, active, premium_only)
     values (v_code, v_rw, left(coalesce(p->>'note',''),200), nullif(p->>'expires_at','')::timestamptz,
-      nullif(greatest(0,coalesce((p->>'max_uses')::int,0)),0), nullif(greatest(0,coalesce((p->>'new_days')::int,0)),0), coalesce((p->>'active')::boolean,true))
+      nullif(greatest(0,coalesce((p->>'max_uses')::int,0)),0), nullif(greatest(0,coalesce((p->>'new_days')::int,0)),0), coalesce((p->>'active')::boolean,true),
+      coalesce((p->>'premium_only')::boolean,false))
     on conflict (code) do update set rewards=excluded.rewards, note=excluded.note, expires_at=excluded.expires_at, max_uses=excluded.max_uses,
-      new_days=excluded.new_days, active=excluded.active, updated_at=now();
+      new_days=excluded.new_days, active=excluded.active, premium_only=excluded.premium_only, updated_at=now();
   return json_build_object('ok',true,'code',v_code);
 end; $$;
 create or replace function admin_code_active(p_token uuid, p_code text, p_active boolean)
@@ -1400,6 +1401,7 @@ begin
     return json_build_object('error','Zu viele ungültige Codes. Bitte 10 Minuten warten.'); end if;
   select * into c from app_codes where code=upper(btrim(coalesce(p_code,''))) for update;
   if c.code is null or not c.active then insert into app_code_attempts(user_id) values (v_uid); return json_build_object('error','Code ungültig'); end if;
+  if c.premium_only and not _premium(v_uid) then return json_build_object('error','Dieser Code ist nur für Premium-Spieler'); end if;
   if c.expires_at is not null and c.expires_at < now() then return json_build_object('error','Code ist abgelaufen'); end if;
   if exists(select 1 from app_code_redemptions where code=c.code and user_id=v_uid) then return json_build_object('error','Code bereits eingelöst'); end if;
   if c.max_uses is not null and (select count(*) from app_code_redemptions where code=c.code) >= c.max_uses then return json_build_object('error','Code ist bereits vergeben'); end if;
@@ -1519,12 +1521,226 @@ begin
   return json_build_object('ok',true,'ready_at',coalesce(v_start,now())+interval '1 day');
 end; $$;
 
+/* ---------- Shop & Premium ----------
+   Einsatzpunkte (EP) und Forschungspunkte (RP) liegen nur auf dem Server (app_wallet). EP kommen später per Stripe
+   (Gutschrift über admin_ep_grant bzw. eine Edge Function mit Service-Role-Key, nie aus dem Browser).
+   Premium kostet 50 EP je 30 Tage und verlängert sich automatisch, solange genug EP da sind. */
+create table if not exists app_wallet (
+  user_id uuid primary key references app_users(id) on delete cascade, ep int not null default 0, rp int not null default 0,
+  premium_until timestamptz, premium_auto boolean not null default true, discord_id text, updated_at timestamptz not null default now() );
+create table if not exists app_ep_ledger ( id bigserial primary key, user_id uuid not null references app_users(id) on delete cascade,
+  amount int not null, kind text not null, note text not null default '', at timestamptz not null default now() );
+create table if not exists app_research_nodes ( id text primary key, max_level int not null, premium_from int, rp int not null, minutes int not null, req text );
+create table if not exists app_research ( user_id uuid not null references app_users(id) on delete cascade, node text not null,
+  level int not null default 0, started_at timestamptz, done_at timestamptz, primary key (user_id, node) );
+create table if not exists app_quests ( id text primary key, period text not null, premium boolean not null, money int not null, rp int not null );
+create table if not exists app_quest_claims ( user_id uuid not null references app_users(id) on delete cascade, quest text not null, period_key text not null,
+  at timestamptz not null default now(), primary key (user_id, quest, period_key) );
+create table if not exists app_user_images ( user_id uuid not null references app_users(id) on delete cascade, slot text not null, data text not null,
+  updated_at timestamptz not null default now(), primary key (user_id, slot) );
+alter table app_codes add column if not exists premium_only boolean not null default false;
+alter table app_wallet enable row level security; alter table app_ep_ledger enable row level security; alter table app_research_nodes enable row level security;
+alter table app_research enable row level security; alter table app_quests enable row level security; alter table app_quest_claims enable row level security;
+alter table app_user_images enable row level security;
+revoke all on app_wallet, app_ep_ledger, app_research_nodes, app_research, app_quests, app_quest_claims, app_user_images from anon, authenticated;
+
+-- SHOPDATEN:BEGIN (automatisch erzeugt mit: node werkzeuge/preise_sql.cjs, nicht von Hand ändern)
+delete from app_research_nodes;
+insert into app_research_nodes(id, max_level, premium_from, rp, minutes, req) values
+  ('lohn_fw',5,4,10,60,null),
+  ('ausrueck',3,null,15,120,'lohn_fw'),
+  ('fahrt',5,4,20,180,'ausrueck'),
+  ('loesch',3,null,30,360,'fahrt'),
+  ('lohn_rd',5,4,10,60,null),
+  ('transport',3,null,15,120,'lohn_rd'),
+  ('behandlung',3,null,20,180,'transport'),
+  ('stabil',3,null,30,360,'behandlung'),
+  ('erw_kosten',3,null,10,60,null),
+  ('erw_bau',3,null,15,120,'erw_kosten'),
+  ('personal_kosten',3,null,15,120,'erw_kosten'),
+  ('zinsen',2,null,25,240,'erw_bau'),
+  ('lehrgang_dauer',3,null,10,60,null),
+  ('lehrgang_kosten',3,null,15,120,'lehrgang_dauer'),
+  ('anwerben',2,null,20,180,'lehrgang_kosten'),
+  ('manv',3,0,25,240,null),
+  ('grosslage',3,0,35,480,'manv'),
+  ('verlegung',2,0,30,360,'manv'),
+  ('notruf',5,0,20,180,null),
+  ('takt',3,0,30,360,'notruf'),
+  ('telemedizin',2,0,30,360,'notruf');
+delete from app_quests where id not in (select quest from app_quest_claims);
+insert into app_quests(id, period, premium, money, rp) values
+  ('d_einsaetze','d',false,50000,5),
+  ('d_transporte','d',false,40000,5),
+  ('d_rd','d',false,30000,3),
+  ('d_einsaetze_p','d',true,150000,15),
+  ('d_verlegung_p','d',true,100000,10),
+  ('w_einsaetze','w',false,300000,30),
+  ('w_transporte','w',false,250000,25),
+  ('w_einsaetze_p','w',true,1000000,80),
+  ('w_brand_p','w',true,600000,60)
+on conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp;
+-- SHOPDATEN:END
+
+-- Premium aktiv? Verlängert automatisch (50 EP), wenn abgelaufen und Auto-Verlängerung an
+create or replace function _premium(p_uid uuid) returns boolean language plpgsql security definer set search_path=public, extensions as $$
+declare w app_wallet;
+begin
+  insert into app_wallet(user_id) values (p_uid) on conflict do nothing;
+  select * into w from app_wallet where user_id=p_uid for update;
+  if w.premium_until is not null and w.premium_until > now() then return true; end if;
+  if w.premium_until is not null and w.premium_auto and w.ep >= 50 then
+    update app_wallet set ep=ep-50, premium_until=now()+interval '30 days', updated_at=now() where user_id=p_uid;
+    insert into app_ep_ledger(user_id, amount, kind, note) values (p_uid, -50, 'premium', 'Premium automatisch verlängert');
+    return true;
+  end if;
+  return false;
+end; $$;
+create or replace function _period_key(p text) returns text language sql stable as $$
+  select case when p='d' then to_char(now() at time zone 'Europe/Berlin','YYYY-MM-DD') else to_char(now() at time zone 'Europe/Berlin','IYYY-"W"IW') end; $$;
+
+create or replace function wallet(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); v_prem boolean; w app_wallet;
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  v_prem := _premium(v_uid);
+  select * into w from app_wallet where user_id=v_uid;
+  return json_build_object('ok',true,'ep',w.ep,'rp',w.rp,'premium',v_prem,'premium_until',w.premium_until,'premium_auto',w.premium_auto,'discord_id',w.discord_id,
+    'day',_period_key('d'),'week',_period_key('w'),
+    'research',coalesce((select json_agg(json_build_object('node',node,'level',level,'started_at',started_at,'done_at',done_at)) from app_research where user_id=v_uid),'[]'::json),
+    'claimed',coalesce((select json_agg(quest) from app_quest_claims c join app_quests q on q.id=c.quest where c.user_id=v_uid and c.period_key=_period_key(q.period)),'[]'::json),
+    'images',coalesce((select json_agg(slot) from app_user_images where user_id=v_uid),'[]'::json));
+end; $$;
+create or replace function premium_activate(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); w app_wallet;
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
+  select * into w from app_wallet where user_id=v_uid for update;
+  if w.ep < 50 then return json_build_object('error','Nicht genug Einsatzpunkte (50 EP nötig)'); end if;
+  update app_wallet set ep=ep-50, premium_until=greatest(now(),coalesce(premium_until,now()))+interval '30 days', updated_at=now() where user_id=v_uid;
+  insert into app_ep_ledger(user_id, amount, kind, note) values (v_uid, -50, 'premium', 'Premium 30 Tage');
+  return json_build_object('ok',true);
+end; $$;
+create or replace function premium_auto(p_token uuid, p_on boolean)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token);
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
+  update app_wallet set premium_auto=coalesce(p_on,true), updated_at=now() where user_id=v_uid;
+  return json_build_object('ok',true);
+end; $$;
+-- Discord-User-ID (Snowflake) für die VIP-Rolle; der Bot kommt später
+create or replace function wallet_discord(p_token uuid, p_id text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token);
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  p_id := nullif(btrim(coalesce(p_id,'')),'');
+  if p_id is not null and p_id !~ '^[0-9]{17,20}$' then return json_build_object('error','Ungültige Discord-User-ID (17–20 Ziffern)'); end if;
+  insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
+  update app_wallet set discord_id=p_id, updated_at=now() where user_id=v_uid;
+  return json_build_object('ok',true);
+end; $$;
+
+-- Forschung starten: eine gleichzeitig, Kosten rp×Stufe, Dauer minutes×Stufe
+create or replace function research_start(p_token uuid, p_node text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); n app_research_nodes; v_lvl int; v_cost int; v_prem boolean; v_done timestamptz;
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  select * into n from app_research_nodes where id=p_node;
+  if n.id is null then return json_build_object('error','Unbekannte Forschung'); end if;
+  v_prem := _premium(v_uid);
+  if exists(select 1 from app_research where user_id=v_uid and done_at > now()) then return json_build_object('error','Es läuft schon eine Forschung'); end if;
+  select coalesce(level,0) into v_lvl from app_research where user_id=v_uid and node=p_node; v_lvl := coalesce(v_lvl,0);
+  if v_lvl >= n.max_level then return json_build_object('error','Höchste Stufe erreicht'); end if;
+  if n.premium_from is not null and v_lvl+1 >= greatest(1,n.premium_from) and not v_prem then return json_build_object('error','Diese Stufe braucht Premium'); end if;
+  if n.req is not null and coalesce((select level from app_research where user_id=v_uid and node=n.req and (done_at is null or done_at <= now())),0) < 1 then
+    return json_build_object('error','Voraussetzung fehlt'); end if;
+  v_cost := n.rp*(v_lvl+1);
+  insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
+  update app_wallet set rp=rp-v_cost, updated_at=now() where user_id=v_uid and rp >= v_cost;
+  if not found then return json_build_object('error','Nicht genug Forschungspunkte ('||v_cost||' RP nötig)'); end if;
+  v_done := now() + make_interval(mins=>n.minutes*(v_lvl+1));
+  insert into app_research(user_id, node, level, started_at, done_at) values (v_uid, p_node, v_lvl+1, now(), v_done)
+    on conflict (user_id,node) do update set level=excluded.level, started_at=excluded.started_at, done_at=excluded.done_at;
+  return json_build_object('ok',true,'level',v_lvl+1,'done_at',v_done,'cost',v_cost);
+end; $$;
+
+-- Quest abholen: einmal je Tag/Woche (Berliner Zeit); Geld wird dem Anti-Cheat als erlaubter Zuwachs gutgeschrieben
+create or replace function quest_claim(p_token uuid, p_quest text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token); q app_quests;
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  select * into q from app_quests where id=p_quest;
+  if q.id is null then return json_build_object('error','Unbekannte Quest'); end if;
+  if q.premium and not _premium(v_uid) then return json_build_object('error','Diese Quest braucht Premium'); end if;
+  insert into app_quest_claims(user_id, quest, period_key) values (v_uid, q.id, _period_key(q.period)) on conflict do nothing;
+  if not found then return json_build_object('error','Schon abgeholt'); end if;
+  insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
+  update app_wallet set rp=rp+q.rp, updated_at=now() where user_id=v_uid;
+  update app_saves set econ_adjust=coalesce(econ_adjust,0)+q.money where user_id=v_uid;
+  return json_build_object('ok',true,'money',q.money,'rp',q.rp);
+end; $$;
+
+-- Eigene Grafiken (Premium): Slots v:<fahrzeugtyp>:<l|r><0|1> (Richtung, Blaulicht) bzw. b:<gebäude>:<normal|bau|verband>
+create or replace function img_save(p_token uuid, p_slot text, p_data text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid := _uid(p_token);
+begin
+  if v_uid is null then return json_build_object('error','Sitzung ungültig'); end if;
+  if not _premium(v_uid) then return json_build_object('error','Eigene Grafiken brauchen Premium'); end if;
+  if coalesce(p_slot,'') !~ '^(v:[a-z0-9_]{1,30}:[lr][01]|b:[a-z_]{1,20}:(normal|bau|verband))$' then return json_build_object('error','Ungültiger Platz'); end if;
+  if coalesce(p_data,'') !~ '^data:image/(png|webp);base64,[A-Za-z0-9+/=]+$' then return json_build_object('error','Nur PNG oder WebP'); end if;
+  if length(p_data) > 280000 then return json_build_object('error','Bild zu groß (max. 200 KB)'); end if;
+  if (select count(*) from app_user_images where user_id=v_uid and slot<>p_slot) >= 80 then return json_build_object('error','Höchstens 80 Grafiken'); end if;
+  insert into app_user_images(user_id, slot, data) values (v_uid, p_slot, p_data)
+    on conflict (user_id,slot) do update set data=excluded.data, updated_at=now();
+  return json_build_object('ok',true);
+end; $$;
+create or replace function img_list(p_token uuid)
+returns json language sql security definer set search_path=public, extensions as $$
+  select coalesce(json_object_agg(slot, data),'{}'::json) from app_user_images where user_id=_uid(p_token); $$;
+create or replace function img_delete(p_token uuid, p_slot text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+begin
+  delete from app_user_images where user_id=_uid(p_token) and slot=p_slot;
+  return json_build_object('ok',true);
+end; $$;
+
+-- Admin: EP gutschreiben (bis Stripe angebunden ist) und Premium-Spieler mit Discord-ID für die VIP-Rolle
+create or replace function admin_ep_grant(p_token uuid, p_username text, p_amount int, p_note text)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+declare v_uid uuid;
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  select id into v_uid from app_users where lower(username)=lower(btrim(coalesce(p_username,'')));
+  if v_uid is null then return json_build_object('error','Spieler nicht gefunden'); end if;
+  if coalesce(p_amount,0)=0 or abs(p_amount) > 100000 then return json_build_object('error','Betrag: ±1 bis 100.000 EP'); end if;
+  insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
+  update app_wallet set ep=greatest(0,ep+p_amount), updated_at=now() where user_id=v_uid;
+  insert into app_ep_ledger(user_id, amount, kind, note) values (v_uid, p_amount, 'admin', left(coalesce(p_note,''),200));
+  return json_build_object('ok',true,'ep',(select ep from app_wallet where user_id=v_uid));
+end; $$;
+create or replace function admin_premium_list(p_token uuid)
+returns json language plpgsql security definer set search_path=public, extensions as $$
+begin
+  if not _admin_ok(p_token) then return json_build_object('error','Nicht angemeldet'); end if;
+  return json_build_object('ok',true,'list',coalesce((select json_agg(json_build_object('name',u.username,'ep',w.ep,'premium_until',w.premium_until,'auto',w.premium_auto,'discord_id',w.discord_id)
+    order by w.premium_until desc nulls last) from app_wallet w join app_users u on u.id=w.user_id where w.premium_until is not null or w.ep > 0 or w.discord_id is not null),'[]'::json));
+end; $$;
+
 grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
 revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash(uuid), _client_ip(), _login_locked(text[]), _login_fail(text[]),
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
   _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
   _ally_banned(uuid,uuid), _sm_tick(uuid), _ally_muted(uuid,uuid), _ally_academies(uuid),
-  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text) from public, anon, authenticated;
+  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text), _premium(uuid), _period_key(text) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
