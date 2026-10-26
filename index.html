@@ -659,6 +659,9 @@ a.dd-item{ text-decoration:none; color:var(--text); }
       <button class="icon-btn" id="btn-menu" title="Menü">☰</button>
       <div class="dropdown-menu hidden" id="topbar-menu">
         <button class="dd-item" id="dd-shop">Shop</button>
+        <button class="dd-item" id="dd-premium">Premium</button>
+        <button class="dd-item" id="dd-quests">Quests</button>
+        <button class="dd-item" id="dd-forschung">Forschung</button>
         <button class="dd-item" id="dd-bank">Bank</button>
         <button class="dd-item" id="dd-verband">Verband</button>
         <button class="dd-item" id="dd-codes">Codes einlösen</button>
@@ -930,7 +933,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 
 <!-- Einstellungen (jeder Spieler) -->
 <div class="modal-bg" id="modal-shop"><div class="modal wide bank-modal">
-  <h3 class="shop-h">Shop <span class="shop-wallet" id="shop-wallet"></span></h3>
+  <h3 class="shop-h"><span id="shop-title">Shop</span> <span class="shop-wallet" id="shop-wallet"></span></h3>
   <div class="tabs sv-tabs" id="shop-tabs"></div>
   <div class="m-content" id="shop-content"></div>
   <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
@@ -1134,7 +1137,7 @@ async function saveGame(silent){
       else if(!silent) toast('Speichern: '+r.error,'err');
     } else {
       saveWarned=false;
-      if(document.getElementById('modal-shop')?.classList.contains('show') && shopTab==='quests') loadWallet();   // Quest-Fortschritt aktualisieren
+      if(document.getElementById('modal-shop')?.classList.contains('show') && shopSec==='quests') loadWallet();   // Quest-Fortschritt aktualisieren
       if(r && r.corrected){                             // Server hat unplausible Einnahmen abgezogen
         const ce=Math.round(r.cut_earnings||0), cc=Math.round(r.cut_credits||0);
         state.earnings=Math.max(0,(state.earnings||0)-ce); state.credits-=cc;
@@ -1566,7 +1569,7 @@ function areaToPolys(a){
 }
 function setAreaMode(mode){
   const E=areaEdit; if(!E) return; const st=stationById(E.stId), a=E.draft;
-  if(mode!=='circle' && !isPremium()){ toast('Rechteck, Stift und Polygon gibt es mit Premium (Menü → Shop)','warn'); return; }
+  if(mode!=='circle' && !isPremium()){ toast('Rechteck, Stift und Polygon gibt es mit Premium (Menü → Premium)','warn'); return; }
   const basic=mode==='circle'||mode==='rect';
   if(basic && a.mode!==mode){                          // Mittelpunkt und Fläche übernehmen
     let c={lat:st.lat,lng:st.lng};
@@ -2798,7 +2801,7 @@ function useExtVoucher(o,key){
 /* ---------- Shop & Premium ----------
    Einsatzpunkte (EP), Forschungspunkte (RP), Premium, Forschungen und abgeholte Quests liegen auf dem Server (wallet).
    Premium kostet 50 EP je 30 Tage. EP-Pakete werden später über Stripe verkauft (hier noch ohne Kauf-Link). */
-let wallet=null, walletImgs={}, shopTab='premium', epConsent=false, resSel=null, resView={ x:40, y:30, k:1 }, gfxSel={ v:null, b:'fire' };
+let wallet=null, walletImgs={}, shopSec='shop', shopTab='ep', epConsent=false, resSel=null, resView={ x:40, y:30, k:1 }, gfxSel={ v:null, b:'fire' };
 const missionLevel=t=>parseInt(String(t?.code||'').replace(/\D+/g,''))||0;
 function isPremium(){ return !!(wallet && wallet.premium_until && new Date(wallet.premium_until).getTime()>Date.now()); }
 const resNode=id=>RESEARCH.find(r=>r.id===id);
@@ -2846,26 +2849,48 @@ const PREMIUM_FEATURES=[
   ['Eigene Fahrzeuggrafiken','Links, rechts, mit und ohne Blaulicht'],
   ['Eigene Gebäudegrafiken','Normal, im Bau und Verband'],
 ];
-async function openShop(){ showModal('modal-shop'); renderShop(); await loadWallet(); }
+/* Ein Fenster für Shop, Premium, Quests und Forschung; jeder Bereich hat eigene Reiter (der erste ist der Start) */
+const SHOP_SECS={
+  shop:{ title:'Shop', tabs:[['ep','Einsatzpunkte',()=>shopEpHtml()],['kauf','Premium kaufen',()=>shopPremiumBuyHtml()]] },
+  premium:{ title:'Premium', tabs:[['vorteile','Vorteile',()=>shopPremiumHtml()],['grafiken','Grafiken',()=>shopGfxHtml()]] },
+  quests:{ title:'Quests', tabs:[['quests','Quests',()=>shopQuestsHtml()]] },
+  forschung:{ title:'Forschung', tabs:[['forschung','Forschung',()=>shopResearchHtml()]] },
+};
+async function openShop(sec='shop',tab){ shopSec=SHOP_SECS[sec]?sec:'shop'; const T=SHOP_SECS[shopSec].tabs; shopTab=T.some(t=>t[0]===tab)?tab:T[0][0];
+  showModal('modal-shop'); renderShop(); await loadWallet(); }
 function renderShop(){
   const box=document.getElementById('shop-content'), tabs=document.getElementById('shop-tabs'); if(!box) return;
-  const T=[['premium','Premium'],['ep','Einsatzpunkte'],['quests','Quests'],['forschung','Forschung'],['grafiken','Grafiken']];
-  tabs.innerHTML=T.map(([k,n])=>`<button class="tab${k===shopTab?' active':''}" data-shoptab="${k}">${n}</button>`).join('');
+  const S=SHOP_SECS[shopSec], T=S.tabs, cur=T.find(t=>t[0]===shopTab)||T[0];
+  document.getElementById('shop-title').textContent=S.title;
+  tabs.classList.toggle('hidden',T.length<2);
+  tabs.innerHTML=T.map(([k,n])=>`<button class="tab${k===cur[0]?' active':''}" data-shoptab="${k}">${n}</button>`).join('');
   tabs.querySelectorAll('[data-shoptab]').forEach(b=>b.onclick=()=>{ shopTab=b.dataset.shoptab; renderShop(); });
   document.getElementById('shop-wallet').innerHTML=wallet?`<span><b>${fmt(wallet.ep)}</b> EP</span><span><b>${fmt(wallet.rp)}</b> Forschungspunkte</span>${isPremium()?'<span class="prem-badge">Premium</span>':''}`:'';
   if(!wallet){ box.innerHTML='<div class="empty-hint">Lade … (nur mit Anmeldung verfügbar)</div>'; return; }
-  box.innerHTML=({premium:shopPremiumHtml,ep:shopEpHtml,quests:shopQuestsHtml,forschung:shopResearchHtml,grafiken:shopGfxHtml}[shopTab])();
+  box.innerHTML=cur[2]();
   shopBind();
 }
-function shopPremiumHtml(){
+function premiumStatusHtml(){
   const until=wallet.premium_until?new Date(wallet.premium_until):null, on=isPremium();
   return `<div class="bank-cards"><div class="bank-card"><div class="k">Status</div><div class="v">${on?'Premium aktiv':'Kein Premium'}</div>
       <div class="s">${on?`bis ${fmtDate(until)}${wallet.premium_auto?' · verlängert sich automatisch':''}`:until?`abgelaufen am ${fmtDate(until)}`:'Premium kostet 50 EP für 30 Tage'}</div></div>
-    <div class="bank-card"><div class="k">Einsatzpunkte</div><div class="v">${fmt(wallet.ep)} EP</div><div class="s">${Math.floor(wallet.ep/PREMIUM_EP)} Monat${Math.floor(wallet.ep/PREMIUM_EP)===1?'':'e'} Premium</div></div></div>
+    <div class="bank-card"><div class="k">Einsatzpunkte</div><div class="v">${fmt(wallet.ep)} EP</div><div class="s">${Math.floor(wallet.ep/PREMIUM_EP)} Monat${Math.floor(wallet.ep/PREMIUM_EP)===1?'':'e'} Premium</div></div></div>`;
+}
+function shopPremiumBuyHtml(){
+  const on=isPremium();
+  return `${premiumStatusHtml()}
     <div class="vb-sec"><h4>Premium</h4><div class="vb-form">
       <button class="btn primary" id="shop-prem" ${wallet.ep>=PREMIUM_EP?'':'disabled'}>${on?'Um 30 Tage verlängern':'Premium aktivieren'} · ${PREMIUM_EP} EP</button>
       <label class="vb-check"><input type="checkbox" id="shop-auto" ${wallet.premium_auto?'checked':''}> Jeden Monat automatisch verlängern, solange genug EP da sind</label></div>
       ${wallet.ep<PREMIUM_EP?'<div class="pers-hint">Zu wenig Einsatzpunkte. EP-Pakete findest du im Reiter „Einsatzpunkte“.</div>':''}</div>
+    <div class="vb-sec"><h4>Das bringt Premium</h4><div class="prem-grid">${PREMIUM_FEATURES.map(([a])=>`<div class="prem-feat"><b>${a}</b></div>`).join('')}</div>
+      <div class="vb-form"><button class="btn ghost" id="shop-go-prem">Alle Vorteile und Einstellungen (Menü → Premium)</button></div></div>`;
+}
+function shopPremiumHtml(){
+  const on=isPremium();
+  return `${premiumStatusHtml()}
+    <div class="vb-sec"><div class="vb-form"><button class="btn ${on?'':'primary'}" id="shop-go-buy">${on?'Premium verlängern':'Premium kaufen'}</button>
+      <span class="pers-hint">${on?'Verlängern und automatische Verlängerung im Shop.':'Premium gibt es im Shop für 50 EP je 30 Tage.'} Die Grafiken findest du im Reiter „Grafiken“.</span></div></div>
     <div class="vb-sec"><h4>Das bringt Premium</h4><div class="prem-grid">${PREMIUM_FEATURES.map(([a,b])=>`<div class="prem-feat"><b>${a}</b><span>${b}</span></div>`).join('')}</div></div>
     <div class="vb-sec"><h4>Discord-Rolle VIP</h4><div class="vb-form"><label class="fld sm" style="flex:1"><span>Discord-User-ID</span>
       <input id="shop-discord" class="vb-in" inputmode="numeric" maxlength="20" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value="${esc(wallet.discord_id||'')}" placeholder="z. B. 123456789012345678"></label>
@@ -2897,7 +2922,7 @@ async function checkPurchaseReturn(){
   u.searchParams.delete('kauf'); history.replaceState(null,'',u.pathname+(u.search||'')+u.hash);
   const before=wallet?.ep??null; toast('Danke für deinen Kauf! Die Einsatzpunkte werden gutgeschrieben …','ok');
   for(let i=0;i<10;i++){ await new Promise(r=>setTimeout(r,3000)); await loadWallet();
-    if(wallet && before!=null && wallet.ep>before){ toast(`+${fmt(wallet.ep-before)} EP gutgeschrieben`,'ok'); shopTab='premium'; openShop(); return; } }
+    if(wallet && before!=null && wallet.ep>before){ toast(`+${fmt(wallet.ep-before)} EP gutgeschrieben`,'ok'); openShop('shop','kauf'); return; } }
   toast('Die Gutschrift dauert länger als üblich. Sie erscheint automatisch, sobald die Zahlung bestätigt ist.','warn');
 }
 function shopQuestsHtml(){
@@ -2989,6 +3014,8 @@ function shopBind(){
   const q=id=>document.getElementById(id), on=(id,fn)=>{ const e=q(id); if(e) e.onclick=fn; };
   on('shop-prem',async()=>{ if(confirm(`Premium für 30 Tage aktivieren? Es werden ${PREMIUM_EP} EP abgezogen.`) && await shopCall('premium_activate',{},'Premium aktiviert')) loadWallet(); });
   const au=q('shop-auto'); if(au) au.onchange=async()=>{ if(await shopCall('premium_auto',{p_on:au.checked},au.checked?'Automatische Verlängerung an':'Automatische Verlängerung aus')) loadWallet(); };
+  on('shop-go-prem',()=>openShop('premium'));
+  on('shop-go-buy',()=>openShop('shop','kauf'));
   const ec=q('ep-consent'); if(ec) ec.onchange=()=>{ epConsent=ec.checked; renderShop(); };
   document.querySelectorAll('[data-epbuy]').forEach(b=>b.onclick=()=>buyEp(b.dataset.epbuy));
   on('shop-discord-save',async()=>{ if(await shopCall('wallet_discord',{p_id:q('shop-discord').value},'Discord-ID gespeichert')) loadWallet(); });
@@ -4569,7 +4596,10 @@ function closeMenu(){ document.getElementById('topbar-menu').classList.add('hidd
 function openShopQuick(){ const st = (svStationId&&stationById(svStationId)) || state.stations[0]; if(!st){ toast('Erst eine Wache bauen','warn'); return; } openStationView(st.id,'shop'); }
 document.getElementById('btn-menu').onclick=(e)=>{ e.stopPropagation(); document.getElementById('topbar-menu').classList.toggle('hidden'); };
 document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-wrap'); if(w && !w.contains(e.target)) closeMenu(); });
-document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
+document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop('shop'); };
+document.getElementById('dd-premium').onclick=()=>{ closeMenu(); openShop('premium'); };
+document.getElementById('dd-quests').onclick=()=>{ closeMenu(); openShop('quests'); };
+document.getElementById('dd-forschung').onclick=()=>{ closeMenu(); openShop('forschung'); };
 document.getElementById('dd-bank').onclick=()=>{ closeMenu(); renderBank(); showModal('modal-bank'); };
 document.getElementById('dd-verband').onclick=()=>{ closeMenu(); openVerband(); };
 document.getElementById('dd-codes').onclick=()=>{ closeMenu(); openCodes(); };
