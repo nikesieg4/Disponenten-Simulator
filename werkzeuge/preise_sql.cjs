@@ -40,9 +40,9 @@ const shop = '-- SHOPDATEN:BEGIN (automatisch erzeugt mit: node werkzeuge/preise
   + 'delete from app_research_nodes;\ninsert into app_research_nodes(id, max_level, premium_from, rp, minutes, req) values\n'
   + RESEARCH.map(r => `  (${q(r.id)},${r.max},${r.premiumFrom == null ? 'null' : r.premiumFrom},${r.rp},${r.min},${q(r.req)})`).join(',\n') + ';\n'
   + 'delete from app_quests where id not in (select quest from app_quest_claims);\n'
-  + 'insert into app_quests(id, period, premium, money, rp) values\n'
-  + QUESTS.map(x => `  (${q(x.id)},${q(x.period)},${x.premium},${x.money},${x.rp})`).join(',\n')
-  + '\non conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp;\n-- SHOPDATEN:END';
+  + 'insert into app_quests(id, period, premium, money, rp, counter, goal) values\n'
+  + QUESTS.map(x => `  (${q(x.id)},${q(x.period)},${x.premium},${x.money},${x.rp},${q(x.counter)},${x.goal})`).join(',\n')
+  + '\non conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp, counter=excluded.counter, goal=excluded.goal;\n-- SHOPDATEN:END';
 const reShop = /-- SHOPDATEN:BEGIN[\s\S]*?-- SHOPDATEN:END/;
 if (!reShop.test(out)) throw new Error('Shop-Datenblock in supabase_setup.sql fehlt');
 out = out.replace(reShop, shop);

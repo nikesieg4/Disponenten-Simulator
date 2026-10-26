@@ -1115,7 +1115,7 @@ function serializeObj(){ return {
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
   buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null,allyShare:b.allyShare||null})),
-  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null, quests:state.quests||null,
+  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null,
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[],patients:m.patients||[],tna:!!m.tna,dueAt:m.dueAt||null,fromKh:m.fromKh||null})),
 };}
 let saveInFlight=false;
@@ -1132,6 +1132,7 @@ async function saveGame(silent){
       else if(!silent) toast('Speichern: '+r.error,'err');
     } else {
       saveWarned=false;
+      if(document.getElementById('modal-shop')?.classList.contains('show') && shopTab==='quests') loadWallet();   // Quest-Fortschritt aktualisieren
       if(r && r.corrected){                             // Server hat unplausible Einnahmen abgezogen
         const ce=Math.round(r.cut_earnings||0), cc=Math.round(r.cut_credits||0);
         state.earnings=Math.max(0,(state.earnings||0)-ce); state.credits-=cc;
@@ -1206,7 +1207,6 @@ function applyLoaded(data){
     return nb; });
   state.allyCourses=Array.isArray(data.allyCourses)?data.allyCourses:[];
   state.vouchers=data.vouchers&&typeof data.vouchers==='object'?data.vouchers:null;
-  state.quests=data.quests&&typeof data.quests==='object'?data.quests:null;
   finishDueCourses(Date.now());
   pendingOfflineMs = data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0;
   idCounter=Date.now()%100000;
@@ -1957,7 +1957,6 @@ function finishHandover(v){
   const m=missionById(tr.missionId), p=m&&(m.patients||[]).find(x=>x.id===tr.patientId);
   const km=tr.km!=null?tr.km:distM({lat:tr.fromLat,lng:tr.fromLng},hospitalById(tr.khId)||v)/1000;
   const pay=Math.round((CONFIG.transportBase+CONFIG.transportPerKm*km)*(tr.na?1+CONFIG.naBonus:1)*(1+resBonus('transport')));
-  questCount('transports');
   state.earnings=(state.earnings||0)+pay; book('transport',`Patiententransport ${hospitalById(tr.khId)?.name||''}`,pay);
   if(p) p.state='done';
   if(isSm(tr.missionId)) smPatientEvent(tr.missionId, tr.patientId, 'done');
@@ -2032,8 +2031,7 @@ function completeMission(m){
   const t=missionType(m.type); m.status='done'; m.doneAt=Date.now(); if(simulating) simDone++;
   const pats=m.patients||[], dead=pats.filter(p=>p.dead).length;
   const boost=t?.iv ? 1+resBonus('lohn_rd')+resBonus('verlegung') : t?.rd ? 1+resBonus('lohn_rd') : 1+resBonus('lohn_fw');
-  const pay=Math.round(missionReward(t)*(pats.length?1-CONFIG.deadPenalty*dead/pats.length:1)*boost);
-  questCount('missions'); if(t?.iv) questCount('iv'); else if(t?.rd) questCount('rd'); else if(t && t.cat==='b' && missionLevel(t)>=3) questCount('fire_big'); state.earnings=(state.earnings||0)+pay; book(t&&t.rd?'einsatz_rd':'einsatz_fw',`${t?t.code+' '+t.name:'Einsatz'}${simulating?' (offline)':''}`,pay);
+  const pay=Math.round(missionReward(t)*(pats.length?1-CONFIG.deadPenalty*dead/pats.length:1)*boost); state.earnings=(state.earnings||0)+pay; book(t&&t.rd?'einsatz_rd':'einsatz_fw',`${t?t.code+' '+t.name:'Einsatz'}${simulating?' (offline)':''}`,pay);
   try{ refreshMissionMarker(m); }catch(e){ console.error(e); }
   m.assigned.slice().forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ try{ releaseVehicle(v); }catch(e){ console.error('release',e); } } });
   try{ toast(`${t?t.name:'Einsatz'} erledigt (+${fmt(pay)} €${dead?` · ${dead} verstorben`:''} · Auszahlung um 0 Uhr)`,dead?'warn':'ok'); renderTopbar(); renderVehicles(); }catch(e){ console.error(e); }
@@ -2817,25 +2815,11 @@ async function loadWallet(){
   if(wasPrem!==isPremium() || (r.images||[]).join()!==oldImgs) refreshCustomGraphics();
   if(document.getElementById('modal-shop').classList.contains('show')) renderShop();
 }
-/* Quests: Zähler je Tag/Woche (Berliner Zeit, gleiche Schlüssel wie der Server) */
-function questKeys(){
-  const d=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin'}).format(new Date());
-  const [y,mo,da]=d.split('-').map(Number), dt=new Date(Date.UTC(y,mo-1,da)), wd=(dt.getUTCDay()+6)%7;
-  dt.setUTCDate(dt.getUTCDate()-wd+3); const wy=dt.getUTCFullYear(), w1=new Date(Date.UTC(wy,0,4));
-  const wk=1+Math.round(((dt-w1)/86400000-3+((w1.getUTCDay()+6)%7))/7);
-  return { d, w:`${wy}-W${String(wk).padStart(2,'0')}` };
-}
-function questState(){
-  const k=questKeys(), q=state.quests=state.quests||{};
-  if(!q.d||q.d.key!==k.d) q.d={ key:k.d, c:{} };
-  if(!q.w||q.w.key!==k.w) q.w={ key:k.w, c:{} };
-  return q;
-}
-function questCount(name,n=1){ if(!state) return; const q=questState(); q.d.c[name]=(q.d.c[name]||0)+n; q.w.c[name]=(q.w.c[name]||0)+n; }
-function questProgress(x){ const q=questState(); return Math.min(x.goal, (q[x.period].c[x.counter]||0)); }
+/* Quests: den Fortschritt zählt der Server beim Speichern (aus den Einnahmen im Protokoll), hier nur Anzeige */
+function questProgress(x){ return Math.min(x.goal, Number(wallet?.progress?.[x.period]?.[x.counter])||0); }
 async function claimQuest(id){
   const x=QUESTS.find(q=>q.id===id); if(!x) return;
-  await saveGame(true);
+  await saveGame(true);                                  // neuesten Fortschritt zum Server schicken
   let r; try{ r=await rpc('quest_claim',{p_token:AUTH.token,p_quest:id}); }catch(e){ toast('Quest: '+errMsg(e),'err'); return; }
   if(!r||r.error){ toast(r?.error||'Fehler','err'); return; }
   state.credits+=r.money; book('quest',`Quest: ${x.text}`,r.money);
@@ -2900,7 +2884,7 @@ function shopQuestsHtml(){
       return `<div class="vb-row cv-row quest${claimed?' claimed':''}"><div class="cv-main" style="flex:1"><b>${esc(x.text)}${x.premium?' <span class="prem-badge sm">Premium</span>':''}</b>
         <div class="q-bar"><div style="width:${prog/x.goal*100}%"></div></div><span class="pat-dept">${prog}/${x.goal} · ${fmt(x.money)} € + ${x.rp} Forschungspunkte</span></div>
         <button class="btn sm ${done&&!claimed&&!locked?'primary':''}" data-qclaim="${x.id}" ${done&&!claimed&&!locked?'':'disabled'}>${claimed?'Abgeholt':locked?'Premium':'Abholen'}</button></div>`; }).join('')}</div>`;
-  return sect('d','Täglich (neu um 0 Uhr)')+sect('w','Wöchentlich (neu am Montag)');
+  return `<div class="pers-hint">Der Fortschritt wird beim Speichern auf dem Server gezählt (etwa alle 15 Sekunden).</div>`+sect('d','Täglich (neu um 0 Uhr)')+sect('w','Wöchentlich (neu am Montag)');
 }
 /* Forschungsbaum: verschiebbare 2D-Ansicht mit Zoom (Maus, Mausrad, Touch) */
 const RES_BRANCH={ einsatz:'Einsatz', rd:'Rettungsdienst', wirtschaft:'Wirtschaft', personal:'Personal', grosslage:'Großlagen', leitstelle:'Leitstelle' };
