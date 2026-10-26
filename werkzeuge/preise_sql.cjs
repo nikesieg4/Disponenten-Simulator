@@ -1,4 +1,5 @@
-// Überträgt die Preise aus index.html (CONFIG, VEHICLES) in den Preisblock von db/supabase_setup.sql.
+// Überträgt die Preise aus index.html (CONFIG, VEHICLES) in den Preisblock von db/supabase_setup.sql,
+// dazu Forschungen (RESEARCH) und Quests (QUESTS) in den Shop-Datenblock.
 // Der Server braucht sie, um Spielstände zu prüfen (Anti-Cheat in app_save).
 // Aufruf nach jeder Preisänderung:  node werkzeuge/preise_sql.cjs
 const fs = require('fs'), path = require('path');
@@ -29,5 +30,21 @@ const file = path.join(root, 'db', 'supabase_setup.sql');
 const sql = fs.readFileSync(file, 'utf8');
 const re = /-- PREISE:BEGIN[\s\S]*?-- PREISE:END/;
 if (!re.test(sql)) throw new Error('Preisblock in supabase_setup.sql fehlt');
-fs.writeFileSync(file, sql.replace(re, block));
-console.log(`${rows.length} Preise geschrieben`);
+let out = sql.replace(re, block);
+
+// Shop-Daten: Forschungen und Quests (der Server prüft damit Kosten, Dauer, Voraussetzungen und Belohnungen)
+const RESEARCH = JSON.parse(grab(/const RESEARCH = (\[.*\]);/, 'RESEARCH'));
+const QUESTS = JSON.parse(grab(/const QUESTS = (\[.*\]);/, 'QUESTS'));
+const q = v => v == null ? 'null' : `'${String(v).replace(/'/g, "''")}'`;
+const shop = '-- SHOPDATEN:BEGIN (automatisch erzeugt mit: node werkzeuge/preise_sql.cjs, nicht von Hand ändern)\n'
+  + 'delete from app_research_nodes;\ninsert into app_research_nodes(id, max_level, premium_from, rp, minutes, req) values\n'
+  + RESEARCH.map(r => `  (${q(r.id)},${r.max},${r.premiumFrom == null ? 'null' : r.premiumFrom},${r.rp},${r.min},${q(r.req)})`).join(',\n') + ';\n'
+  + 'delete from app_quests where id not in (select quest from app_quest_claims);\n'
+  + 'insert into app_quests(id, period, premium, money, rp) values\n'
+  + QUESTS.map(x => `  (${q(x.id)},${q(x.period)},${x.premium},${x.money},${x.rp})`).join(',\n')
+  + '\non conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp;\n-- SHOPDATEN:END';
+const reShop = /-- SHOPDATEN:BEGIN[\s\S]*?-- SHOPDATEN:END/;
+if (!reShop.test(out)) throw new Error('Shop-Datenblock in supabase_setup.sql fehlt');
+out = out.replace(reShop, shop);
+fs.writeFileSync(file, out);
+console.log(`${rows.length} Preise, ${RESEARCH.length} Forschungen, ${QUESTS.length} Quests geschrieben`);

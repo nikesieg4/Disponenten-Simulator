@@ -391,6 +391,46 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .vb-post-h .dim{ font-size:11px; }
 .vb-post-b{ font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
 .vb-click{ cursor:pointer; }
+/* Shop & Premium */
+.shop-h{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.shop-wallet{ display:flex; gap:12px; font-size:13px; font-weight:400; color:var(--text-mut); margin-left:auto; flex-wrap:wrap; }
+.shop-wallet b{ color:var(--text); font-family:var(--font-mono); }
+.prem-badge{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:.04em; color:#1a1405; background:linear-gradient(135deg,#fde68a,#f59e0b); }
+.prem-badge.sm{ font-size:10px; padding:1px 7px; vertical-align:middle; }
+.prem-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px; }
+.prem-feat{ display:flex; flex-direction:column; gap:3px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); font-size:13px; }
+.prem-feat span{ color:var(--text-mut); font-size:12px; }
+.ep-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; padding-top:10px; }
+@media (min-width:900px){ .ep-grid{ grid-template-columns:repeat(5,1fr); } }
+.ep-card{ position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; padding:18px 12px 14px; border:1px solid var(--border); border-radius:14px; background:var(--panel-2); text-align:center; }
+.ep-card.hl{ border-color:#f59e0b; box-shadow:0 0 0 1px #f59e0b55; }
+.ep-tag{ position:absolute; top:-10px; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; color:#1a1405; background:#f59e0b; }
+.ep-amt{ font-size:26px; font-weight:800; font-family:var(--font-mono); } .ep-amt small{ font-size:13px; color:var(--text-mut); }
+.ep-bonus{ font-size:12px; color:#86efac; } .ep-price{ font-size:18px; font-weight:700; margin-top:4px; }
+.ep-more{ font-size:12px; color:#fbbf24; min-height:16px; } .ep-months{ font-size:11px; color:var(--text-mut); margin-bottom:6px; }
+.quest.claimed{ opacity:.6; }
+.q-bar{ height:6px; border-radius:3px; background:var(--panel-3); overflow:hidden; margin:5px 0 2px; } .q-bar div{ height:100%; background:var(--ok); }
+.res-top{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.res-view{ height:min(54vh,460px); border:1px solid var(--border); border-radius:12px; background:radial-gradient(circle at 1px 1px,#ffffff10 1px,transparent 0) 0 0/22px 22px, var(--panel-2); overflow:hidden; touch-action:none; cursor:grab; }
+.res-view:active{ cursor:grabbing; }
+.res-head{ fill:var(--text-mut); font-size:12px; font-weight:700; text-anchor:middle; letter-spacing:.06em; text-transform:uppercase; }
+.res-link{ fill:none; stroke:var(--border-2); stroke-width:2; } .res-link.on{ stroke:#22c55e88; }
+.res-node{ cursor:pointer; } .res-node rect:first-child{ fill:var(--panel-3); stroke:var(--border-2); stroke-width:1.5; }
+.res-node.sel rect:first-child{ stroke:var(--fire); stroke-width:2.5; } .res-node.run rect:first-child{ stroke:#fbbf24; }
+.res-node.max rect:first-child{ stroke:#22c55e; } .res-node.lock{ opacity:.55; } .res-node.prem rect:first-child{ fill:#2a2208; }
+.res-name{ fill:var(--text); font-size:13px; font-weight:700; } .res-sub{ fill:var(--text-mut); font-size:11px; }
+.res-track{ fill:#ffffff14; } .res-fill{ fill:#22c55e; }
+.res-det{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
+.gfx-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.gfx-slot{ display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); font-size:12px; }
+.gfx-prev{ height:72px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:#0d1017; }
+.gfx-prev img{ max-height:64px; max-width:100%; }
+.btn.disabled{ opacity:.5; pointer-events:none; }
+.mk-vimg{ position:absolute; transform:translate(-50%,-50%); height:30px; width:auto; filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); pointer-events:none; }
+.mk-vimg.flip{ transform:translate(-50%,-50%) scaleX(-1); }
+.mk-bimg{ width:44px; height:44px; object-fit:contain; filter:drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
+#areaBar [data-amode].locked::after{ content:' · Premium'; font-size:10px; color:#fbbf24; }
+.ls-auto{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--panel-2); }
 .vb-depts{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
 .vb-dept{ font-size:11px; padding:1px 7px; border-radius:10px; border:1px solid var(--border-2); color:var(--text-mut); }
 .vb-dept.build{ color:#fbbf24; border-color:#7c5a10; }
@@ -887,11 +927,10 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 </div>
 
 <!-- Einstellungen (jeder Spieler) -->
-<div class="modal-bg" id="modal-shop"><div class="modal wide">
-  <h3>Shop</h3>
-  <div class="m-content">
-    <div class="empty-hint" style="padding:50px 16px;font-size:15px">Kommt noch — der Shop ist derzeit nicht verfügbar.</div>
-  </div>
+<div class="modal-bg" id="modal-shop"><div class="modal wide bank-modal">
+  <h3 class="shop-h">Shop <span class="shop-wallet" id="shop-wallet"></span></h3>
+  <div class="tabs sv-tabs" id="shop-tabs"></div>
+  <div class="m-content" id="shop-content"></div>
   <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
 
@@ -1076,7 +1115,7 @@ function serializeObj(){ return {
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
   buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null,allyShare:b.allyShare||null})),
-  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null,
+  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null, quests:state.quests||null,
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[],patients:m.patients||[],tna:!!m.tna,dueAt:m.dueAt||null,fromKh:m.fromKh||null})),
 };}
 let saveInFlight=false;
@@ -1167,6 +1206,7 @@ function applyLoaded(data){
     return nb; });
   state.allyCourses=Array.isArray(data.allyCourses)?data.allyCourses:[];
   state.vouchers=data.vouchers&&typeof data.vouchers==='object'?data.vouchers:null;
+  state.quests=data.quests&&typeof data.quests==='object'?data.quests:null;
   finishDueCourses(Date.now());
   pendingOfflineMs = data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0;
   idCounter=Date.now()%100000;
@@ -1247,7 +1287,8 @@ function buildingPinHtml(b,t){
 }
 function addBuildingMarker(b){
   const t=buildingById(b.typeId); if(!t) return;
-  const icon=L.divIcon({className:'f-ac mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:buildingPinHtml(b,t)});
+  const ci=customBldImg(b.typeId, !stationReady(b)?'bau':(b.allyShare?'verband':'normal'));
+  const icon=ci ? customPinIcon(ci,'f-ac') : L.divIcon({className:'f-ac mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:buildingPinHtml(b,t)});
   b.marker=L.marker([b.lat,b.lng],{icon}).addTo(buildingLayer);
   b.marker.bindTooltip(stationReady(b)?b.name:`${b.name} (im Bau)`,{direction:'top'});
   b.marker.on('click',()=>{ if(t.isAcademy) openAcademyView(b.id); else if(t.isLeitstelle) openLeitstelleView(b.id); else toast(`${b.name}${t.desc?' — '+t.desc:''}`,'ok'); });
@@ -1428,7 +1469,16 @@ async function detectOrt(st){
 let areaRev=0;                                        // Zähler für Gebietsänderungen (Flächen-Cache)
 const M_LAT=111320, mLng=lat=>111320*Math.cos(lat*Math.PI/180);
 const AREA_REF_KM2=Math.PI*36;                        // 6-km-Kreis ≈ 113 km² entspricht der Grundrate
-function stationArea(st){ return st.area || {mode:'circle',lat:st.lat,lng:st.lng,r:CONFIG.areaDefaultM}; }
+function stationArea(st){
+  const a=st.area || {mode:'circle',lat:st.lat,lng:st.lng,r:CONFIG.areaDefaultM};
+  if(a.mode==='circle' || isPremium()) return a;
+  // ohne Premium: gezeichnete Form bleibt gespeichert, wirkt aber als Kreis gleicher Fläche
+  if(st._circSrc!==a){ const sh=areaShapes(a), boxes=sh.map(shapeBox); let s=90,w=180,n=-90,e=-180;
+    boxes.forEach(b=>{ s=Math.min(s,b[0]); w=Math.min(w,b[1]); n=Math.max(n,b[2]); e=Math.max(e,b[3]); });
+    const k=Math.min(CONFIG.areaMaxKm2,Math.max(CONFIG.areaMinKm2,unionKm2(sh)||AREA_REF_KM2))*1e6;
+    st._circSrc=a; st._circ={mode:'circle',lat:sh.length?(s+n)/2:st.lat,lng:sh.length?(w+e)/2:st.lng,r:Math.sqrt(k/Math.PI)}; }
+  return st._circ;
+}
 function areaShapes(a){
   if(a.mode==='circle') return [{c:true,lat:a.lat,lng:a.lng,r:a.r}];
   if(a.mode==='rect') return [{pts:[[a.s,a.w],[a.s,a.e],[a.n,a.e],[a.n,a.w]]}];
@@ -1469,8 +1519,8 @@ function totalAreaKm2(){
   return _areaCache.km2;
 }
 function spawnFactor(km2){ return Math.min(km2,CONFIG.areaCapKm2)/AREA_REF_KM2; }
-function spawnIntervalMs(km2){ const f=spawnFactor(km2); return f>0?CONFIG.missionIntervalMs/f:Infinity; }
-function maxOpenMissions(km2){ return Math.max(1,Math.min(CONFIG.maxOpenCap,Math.round(CONFIG.maxOpenMissions*spawnFactor(km2)))) + CONFIG.calltakerOpen*calltakers(); }
+function spawnIntervalMs(km2){ const f=spawnFactor(km2); return f>0?CONFIG.missionIntervalMs/f/(1+resBonus('takt')):Infinity; }
+function maxOpenMissions(km2){ return Math.max(1,Math.min(CONFIG.maxOpenCap,Math.round(CONFIG.maxOpenMissions*spawnFactor(km2)))) + CONFIG.calltakerOpen*calltakers() + researchLvl('notruf'); }
 function missionsPerHour(km2){ const i=spawnIntervalMs(km2); return isFinite(i)?3600000/i:0; }
 /* Zufallspunkt gleichmäßig in der Vereinigung aller Gebiete fertiger Wachen */
 function randomPointInAreas(){
@@ -1514,6 +1564,7 @@ function areaToPolys(a){
 }
 function setAreaMode(mode){
   const E=areaEdit; if(!E) return; const st=stationById(E.stId), a=E.draft;
+  if(mode!=='circle' && !isPremium()){ toast('Rechteck, Stift und Polygon gibt es mit Premium (Menü → Shop)','warn'); return; }
   const basic=mode==='circle'||mode==='rect';
   if(basic && a.mode!==mode){                          // Mittelpunkt und Fläche übernehmen
     let c={lat:st.lat,lng:st.lng};
@@ -1578,7 +1629,7 @@ const AREA_HINTS={
 function updateAreaBar(){
   const E=areaEdit; if(!E) return; const st=stationById(E.stId), a=E.draft;
   document.getElementById('ab-title').textContent=`Alarmierungsgebiet · ${st?st.name:''}`;
-  document.querySelectorAll('#areaBar [data-amode]').forEach(b=>b.classList.toggle('active',b.dataset.amode===E.mode));
+  document.querySelectorAll('#areaBar [data-amode]').forEach(b=>{ b.classList.toggle('active',b.dataset.amode===E.mode); b.classList.toggle('locked',b.dataset.amode!=='circle'&&!isPremium()); });
   document.getElementById('ab-hint').textContent=AREA_HINTS[E.mode]||'';
   const pl=document.getElementById('ab-polys');
   pl.innerHTML=a.mode==='poly' ? (a.polys.length ? a.polys.map((p,i)=>`<span class="ab-poly">Fläche ${i+1} · ${p.kind==='free'?'Stift':'Polygon'} · ${fmtKm2(unionKm2([{pts:p.pts}],8000))} km²<button class="btn sm ghost" data-apdel="${i}" title="Fläche löschen">×</button></span>`).join('')
@@ -1648,7 +1699,8 @@ function stationPinHtml(st){
     `<rect x="28" y="1" width="18" height="12" rx="4" fill="#0d1017" stroke="#3a4250" stroke-width="1"/><text x="37" y="10" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="#e6ebf2">L${st.level}</text></svg>`;
 }
 function addStationMarker(st){
-  const icon=L.divIcon({className:'f-st mk-pin',iconSize:[48,52],iconAnchor:[20,48],tooltipAnchor:[0,-44],html:stationPinHtml(st)});   // 48×52 mit Level-Abzeichen: Spitze bei (20|48)
+  const ci=customBldImg('fire',stationReady(st)?'normal':'bau');
+  const icon=ci ? customPinIcon(ci,'f-st') : L.divIcon({className:'f-st mk-pin',iconSize:[48,52],iconAnchor:[20,48],tooltipAnchor:[0,-44],html:stationPinHtml(st)});   // 48×52 mit Level-Abzeichen: Spitze bei (20|48)
   st.marker=L.marker([st.lat,st.lng],{icon}).addTo(stationLayer); st.marker.on('click',()=>openBuyModal(st.id));
   st.marker.bindTooltip(stationReady(st)?st.name:`${st.name} (im Bau)`,{direction:'top'});
   renderAreas();
@@ -1691,8 +1743,8 @@ function addMissionMarker(m){ const t=missionType(m.type);
   m.marker=L.marker([m.lat,m.lng],{icon}).addTo(missionLayer); m.marker.on('click',()=>openMissionModal(m.id)); }
 function refreshMissionMarker(m){ if(m.marker) missionLayer.removeLayer(m.marker); addMissionMarker(m); }
 function vehStatusColor(s){ return (getComputedStyle(document.documentElement).getPropertyValue(`--fms-${s}`)||'#888').trim(); }
-function addVehicleMarker(v){ const t=VEHICLES[v.type];
-  const icon=L.divIcon({className:t?.category==='rd'?'f-v-rd':'f-v-fw',iconSize:[0,0],iconAnchor:[0,0],html:`<div class="mk-veh" style="background:${vehStatusColor(v.status)}">${vehAbbr(v)}</div>`});
+function addVehicleMarker(v){ const t=VEHICLES[v.type], ci=customVehImg(v);
+  const icon=L.divIcon({className:t?.category==='rd'?'f-v-rd':'f-v-fw',iconSize:[0,0],iconAnchor:[0,0],html:ci?`<img class="mk-vimg${ci.flip?' flip':''}" src="${ci.src}" alt="">`:`<div class="mk-veh" style="background:${vehStatusColor(v.status)}">${vehAbbr(v)}</div>`});
   v.marker=L.marker([v.lat,v.lng],{icon,zIndexOffset:500}).addTo(vehicleLayer); }
 function refreshVehicleMarker(v){ if(v.marker){ vehicleLayer.removeLayer(v.marker); v.marker=null; }
   if(v.status===2||v.status===6||v.status===4||v.status===5||v.status===8) return; addVehicleMarker(v); }
@@ -1700,6 +1752,11 @@ function drawRoute(v,coords){ clearRoute(v); const color=v.status===1?'#8a97a8':
   v.routeLine=L.polyline(coords.map(c=>[c.lat,c.lng]),{color,weight:3,opacity:.4,dashArray:'6 6',className:'f-route'}).addTo(routeLayer); }
 function clearRoute(v){ if(v.routeLine){ routeLayer.removeLayer(v.routeLine); v.routeLine=null; } }
 
+/* ---------- Shop & Premium: Daten (Server-Kopie erzeugt werkzeuge/preise_sql.cjs) ---------- */
+const PREMIUM_EP = 50;                // Premium kostet 50 Einsatzpunkte je 30 Tage
+const EP_PACKAGES = [{"id": "ep110", "ep": 110, "bonus": 10, "cents": 999, "tag": ""}, {"id": "ep220", "ep": 220, "bonus": 20, "cents": 1999, "tag": ""}, {"id": "ep340", "ep": 340, "bonus": 40, "cents": 2999, "tag": "Beliebt"}, {"id": "ep575", "ep": 575, "bonus": 75, "cents": 4999, "tag": ""}, {"id": "ep1100", "ep": 1100, "bonus": 100, "cents": 8499, "tag": "Bester Deal"}];
+const QUESTS = [{"id": "d_einsaetze", "period": "d", "premium": false, "counter": "missions", "goal": 10, "money": 50000, "rp": 5, "text": "Erledige 10 Einsätze"}, {"id": "d_transporte", "period": "d", "premium": false, "counter": "transports", "goal": 5, "money": 40000, "rp": 5, "text": "Bringe 5 Patienten ins Krankenhaus"}, {"id": "d_rd", "period": "d", "premium": false, "counter": "rd", "goal": 3, "money": 30000, "rp": 3, "text": "Erledige 3 Rettungsdienst-Einsätze"}, {"id": "d_einsaetze_p", "period": "d", "premium": true, "counter": "missions", "goal": 25, "money": 150000, "rp": 15, "text": "Erledige 25 Einsätze"}, {"id": "d_verlegung_p", "period": "d", "premium": true, "counter": "iv", "goal": 2, "money": 100000, "rp": 10, "text": "Erledige 2 Intensivverlegungen"}, {"id": "w_einsaetze", "period": "w", "premium": false, "counter": "missions", "goal": 75, "money": 300000, "rp": 30, "text": "Erledige 75 Einsätze"}, {"id": "w_transporte", "period": "w", "premium": false, "counter": "transports", "goal": 40, "money": 250000, "rp": 25, "text": "Bringe 40 Patienten ins Krankenhaus"}, {"id": "w_einsaetze_p", "period": "w", "premium": true, "counter": "missions", "goal": 200, "money": 1000000, "rp": 80, "text": "Erledige 200 Einsätze"}, {"id": "w_brand_p", "period": "w", "premium": true, "counter": "fire_big", "goal": 10, "money": 600000, "rp": 60, "text": "Erledige 10 Einsätze ab BRAND 3"}];
+const RESEARCH = [{"id": "lohn_fw", "branch": "einsatz", "name": "Einsatzhonorar", "desc": "Feuerwehr-Einsätze bringen mehr Geld", "per": 5, "max": 5, "premiumFrom": 4, "rp": 10, "min": 60, "req": null, "x": 0, "y": 0}, {"id": "ausrueck", "branch": "einsatz", "name": "Alarmübungen", "desc": "Kürzere Ausrückezeit", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "lohn_fw", "x": 0, "y": 1}, {"id": "fahrt", "branch": "einsatz", "name": "Fahrsicherheitstraining", "desc": "Kürzere Fahrzeiten", "per": 4, "max": 5, "premiumFrom": 4, "rp": 20, "min": 180, "req": "ausrueck", "x": 0, "y": 2}, {"id": "loesch", "branch": "einsatz", "name": "Taktikschulung", "desc": "Feuerwehr-Einsätze dauern kürzer", "per": 5, "max": 3, "premiumFrom": null, "rp": 30, "min": 360, "req": "fahrt", "x": 0, "y": 3}, {"id": "lohn_rd", "branch": "rd", "name": "RD-Honorar", "desc": "Rettungsdienst-Einsätze bringen mehr Geld", "per": 5, "max": 5, "premiumFrom": 4, "rp": 10, "min": 60, "req": null, "x": 1, "y": 0}, {"id": "transport", "branch": "rd", "name": "Transportabrechnung", "desc": "Höhere Transportvergütung", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "lohn_rd", "x": 1, "y": 1}, {"id": "behandlung", "branch": "rd", "name": "Notfallsanitäter", "desc": "Kürzere Versorgung vor Ort", "per": 10, "max": 3, "premiumFrom": null, "rp": 20, "min": 180, "req": "transport", "x": 1, "y": 2}, {"id": "stabil", "branch": "rd", "name": "Erweiterte Maßnahmen", "desc": "Patienten verschlechtern sich langsamer", "per": 20, "max": 3, "premiumFrom": null, "rp": 30, "min": 360, "req": "behandlung", "x": 1, "y": 3}, {"id": "erw_kosten", "branch": "wirtschaft", "name": "Einkauf", "desc": "Günstigere Erweiterungen", "per": 5, "max": 3, "premiumFrom": null, "rp": 10, "min": 60, "req": null, "x": 2, "y": 0}, {"id": "erw_bau", "branch": "wirtschaft", "name": "Baukoordination", "desc": "Erweiterungen sind schneller fertig", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "erw_kosten", "x": 2, "y": 1}, {"id": "personal_kosten", "branch": "wirtschaft", "name": "Personalverwaltung", "desc": "Günstigeres Anwerben", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "erw_kosten", "x": 3, "y": 1}, {"id": "zinsen", "branch": "wirtschaft", "name": "Finanzplanung", "desc": "Weniger Dispo-Zinsen", "per": 20, "max": 2, "premiumFrom": null, "rp": 25, "min": 240, "req": "erw_bau", "x": 2, "y": 2}, {"id": "lehrgang_dauer", "branch": "personal", "name": "Ausbildungsplanung", "desc": "Lehrgänge dauern kürzer", "per": 10, "max": 3, "premiumFrom": null, "rp": 10, "min": 60, "req": null, "x": 4, "y": 0}, {"id": "lehrgang_kosten", "branch": "personal", "name": "Fördermittel", "desc": "Günstigere Lehrgänge", "per": 10, "max": 3, "premiumFrom": null, "rp": 15, "min": 120, "req": "lehrgang_dauer", "x": 4, "y": 1}, {"id": "anwerben", "branch": "personal", "name": "Nachwuchswerbung", "desc": "Personal wird schneller eingestellt", "per": 25, "max": 2, "premiumFrom": null, "rp": 20, "min": 180, "req": "lehrgang_kosten", "x": 4, "y": 2}, {"id": "manv", "branch": "grosslage", "name": "MANV-Konzept", "desc": "Schnellere Versorgung ab 4 Patienten", "per": 10, "max": 3, "premiumFrom": 0, "rp": 25, "min": 240, "req": null, "x": 5, "y": 0}, {"id": "grosslage", "branch": "grosslage", "name": "Führungsstab", "desc": "Große Einsätze (ab BRAND 4 / TH 3) dauern kürzer", "per": 5, "max": 3, "premiumFrom": 0, "rp": 35, "min": 480, "req": "manv", "x": 5, "y": 1}, {"id": "verlegung", "branch": "grosslage", "name": "Verlegungsdienst", "desc": "Intensivverlegungen bringen mehr Geld", "per": 20, "max": 2, "premiumFrom": 0, "rp": 30, "min": 360, "req": "manv", "x": 6, "y": 1}, {"id": "notruf", "branch": "leitstelle", "name": "Notrufabfrage", "desc": "Mehr offene Einsätze gleichzeitig (+1 je Stufe)", "per": 1, "max": 5, "premiumFrom": 0, "rp": 20, "min": 180, "req": null, "x": 7, "y": 0}, {"id": "takt", "branch": "leitstelle", "name": "Einsatzaufkommen", "desc": "Einsätze kommen häufiger", "per": 5, "max": 3, "premiumFrom": 0, "rp": 30, "min": 360, "req": "notruf", "x": 7, "y": 1}, {"id": "telemedizin", "branch": "leitstelle", "name": "Telemedizin", "desc": "Telenotarzt-Behandlung geht schneller", "per": 10, "max": 2, "premiumFrom": 0, "rp": 30, "min": 360, "req": "notruf", "x": 8, "y": 1}];
 /* ------------------------- LOOKUPS ------------------------- */
 const missionType=id=> (typeof id==='string' && id.startsWith('rd:')) ? rdMissionType(id) : (typeof id==='string' && id.startsWith('iv:')) ? ivMissionType(id) : MISSION_TYPES.find(m=>m.id===id);
 const stationById=id=>state.stations.find(s=>s.id===id);
@@ -1837,6 +1894,8 @@ function tickPatients(gm){
     let speed=1;
     if(m.patients.length>=3 && has('kdow_lna')) speed*=1.25;                       // LNA koordiniert
     if(m.patients.length>=4 && (has('gw_san')||has('ab_manv')||has('gw_rettmat'))) speed*=1.33;      // MANV-Material
+    if(m.patients.length>=4) speed*=1+resBonus('manv');
+    speed/=1-resBonus('behandlung');
     worsenPatients(m,gm);
     for(const p of m.patients){
       if(p.state!=='treating') continue;
@@ -1844,11 +1903,11 @@ function tickPatients(gm){
       const stemo=p.nefId && state.vehicles.find(v=>v.id===p.nefId)?.type==='stemo';
       p.stemo=!!stemo;
       const rv=state.vehicles.find(v=>v.id===p.rtwId), uebung=rv&&extCount(stationById(rv.stationId),'uebung')?1.1:1;
-      p.treatLeft-=gm*speed*(stemo?2:1)*(p.nefId==='tna'?CONFIG.tnaTreatFactor:1)*uebung;
+      p.treatLeft-=gm*speed*(stemo?2:1)*(p.nefId==='tna'?Math.min(1,CONFIG.tnaTreatFactor*(1+resBonus('telemedizin'))):1)*uebung;
       if(p.treatLeft<=0){
         p.state='ready'; const r=state.vehicles.find(v=>v.id===p.rtwId);
         if(r){ r.status=5; funk(r,5,'Patient transportbereit'); refreshVehicleMarker(r); }
-        if(state.autoHospital){ const best=hospitalsFor(p,m).find(x=>x.ok)||hospitalsFor(p,m)[0]; startTransport(m,p,best.h.id); }
+        if(state.autoHospital && isPremium()){ const best=hospitalsFor(p,m).find(x=>x.ok)||hospitalsFor(p,m)[0]; startTransport(m,p,best.h.id); }
         else toast(`Sprechwunsch: ${r?vehName(r):'RTW'} – Krankenhaus zuweisen`,'warn');
         renderMissionsThrottled(); renderVehicles();
       }
@@ -1864,7 +1923,7 @@ function worsenPatients(m,gm){
     const untreated = p.state==='waiting' || (p.cond>=COND_NA && !p.nefId);
     if(!untreated) continue;
     p.worse=(p.worse||0)+gm;
-    if(p.worse < CONFIG.patWorseMin[Math.min(3,p.cond)]) continue;
+    if(p.worse < CONFIG.patWorseMin[Math.min(3,p.cond)]*(1+resBonus('stabil'))) continue;
     p.worse=0;
     if(p.cond>=COND_NA){                                   // kritisch und unversorgt → verstorben
       p.cond=4; p.dead=true; p.state='done';
@@ -1897,7 +1956,8 @@ function finishHandover(v){
   const tr=v.transport; v.transport=null; v.handoverLeft=0;
   const m=missionById(tr.missionId), p=m&&(m.patients||[]).find(x=>x.id===tr.patientId);
   const km=tr.km!=null?tr.km:distM({lat:tr.fromLat,lng:tr.fromLng},hospitalById(tr.khId)||v)/1000;
-  const pay=Math.round((CONFIG.transportBase+CONFIG.transportPerKm*km)*(tr.na?1+CONFIG.naBonus:1));
+  const pay=Math.round((CONFIG.transportBase+CONFIG.transportPerKm*km)*(tr.na?1+CONFIG.naBonus:1)*(1+resBonus('transport')));
+  questCount('transports');
   state.earnings=(state.earnings||0)+pay; book('transport',`Patiententransport ${hospitalById(tr.khId)?.name||''}`,pay);
   if(p) p.state='done';
   if(isSm(tr.missionId)) smPatientEvent(tr.missionId, tr.patientId, 'done');
@@ -1971,7 +2031,9 @@ function missionReward(t){
 function completeMission(m){
   const t=missionType(m.type); m.status='done'; m.doneAt=Date.now(); if(simulating) simDone++;
   const pats=m.patients||[], dead=pats.filter(p=>p.dead).length;
-  const pay=Math.round(missionReward(t)*(pats.length?1-CONFIG.deadPenalty*dead/pats.length:1)); state.earnings=(state.earnings||0)+pay; book(t&&t.rd?'einsatz_rd':'einsatz_fw',`${t?t.code+' '+t.name:'Einsatz'}${simulating?' (offline)':''}`,pay);
+  const boost=t?.iv ? 1+resBonus('lohn_rd')+resBonus('verlegung') : t?.rd ? 1+resBonus('lohn_rd') : 1+resBonus('lohn_fw');
+  const pay=Math.round(missionReward(t)*(pats.length?1-CONFIG.deadPenalty*dead/pats.length:1)*boost);
+  questCount('missions'); if(t?.iv) questCount('iv'); else if(t?.rd) questCount('rd'); else if(t && t.cat==='b' && missionLevel(t)>=3) questCount('fire_big'); state.earnings=(state.earnings||0)+pay; book(t&&t.rd?'einsatz_rd':'einsatz_fw',`${t?t.code+' '+t.name:'Einsatz'}${simulating?' (offline)':''}`,pay);
   try{ refreshMissionMarker(m); }catch(e){ console.error(e); }
   m.assigned.slice().forEach(vid=>{ const v=state.vehicles.find(x=>x.id===vid); if(v){ try{ releaseVehicle(v); }catch(e){ console.error('release',e); } } });
   try{ toast(`${t?t.name:'Einsatz'} erledigt (+${fmt(pay)} €${dead?` · ${dead} verstorben`:''} · Auszahlung um 0 Uhr)`,dead?'warn':'ok'); renderTopbar(); renderVehicles(); }catch(e){ console.error(e); }
@@ -1986,7 +2048,7 @@ function settlePayday(){
     const earned=state.earnings;
     if(state.earnings>0){ state.credits+=state.earnings; book('auszahlung','Auszahlung Tageskasse',state.earnings); toast(`Tageseinnahmen gutgeschrieben: +${fmt(state.earnings)} €`,'ok'); }
     setTimeout(()=>allyAutoDeposit(earned),1500);        // Verband: automatischer Anteil (nach dem Speichern)
-    if(state.credits<0){ const z=Math.ceil(-state.credits*CONFIG.overdraftInterest); state.credits-=z; book('zinsen','Dispo-Zinsen (1 Tag)',-z); toast(`Dispo-Zinsen: −${fmt(z)} €`,'warn'); }
+    if(state.credits<0){ const z=Math.ceil(-state.credits*CONFIG.overdraftInterest*(1-resBonus('zinsen'))); state.credits-=z; book('zinsen','Dispo-Zinsen (1 Tag)',-z); toast(`Dispo-Zinsen: −${fmt(z)} €`,'warn'); }
     state.earnings=0; state.payDayKey=d; renderTopbar(); saveGame(true);
   }
 }
@@ -2438,7 +2500,8 @@ function allyVbPin(type){ const icon=type==='kh'
   return `<svg viewBox="0 0 40 48" width="40" height="48" aria-hidden="true"><path d="M8 2H32A6 6 0 0 1 38 8V30A6 6 0 0 1 32 36H25L20 44L15 36H8A6 6 0 0 1 2 30V8A6 6 0 0 1 8 2Z" fill="#2a2140" stroke="${ALLY_COLOR}" stroke-width="2.5"/><g transform="translate(8 7)">${icon(ALLY_COLOR)}</g></svg>`; }
 function allyDrawBuildings(){
   (allyAssets.buildings||[]).forEach(b=>{
-    const m=L.marker([b.lat,b.lng],{icon:L.divIcon({className:'f-ally mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:allyVbPin(b.type)})})
+    const ci=customBldImg(b.type==='kh'?'ally_kh':'ally_akademie','verband');
+    const m=L.marker([b.lat,b.lng],{icon:ci?customPinIcon(ci,'f-ally'):L.divIcon({className:'f-ally mk-pin',iconSize:[40,48],iconAnchor:PIN_TIP,tooltipAnchor:[0,-40],html:allyVbPin(b.type)})})
       .bindTooltip(`${esc(b.name)} · ${VB_BUILD[b.type]?.name||''}${b.type==='akademie'?` · ${b.rooms} Lehrsaal${b.rooms>1?'e':''}`:''}`,{direction:'top'}).addTo(allyLayer);
     m.on('click',()=>{ if(b.type==='akademie'){ acadSel.key='a:'+b.id; allyTab='academies'; } else allyTab='buildings'; openVerband(); });
   });
@@ -2730,6 +2793,232 @@ function useExtVoucher(o,key){
   toast(`${d.name} für ${o.name} per Gutschein beauftragt — fertig in ${fmtDur(e.readyAt-Date.now())}`,'ok');
 }
 
+/* ---------- Shop & Premium ----------
+   Einsatzpunkte (EP), Forschungspunkte (RP), Premium, Forschungen und abgeholte Quests liegen auf dem Server (wallet).
+   Premium kostet 50 EP je 30 Tage. EP-Pakete werden später über Stripe verkauft (hier noch ohne Kauf-Link). */
+let wallet=null, walletImgs={}, shopTab='premium', resSel=null, resView={ x:40, y:30, k:1 }, gfxSel={ v:null, b:'fire' };
+const missionLevel=t=>parseInt(String(t?.code||'').replace(/\D+/g,''))||0;
+function isPremium(){ return !!(wallet && wallet.premium_until && new Date(wallet.premium_until).getTime()>Date.now()); }
+const resNode=id=>RESEARCH.find(r=>r.id===id);
+/* Aktive Stufe einer Forschung: laufende Stufe zählt erst ab Fertigstellung; Premium-Stufen nur mit Premium */
+function researchLvl(id){
+  const r=(wallet?.research||[]).find(x=>x.node===id), n=resNode(id); if(!r||!n) return 0;
+  let lvl=r.level - (r.done_at && new Date(r.done_at).getTime()>Date.now() ? 1 : 0);
+  if(n.premiumFrom!=null && !isPremium()) lvl=Math.min(lvl, Math.max(0,n.premiumFrom-1));
+  return Math.max(0,lvl);
+}
+function resBonus(id){ const n=resNode(id); return n ? researchLvl(id)*n.per/100 : 0; }
+async function loadWallet(){
+  if(!sb||!AUTH.token) return;
+  let r; try{ r=await rpc('wallet',{p_token:AUTH.token}); }catch(e){ return; }
+  if(!r||r.error) return;
+  const wasPrem=isPremium(), oldImgs=(wallet?.images||[]).join(); wallet=r;
+  if(isPremium() && (r.images||[]).length && (r.images||[]).join()!==oldImgs){ try{ walletImgs=await rpc('img_list',{p_token:AUTH.token})||{}; }catch(e){} }
+  if(wasPrem!==isPremium() || (r.images||[]).join()!==oldImgs) refreshCustomGraphics();
+  if(document.getElementById('modal-shop').classList.contains('show')) renderShop();
+}
+/* Quests: Zähler je Tag/Woche (Berliner Zeit, gleiche Schlüssel wie der Server) */
+function questKeys(){
+  const d=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin'}).format(new Date());
+  const [y,mo,da]=d.split('-').map(Number), dt=new Date(Date.UTC(y,mo-1,da)), wd=(dt.getUTCDay()+6)%7;
+  dt.setUTCDate(dt.getUTCDate()-wd+3); const wy=dt.getUTCFullYear(), w1=new Date(Date.UTC(wy,0,4));
+  const wk=1+Math.round(((dt-w1)/86400000-3+((w1.getUTCDay()+6)%7))/7);
+  return { d, w:`${wy}-W${String(wk).padStart(2,'0')}` };
+}
+function questState(){
+  const k=questKeys(), q=state.quests=state.quests||{};
+  if(!q.d||q.d.key!==k.d) q.d={ key:k.d, c:{} };
+  if(!q.w||q.w.key!==k.w) q.w={ key:k.w, c:{} };
+  return q;
+}
+function questCount(name,n=1){ if(!state) return; const q=questState(); q.d.c[name]=(q.d.c[name]||0)+n; q.w.c[name]=(q.w.c[name]||0)+n; }
+function questProgress(x){ const q=questState(); return Math.min(x.goal, (q[x.period].c[x.counter]||0)); }
+async function claimQuest(id){
+  const x=QUESTS.find(q=>q.id===id); if(!x) return;
+  await saveGame(true);
+  let r; try{ r=await rpc('quest_claim',{p_token:AUTH.token,p_quest:id}); }catch(e){ toast('Quest: '+errMsg(e),'err'); return; }
+  if(!r||r.error){ toast(r?.error||'Fehler','err'); return; }
+  state.credits+=r.money; book('quest',`Quest: ${x.text}`,r.money);
+  renderTopbar(); saveGame(true); toast(`Quest abgeschlossen: +${fmt(r.money)} € und ${r.rp} Forschungspunkte`,'ok');
+  await loadWallet();
+}
+async function shopCall(fn,args,ok){
+  try{ const r=await rpc(fn,{p_token:AUTH.token,...args}); if(r&&r.error){ toast(r.error,'err'); return null; } if(ok) toast(ok,'ok'); return r||{}; }
+  catch(e){ toast('Shop: '+errMsg(e),'err'); return null; }
+}
+
+/* ----- Shop-Fenster ----- */
+const PREMIUM_FEATURES=[
+  ['Eigene Alarmierungsgebiete','Rechteck, Polygon und Freihand statt nur Kreis'],
+  ['Automatische Krankenhauswahl','RTW fahren selbst ins nächste geeignete Krankenhaus (in der Leitstelle umschaltbar)'],
+  ['Discord-Rolle VIP','Mit deiner Discord-User-ID bekommst du die Rolle VIP'],
+  ['Mehr Quests','Zusätzliche tägliche und wöchentliche Quests mit höheren Belohnungen'],
+  ['Größerer Forschungsbaum','Zwei zusätzliche Äste und höhere Stufen'],
+  ['Premium-Codes','Codes, die nur Premium-Spieler einlösen können'],
+  ['Eigene Fahrzeuggrafiken','Links, rechts, mit und ohne Blaulicht'],
+  ['Eigene Gebäudegrafiken','Normal, im Bau und Verband'],
+];
+async function openShop(){ showModal('modal-shop'); renderShop(); await loadWallet(); }
+function renderShop(){
+  const box=document.getElementById('shop-content'), tabs=document.getElementById('shop-tabs'); if(!box) return;
+  const T=[['premium','Premium'],['ep','Einsatzpunkte'],['quests','Quests'],['forschung','Forschung'],['grafiken','Grafiken']];
+  tabs.innerHTML=T.map(([k,n])=>`<button class="tab${k===shopTab?' active':''}" data-shoptab="${k}">${n}</button>`).join('');
+  tabs.querySelectorAll('[data-shoptab]').forEach(b=>b.onclick=()=>{ shopTab=b.dataset.shoptab; renderShop(); });
+  document.getElementById('shop-wallet').innerHTML=wallet?`<span><b>${fmt(wallet.ep)}</b> EP</span><span><b>${fmt(wallet.rp)}</b> Forschungspunkte</span>${isPremium()?'<span class="prem-badge">Premium</span>':''}`:'';
+  if(!wallet){ box.innerHTML='<div class="empty-hint">Lade … (nur mit Anmeldung verfügbar)</div>'; return; }
+  box.innerHTML=({premium:shopPremiumHtml,ep:shopEpHtml,quests:shopQuestsHtml,forschung:shopResearchHtml,grafiken:shopGfxHtml}[shopTab])();
+  shopBind();
+}
+function shopPremiumHtml(){
+  const until=wallet.premium_until?new Date(wallet.premium_until):null, on=isPremium();
+  return `<div class="bank-cards"><div class="bank-card"><div class="k">Status</div><div class="v">${on?'Premium aktiv':'Kein Premium'}</div>
+      <div class="s">${on?`bis ${fmtDate(until)}${wallet.premium_auto?' · verlängert sich automatisch':''}`:until?`abgelaufen am ${fmtDate(until)}`:'Premium kostet 50 EP für 30 Tage'}</div></div>
+    <div class="bank-card"><div class="k">Einsatzpunkte</div><div class="v">${fmt(wallet.ep)} EP</div><div class="s">${Math.floor(wallet.ep/PREMIUM_EP)} Monat${Math.floor(wallet.ep/PREMIUM_EP)===1?'':'e'} Premium</div></div></div>
+    <div class="vb-sec"><h4>Premium</h4><div class="vb-form">
+      <button class="btn primary" id="shop-prem" ${wallet.ep>=PREMIUM_EP?'':'disabled'}>${on?'Um 30 Tage verlängern':'Premium aktivieren'} · ${PREMIUM_EP} EP</button>
+      <label class="vb-check"><input type="checkbox" id="shop-auto" ${wallet.premium_auto?'checked':''}> Jeden Monat automatisch verlängern, solange genug EP da sind</label></div>
+      ${wallet.ep<PREMIUM_EP?'<div class="pers-hint">Zu wenig Einsatzpunkte. EP-Pakete findest du im Reiter „Einsatzpunkte“.</div>':''}</div>
+    <div class="vb-sec"><h4>Das bringt Premium</h4><div class="prem-grid">${PREMIUM_FEATURES.map(([a,b])=>`<div class="prem-feat"><b>${a}</b><span>${b}</span></div>`).join('')}</div></div>
+    <div class="vb-sec"><h4>Discord-Rolle VIP</h4><div class="vb-form"><label class="fld sm" style="flex:1"><span>Discord-User-ID</span>
+      <input id="shop-discord" class="vb-in" inputmode="numeric" maxlength="20" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value="${esc(wallet.discord_id||'')}" placeholder="z. B. 123456789012345678"></label>
+      <button class="btn" id="shop-discord-save">Speichern</button></div>
+      <div class="pers-hint">Die ID findest du in Discord unter Einstellungen → Erweitert → Entwicklermodus an, dann Rechtsklick auf deinen Namen → „User-ID kopieren“. Solange Premium aktiv ist, bekommst du die Rolle VIP.</div></div>`;
+}
+function shopEpHtml(){
+  const base=EP_PACKAGES[0].ep/EP_PACKAGES[0].cents;
+  return `<div class="pers-hint">Einsatzpunkte (EP) sind die Premium-Währung. 50 EP = 30 Tage Premium.</div>
+    <div class="ep-grid">${EP_PACKAGES.map(p=>{ const more=Math.round((p.ep/p.cents/base-1)*100);
+      return `<div class="ep-card${p.tag?' hl':''}">${p.tag?`<span class="ep-tag">${p.tag}</span>`:''}<div class="ep-amt">${fmt(p.ep)} <small>EP</small></div>
+        <div class="ep-bonus">${fmt(p.ep-p.bonus)} + ${fmt(p.bonus)} gratis</div><div class="ep-price">${(p.cents/100).toFixed(2).replace('.',',')} €</div>
+        <div class="ep-more">${more>0?`+${more} % mehr EP je Euro`:'&nbsp;'}</div><div class="ep-months">≈ ${Math.floor(p.ep/PREMIUM_EP)} Monate Premium</div>
+        <button class="btn ${p.tag?'primary':''}" disabled title="Zahlung folgt">Bald verfügbar</button></div>`; }).join('')}</div>
+    <div class="pers-hint">Der Kauf ist noch nicht freigeschaltet.</div>`;
+}
+function shopQuestsHtml(){
+  const sect=(period,title)=>`<div class="vb-sec"><h4>${title}</h4>${QUESTS.filter(x=>x.period===period).map(x=>{
+      const prog=questProgress(x), done=prog>=x.goal, claimed=(wallet.claimed||[]).includes(x.id), locked=x.premium&&!isPremium();
+      return `<div class="vb-row cv-row quest${claimed?' claimed':''}"><div class="cv-main" style="flex:1"><b>${esc(x.text)}${x.premium?' <span class="prem-badge sm">Premium</span>':''}</b>
+        <div class="q-bar"><div style="width:${prog/x.goal*100}%"></div></div><span class="pat-dept">${prog}/${x.goal} · ${fmt(x.money)} € + ${x.rp} Forschungspunkte</span></div>
+        <button class="btn sm ${done&&!claimed&&!locked?'primary':''}" data-qclaim="${x.id}" ${done&&!claimed&&!locked?'':'disabled'}>${claimed?'Abgeholt':locked?'Premium':'Abholen'}</button></div>`; }).join('')}</div>`;
+  return sect('d','Täglich (neu um 0 Uhr)')+sect('w','Wöchentlich (neu am Montag)');
+}
+/* Forschungsbaum: verschiebbare 2D-Ansicht mit Zoom (Maus, Mausrad, Touch) */
+const RES_BRANCH={ einsatz:'Einsatz', rd:'Rettungsdienst', wirtschaft:'Wirtschaft', personal:'Personal', grosslage:'Großlagen', leitstelle:'Leitstelle' };
+const RES_W=170, RES_H=74, RES_DX=200, RES_DY=120;
+function shopResearchHtml(){
+  const now=Date.now(), running=(wallet.research||[]).find(r=>r.done_at&&new Date(r.done_at).getTime()>now);
+  const pos=n=>({ x:n.x*RES_DX, y:n.y*RES_DY+40 });
+  const lines=RESEARCH.filter(n=>n.req).map(n=>{ const a=pos(resNode(n.req)), b=pos(n); return `<path d="M${a.x+RES_W/2} ${a.y+RES_H} C${a.x+RES_W/2} ${a.y+RES_H+30},${b.x+RES_W/2} ${b.y-30},${b.x+RES_W/2} ${b.y}" class="res-link${researchLvl(n.req)>0?' on':''}"/>`; }).join('');
+  const heads=[...new Set(RESEARCH.map(n=>n.branch))].map(br=>{ const xs=RESEARCH.filter(n=>n.branch===br).map(n=>n.x); const x=(Math.min(...xs)+Math.max(...xs))/2*RES_DX+RES_W/2;
+    const prem=RESEARCH.find(n=>n.branch===br).premiumFrom===0; return `<text x="${x}" y="18" class="res-head">${RES_BRANCH[br]}${prem?' · Premium':''}</text>`; }).join('');
+  const nodes=RESEARCH.map(n=>{ const p=pos(n), r=(wallet.research||[]).find(x=>x.node===n.id), lvl=r?r.level:0, active=researchLvl(n.id);
+    const run=r&&r.done_at&&new Date(r.done_at).getTime()>now, prem=n.premiumFrom===0, sel=resSel===n.id;
+    const reqOk=!n.req||researchLvl(n.req)>0, cls=['res-node',sel?'sel':'',run?'run':'',lvl>=n.max?'max':'',!reqOk?'lock':'',prem?'prem':''].join(' ');
+    return `<g class="${cls}" data-res="${n.id}" transform="translate(${p.x} ${p.y})"><rect width="${RES_W}" height="${RES_H}" rx="10"/>
+      <text x="12" y="24" class="res-name">${esc(n.name)}</text><text x="12" y="44" class="res-sub">Stufe ${active}/${n.max}${run?' · läuft':''}</text>
+      <rect x="12" y="54" width="${RES_W-24}" height="6" rx="3" class="res-track"/><rect x="12" y="54" width="${(RES_W-24)*lvl/n.max}" height="6" rx="3" class="res-fill"/></g>`; }).join('');
+  const W=Math.max(...RESEARCH.map(n=>n.x))*RES_DX+RES_W, H=Math.max(...RESEARCH.map(n=>n.y))*RES_DY+RES_H+60;
+  const n=resSel&&resNode(resSel);
+  let det='<div class="pers-hint">Klicke eine Forschung an. Ziehen verschiebt, Mausrad oder zwei Finger zoomen.</div>';
+  if(n){ const r=(wallet.research||[]).find(x=>x.node===n.id), lvl=r?r.level:0, next=lvl+1, cost=n.rp*next, mins=n.min*next;
+    const needPrem=n.premiumFrom!=null && next>=Math.max(1,n.premiumFrom) && !isPremium(), reqOk=!n.req||researchLvl(n.req)>0;
+    const why= lvl>=n.max?'Höchste Stufe erreicht' : running?`Es läuft schon: ${esc(resNode(running.node)?.name||'')} (fertig in ${fmtDur(new Date(running.done_at)-now)})`
+      : needPrem?'Diese Stufe braucht Premium' : !reqOk?`Erst „${esc(resNode(n.req).name)}“ erforschen` : wallet.rp<cost?`Zu wenig Forschungspunkte (${cost} nötig)`:'';
+    det=`<div class="res-det"><div><b>${esc(n.name)}</b> <span class="dim">· ${RES_BRANCH[n.branch]}</span><div class="pat-dept">${esc(n.desc)}: ${n.per}${n.id==='notruf'?'':' %'} je Stufe · aktiv: Stufe ${researchLvl(n.id)} von ${n.max}${n.premiumFrom>0?` · ab Stufe ${n.premiumFrom} Premium`:''}</div></div>
+      <span class="vb-sp"></span>${lvl<n.max?`<button class="btn primary" id="res-go" ${why?'disabled':''} title="${why}">Stufe ${next} erforschen · ${cost} RP · ${fmtDur(mins*60000)}</button>`:''}
+      ${why&&lvl<n.max?`<div class="pers-hint" style="width:100%">${why}</div>`:''}</div>`; }
+  return `<div class="res-top"><span class="pers-hint">Forschungspunkte gibt es für Quests. Es läuft immer eine Forschung gleichzeitig.${running?` Gerade: <b>${esc(resNode(running.node)?.name||'')}</b>, fertig in ${fmtDur(new Date(running.done_at)-now)}.`:''}</span>
+      <span class="vb-sp"></span><button class="btn sm ghost" data-rz="1.2">+</button><button class="btn sm ghost" data-rz="0.83">−</button><button class="btn sm ghost" data-rz="0">Mitte</button></div>
+    <div class="res-view" id="res-view"><svg id="res-svg" width="100%" height="100%"><g id="res-g" transform="translate(${resView.x} ${resView.y}) scale(${resView.k})" data-w="${W}" data-h="${H}">${heads}${lines}${nodes}</g></svg></div>${det}`;
+}
+function resBind(){
+  const view=document.getElementById('res-view'), g=document.getElementById('res-g'); if(!view||!g) return;
+  const apply=()=>g.setAttribute('transform',`translate(${resView.x} ${resView.y}) scale(${resView.k})`);
+  if(!resView.fit){ const r=view.getBoundingClientRect(); if(r.width){ resView={ x:20, y:10, k:Math.max(0.7,Math.min(1,(r.width-40)/Number(g.dataset.w))), fit:true }; apply(); } }   // beim ersten Öffnen ganz zeigen
+  const zoom=(f,cx,cy)=>{ const k=Math.max(0.35,Math.min(2.2,resView.k*f)); resView.x=cx-(cx-resView.x)*k/resView.k; resView.y=cy-(cy-resView.y)*k/resView.k; resView.k=k; apply(); };
+  const pts=new Map(); let moved=false, pinch=null;
+  view.onpointerdown=e=>{ view.setPointerCapture(e.pointerId); pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); moved=false;
+    if(pts.size===2){ const [a,b]=[...pts.values()]; pinch={ d:Math.hypot(a.x-b.x,a.y-b.y) }; } };
+  view.onpointermove=e=>{ const p=pts.get(e.pointerId); if(!p) return;
+    if(pts.size===2 && pinch){ pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); const [a,b]=[...pts.values()], d=Math.hypot(a.x-b.x,a.y-b.y), r=view.getBoundingClientRect();
+      zoom(d/pinch.d,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top); pinch.d=d; moved=true; return; }
+    const dx=e.clientX-p.x, dy=e.clientY-p.y; if(Math.abs(dx)+Math.abs(dy)>3) moved=true;
+    resView.x+=dx; resView.y+=dy; pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); apply(); };
+  const up=e=>{ const was=pts.size; pts.delete(e.pointerId); if(pts.size<2) pinch=null;
+    if(!moved && was===1){ const t=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-res]'); if(t){ resSel=t.dataset.res; renderShop(); } } };
+  view.onpointerup=up; view.onpointercancel=up;
+  view.onwheel=e=>{ e.preventDefault(); const r=view.getBoundingClientRect(); zoom(e.deltaY<0?1.12:0.89,e.clientX-r.left,e.clientY-r.top); };
+  document.querySelectorAll('[data-rz]').forEach(b=>b.onclick=()=>{ const f=Number(b.dataset.rz), r=view.getBoundingClientRect();
+    if(f) zoom(f,r.width/2,r.height/2); else { resView={ x:20, y:10, k:Math.max(0.7,Math.min(1,(r.width-40)/Number(g.dataset.w))), fit:true }; apply(); } });
+  const go=document.getElementById('res-go'); if(go) go.onclick=async()=>{ if(await shopCall('research_start',{p_node:resSel},'Forschung gestartet')) loadWallet(); };
+}
+/* Eigene Grafiken: Fahrzeuge (links/rechts, mit/ohne Blaulicht), Gebäude (normal, im Bau, Verband) */
+const GFX_BUILDINGS=[['fire','Feuerwache'],['academy','Akademie'],['leitstelle','Leitstelle'],['ally_kh','Verbandskrankenhaus'],['ally_akademie','Verbandsakademie']];
+function gfxSlotsHtml(slots){
+  return `<div class="gfx-grid">${slots.map(([slot,label])=>{ const has=(wallet.images||[]).includes(slot), src=walletImgs[slot];
+    return `<div class="gfx-slot"><div class="gfx-prev">${has&&src?`<img src="${src}" alt="${esc(label)}">`:'<span class="dim">Standard</span>'}</div><b>${label}</b>
+      <div class="vb-form"><label class="btn sm ${isPremium()?'':'disabled'}">Hochladen<input type="file" accept="image/png,image/webp,image/jpeg" data-gfx="${slot}" hidden ${isPremium()?'':'disabled'}></label>
+      ${has?`<button class="btn sm ghost" data-gfxdel="${slot}">Löschen</button>`:''}</div></div>`; }).join('')}</div>`;
+}
+function shopGfxHtml(){
+  const types=Object.values(VEHICLES).sort((a,b)=>a.name.localeCompare(b.name,'de')); if(!gfxSel.v||!VEHICLES[gfxSel.v]) gfxSel.v=types[0].id;
+  const v=gfxSel.v;
+  return `${isPremium()?'':'<div class="lss-alert miss">Eigene Grafiken gibt es mit Premium. Hochgeladene Bilder bleiben gespeichert und werden nur bei aktivem Premium angezeigt.</div>'}
+    <div class="pers-hint">PNG, WebP oder JPG, wird automatisch verkleinert (max. 200 KB). Nur du siehst deine Grafiken, Verbandsmitglieder sehen die normalen.</div>
+    <div class="vb-sec"><h4>Fahrzeug</h4><div class="vb-form"><label class="fld sm"><span>Fahrzeugtyp</span><select id="gfx-v" class="vb-sel">${types.map(t=>`<option value="${t.id}"${t.id===v?' selected':''}>${esc(t.name)}</option>`).join('')}</select></label></div>
+      ${gfxSlotsHtml([[`v:${v}:l0`,'Nach links'],[`v:${v}:r0`,'Nach rechts'],[`v:${v}:l1`,'Links mit Blaulicht'],[`v:${v}:r1`,'Rechts mit Blaulicht']])}
+      <div class="pers-hint">Fehlt eine Richtung, wird die andere gespiegelt. Blaulicht leuchtet auf Anfahrt (Status 3) und beim Transport (Status 7).</div></div>
+    <div class="vb-sec"><h4>Gebäude</h4><div class="vb-form"><label class="fld sm"><span>Gebäude</span><select id="gfx-b" class="vb-sel">${GFX_BUILDINGS.map(([id,n])=>`<option value="${id}"${id===gfxSel.b?' selected':''}>${n}</option>`).join('')}</select></label></div>
+      ${gfxSlotsHtml([[`b:${gfxSel.b}:normal`,'Normal'],[`b:${gfxSel.b}:bau`,'Im Bau'],[`b:${gfxSel.b}:verband`,'Verband (für den Verband freigegeben)']])}</div>`;
+}
+/* Bild verkleinern (max. 160 px) und als WebP bzw. PNG speichern */
+function gfxEncode(file){
+  return new Promise((res,rej)=>{ const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{ const f=Math.min(1,160/Math.max(img.width,img.height)), c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.width*f)); c.height=Math.max(1,Math.round(img.height*f));
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+      let d=c.toDataURL('image/webp',0.9); if(!d.startsWith('data:image/webp')) d=c.toDataURL('image/png'); res(d); };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('Bild kann nicht gelesen werden')); }; img.src=url; });
+}
+function shopBind(){
+  const q=id=>document.getElementById(id), on=(id,fn)=>{ const e=q(id); if(e) e.onclick=fn; };
+  on('shop-prem',async()=>{ if(confirm(`Premium für 30 Tage aktivieren? Es werden ${PREMIUM_EP} EP abgezogen.`) && await shopCall('premium_activate',{},'Premium aktiviert')) loadWallet(); });
+  const au=q('shop-auto'); if(au) au.onchange=async()=>{ if(await shopCall('premium_auto',{p_on:au.checked},au.checked?'Automatische Verlängerung an':'Automatische Verlängerung aus')) loadWallet(); };
+  on('shop-discord-save',async()=>{ if(await shopCall('wallet_discord',{p_id:q('shop-discord').value},'Discord-ID gespeichert')) loadWallet(); });
+  document.querySelectorAll('[data-qclaim]').forEach(b=>b.onclick=()=>claimQuest(b.dataset.qclaim));
+  resBind();
+  const gv=q('gfx-v'); if(gv) gv.onchange=()=>{ gfxSel.v=gv.value; renderShop(); };
+  const gb=q('gfx-b'); if(gb) gb.onchange=()=>{ gfxSel.b=gb.value; renderShop(); };
+  document.querySelectorAll('[data-gfx]').forEach(inp=>inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+    let d; try{ d=await gfxEncode(f); }catch(e){ toast(e.message,'err'); return; }
+    if(d.length>280000){ toast('Bild zu groß (max. 200 KB)','err'); return; }
+    if(await shopCall('img_save',{p_slot:inp.dataset.gfx,p_data:d},'Grafik gespeichert')){ walletImgs[inp.dataset.gfx]=d; if(wallet && !wallet.images.includes(inp.dataset.gfx)) wallet.images.push(inp.dataset.gfx); refreshCustomGraphics(); renderShop(); } });
+  document.querySelectorAll('[data-gfxdel]').forEach(b=>b.onclick=async()=>{ if(await shopCall('img_delete',{p_slot:b.dataset.gfxdel},'Grafik gelöscht')){ delete walletImgs[b.dataset.gfxdel]; wallet.images=wallet.images.filter(x=>x!==b.dataset.gfxdel); refreshCustomGraphics(); renderShop(); } });
+}
+/* Eigene Grafiken auf der Karte (nur für den Spieler selbst, nur mit Premium) */
+function customVehImg(v){
+  if(!isPremium()) return null; const bl=(v.status===3||v.status===7)?1:0, d=v.face||'r', o=d==='r'?'l':'r', I=walletImgs;
+  if(I[`v:${v.type}:${d}${bl}`]) return { src:I[`v:${v.type}:${d}${bl}`], flip:false };
+  if(I[`v:${v.type}:${o}${bl}`]) return { src:I[`v:${v.type}:${o}${bl}`], flip:true };
+  if(I[`v:${v.type}:${d}${1-bl}`]) return { src:I[`v:${v.type}:${d}${1-bl}`], flip:false };
+  if(I[`v:${v.type}:${o}${1-bl}`]) return { src:I[`v:${v.type}:${o}${1-bl}`], flip:true };
+  return null;
+}
+function customBldImg(type,stateKey){ if(!isPremium()) return null; return walletImgs[`b:${type}:${stateKey}`] || (stateKey!=='normal'?walletImgs[`b:${type}:normal`]:null) || null; }
+function customPinIcon(src,cls){ return L.divIcon({className:cls+' mk-pin',iconSize:[44,44],iconAnchor:[22,44],tooltipAnchor:[0,-40],html:`<img class="mk-bimg" src="${src}" alt="">`}); }
+function refreshCustomGraphics(){
+  if(!map||!state) return;
+  state.stations.forEach(refreshStationMarker);
+  (state.buildings||[]).forEach(b=>{ if(b.marker) buildingLayer.removeLayer(b.marker); addBuildingMarker(b); });
+  state.vehicles.forEach(v=>refreshVehicleMarker(v));
+  areaRev++; renderAreas();
+  if(allyInfo.id) allyLoadMap();
+}
+/* Leitstelle: automatische Krankenhauswahl (Premium) */
+function lsAutoKhHtml(){
+  return `<div class="ls-auto"><label class="vb-check"><input type="checkbox" id="ls-autokh" ${state.autoHospital&&isPremium()?'checked':''} ${isPremium()?'':'disabled'}>
+    RTW fahren automatisch ins nächste geeignete Krankenhaus</label>${isPremium()?'':' <span class="prem-badge sm">Premium</span>'}</div>`;
+}
+
 /* ------------------------- FUNK ------------------------- */
 let funkLog=[];
 function vehAbbr(v){ const t=VEHICLES[v.type]; return (t&&t.abbr)||(t&&t.name.split(' ')[0])||v.type; }
@@ -2749,7 +3038,7 @@ function funk(v,status,note){ if(simulating) return;
 /* ------------------------- DISPATCH / DRIVE ------------------------- */
 function startDrive(v,coords,osrmDuration,factor){
   v.path=buildPath(coords);
-  v.driveSeconds=Math.max(2,osrmDuration*CONFIG.driveTimeScale*factor);
+  v.driveSeconds=Math.max(2,osrmDuration*CONFIG.driveTimeScale*factor*(1-resBonus('fahrt')));
   v.driveElapsed=0; v.lat=coords[0].lat; v.lng=coords[0].lng;
   drawRoute(v,coords); refreshVehicleMarker(v);
 }
@@ -2768,7 +3057,7 @@ async function routeVehicleTo(v,m,factor,departIn){
   startDrive(v,route.coords,route.duration,factor||CONFIG.outboundFactor);
 }
 /* Ausrückezeit: eigener Wert des Fahrzeugs, sonst Standard der Wache (Sekunden) */
-function turnoutOf(v){ const st=stationById(v.stationId); return v.turnout!=null ? v.turnout : (st?.turnout||0); }
+function turnoutOf(v){ const st=stationById(v.stationId); return (v.turnout!=null ? v.turnout : (st?.turnout||0))*(1-resBonus('ausrueck')); }
 function turnoutGapMs(){ const [a,b]=CONFIG.turnoutGap; return (a+Math.random()*(b-a))*1000; }
 /* Abfahrt einplanen: Fahrzeuge einer Wache verlassen das Tor nie gleichzeitig, sondern mit 5–15 s Abstand */
 function scheduleTurnout(v){
@@ -2901,7 +3190,9 @@ function stepWorld(dt){
       if(!v.path) continue; // Route lädt noch
       if(v.status===3 && v.departIn>0){ v.departIn-=dt; continue; }   // wartet noch auf Abfahrt (Ausrückezeit)
       v.driveElapsed+=dt; const frac=Math.min(1,v.driveElapsed/v.driveSeconds);
-      const p=pointAtFrac(v.path,frac); v.lat=p.lat; v.lng=p.lng; if(v.marker && !simulating) v.marker.setLatLng([v.lat,v.lng]);
+      const p=pointAtFrac(v.path,frac);
+      if(Math.abs(p.lng-v.lng)>2e-6){ const face=p.lng>v.lng?'r':'l'; if(face!==v.face){ v.face=face; if(!simulating && v.marker && isPremium() && customVehImg(v)) refreshVehicleMarker(v); } }   // Blickrichtung für eigene Grafiken
+      v.lat=p.lat; v.lng=p.lng; if(v.marker && !simulating) v.marker.setLatLng([v.lat,v.lng]);
       if(frac>=1){
         clearRoute(v); v.path=null;
         if(v.status===3){ v.status=4; funk(v,4); refreshVehicleMarker(v); renderMissions(); renderVehicles(); }
@@ -2974,7 +3265,7 @@ function mmss(min){ const m=Math.max(0,min),w=Math.floor(m),s=Math.floor((m-w)*6
 /* Effektive Einsatzdauer: jedes Fzg bis Cap = perVehicleSpeedup schneller. */
 function effMissionMinutes(t, vehCount){
   const used=Math.max(1, Math.min(vehCount||1, CONFIG.usefulVehicleCap));
-  return t.minutes * (1 - CONFIG.perVehicleSpeedup*(used-1));
+  return t.minutes * (1 - CONFIG.perVehicleSpeedup*(used-1)) * (1-resBonus('loesch')) * (missionLevel(t)>=(t.cat==='b'?4:3)?1-resBonus('grosslage'):1);
 }
 /* Löschmittel-Deckung: summiert Wasser/Schaum der Fahrzeuge VOR ORT.
    coverage = kleinster Deckungsgrad (Wasser bzw. Schaum). Fortschritt läuft nur bis dahin. */
@@ -3098,7 +3389,7 @@ const BOOK_CATS={
   fahrzeug:{name:'Fahrzeuge',kind:'out'}, gebaeude:{name:'Gebäude',kind:'out'}, ausbau:{name:'Ausbau',kind:'out'},
   personal:{name:'Personal',kind:'out'}, lehrgang:{name:'Lehrgänge',kind:'out'}, zinsen:{name:'Dispo-Zinsen',kind:'out'},
   korrektur:{name:'Korrektur (Server)',kind:'out'}, erweiterung:{name:'Erweiterungen',kind:'out'},
-  verband:{name:'Verband (Einzahlungen)',kind:'out'}, verband_in:{name:'Verband (Auszahlungen)',kind:'in'}, code:{name:'Codes',kind:'in'},
+  verband:{name:'Verband (Einzahlungen)',kind:'out'}, verband_in:{name:'Verband (Auszahlungen)',kind:'in'}, code:{name:'Codes',kind:'in'}, quest:{name:'Quests',kind:'in'},
   auszahlung:{name:'Auszahlung Tageskasse',kind:'transfer'} };
 const LEDGER_MAX=500;
 function book(cat,text,amt){
@@ -3219,7 +3510,7 @@ function stationFree(st){ return Math.max(0, staffCount(st)-stationBound(st)-tra
 function accrueStaff(st, now){
   if(!Array.isArray(st.roster)) st.roster=makeRoster(st.staff!=null?st.staff:CONFIG.startStaff);
   if(st.hireTarget && st.hireTarget>staffCount(st)){
-    const dayMs=CONFIG.personnelDayMs/(extCount(st,'ruhe')?2:1);   // Ruheräume: doppelt so schnell
+    const dayMs=CONFIG.personnelDayMs/(extCount(st,'ruhe')?2:1)/(1+resBonus('anwerben'));   // Ruheräume: doppelt so schnell
     if(!st.lastHireAt) st.lastHireAt=now;
     while(now - st.lastHireAt >= dayMs && staffCount(st) < st.hireTarget){
       st.roster.push(makePerson()); st.lastHireAt += dayMs;
@@ -3242,7 +3533,7 @@ function startHire(id){
 function hireNow(id,n){
   const st=stationById(id); if(!st||n<1) return;
   n=Math.min(n, CONFIG.maxStaff-staffCount(st)); if(n<1){ toast(`Maximal ${CONFIG.maxStaff} Personal`,'warn'); return; }
-  const cost=n*CONFIG.hireCost;
+  const cost=Math.round(n*CONFIG.hireCost*(1-resBonus('personal_kosten')));
   if(!canAfford(cost)){ toast(`Nicht genug Guthaben bzw. Dispo (${fmt(cost)} € nötig)`,'err'); return; }
   state.credits-=cost; book('personal',`${n} Person(en) für ${st.name}`,-cost); for(let i=0;i<n;i++) st.roster.push(makePerson());
   renderTopbar(); renderStations(); renderStationView(); saveGame(true); toast(`${n} Person(en) angeworben (−${fmt(cost)} €)`,'ok');
@@ -3456,12 +3747,12 @@ function extKind(o){ return o && o.typeId==='academy' ? 'academy' : o && o.typeI
 function extDef(o,key){ return EXTENSIONS[extKind(o)].find(x=>x.key===key); }
 function extList(o){ return o && Array.isArray(o.exts) ? o.exts : []; }
 function extCount(o,key){ const now=Date.now(); return extList(o).filter(e=>e.key===key && (!e.readyAt || now>=e.readyAt)).length; }
-function extCost(o,d){ return typeof d.cost==='function' ? d.cost(o) : d.cost; }
+function extCost(o,d){ return Math.round((typeof d.cost==='function' ? d.cost(o) : d.cost)*(1-resBonus('erw_kosten'))); }
 function vehicleLockedAt(st,typeId){ const k=VEH_UNLOCK[typeId]; return k && !extCount(st,k) ? k : null; }
 /* Bauschlange je Gebäude: Erweiterungen werden nacheinander gebaut. Ein neuer Auftrag beginnt, wenn der letzte fertig ist. */
 function extQueueEnd(o){ const now=Date.now(); return Math.max(now, ...extList(o).filter(e=>e.readyAt&&e.readyAt>now).map(e=>e.readyAt)); }
 function queueExt(o,key,paid,voucher){
-  const start=extQueueEnd(o), e={ key, startAt:start, readyAt:start+CONFIG.extBuildMs, pending:true, q:1, paid:paid||0, voucher:!!voucher };
+  const start=extQueueEnd(o), e={ key, startAt:start, readyAt:start+Math.round(CONFIG.extBuildMs*(1-resBonus('erw_bau'))), pending:true, q:1, paid:paid||0, voucher:!!voucher };
   (o.exts=o.exts||[]).push(e); return e;
 }
 /* Stornieren (auch die laufende): volle Erstattung bzw. Gutschein zurück, die dahinter rücken nach */
@@ -3560,15 +3851,17 @@ function renderLeitstelleView(){
       <div class="ls-stat"><b>${open} / ${maxOpenMissions(km2)}</b><span>offene Einsätze / Grenze</span></div>
       <div class="ls-stat"><b>${tnaUsed()} / ${tnaSlots()}</b><span>Telenotärzte im Einsatz</span></div>
     </div>
-    <div class="pers-hint">Calltaker nehmen Notrufe an: je Platz ${CONFIG.calltakerOpen} offene Einsätze mehr. Telenotärzte werden im Alarmierungsfenster eines RD-Einsatzes alarmiert und sind ohne Anfahrt da, sobald ein RTW den Patienten versorgt. Weitere Plätze gibt es im Reiter <b>Erweiterungen</b>.</div>`;
+    <div class="pers-hint">Calltaker nehmen Notrufe an: je Platz ${CONFIG.calltakerOpen} offene Einsätze mehr. Telenotärzte werden im Alarmierungsfenster eines RD-Einsatzes alarmiert und sind ohne Anfahrt da, sobald ein RTW den Patienten versorgt. Weitere Plätze gibt es im Reiter <b>Erweiterungen</b>.</div>
+    ${lsAutoKhHtml()}`;
+  const ak=document.getElementById('ls-autokh'); if(ak) ak.onchange=()=>{ state.autoHospital=ak.checked; saveGame(true); toast(ak.checked?'Automatische Krankenhauswahl an':'Automatische Krankenhauswahl aus','ok'); };
 }
 
 /* ---------- Feuerwehr-Akademie ---------- */
 let avId=null, avStationId=null, avCourseId=null, avSelected=new Set();
 const academyById=id=>(state.buildings||[]).find(b=>b.id===id&&b.typeId==='academy');
 function academyRooms(a){ return 1+extCount(a,'saal'); }
-function courseCostFor(a){ return Math.round(CONFIG.courseCost*(extCount(a,'hof')?0.7:1)); }      // Übungshof: 30 % günstiger
-function courseDurationFor(a,co){ return Math.round(co.durationMs*(extCount(a,'sim')?0.75:1)); } // Simulationszentrum: 25 % kürzer
+function courseCostFor(a){ return Math.round(CONFIG.courseCost*(extCount(a,'hof')?0.7:1)*(1-resBonus('lehrgang_kosten'))); }      // Übungshof: 30 % günstiger
+function courseDurationFor(a,co){ return Math.round(co.durationMs*(extCount(a,'sim')?0.75:1)*(1-resBonus('lehrgang_dauer'))); } // Simulationszentrum: 25 % kürzer
 function personById(pid){ for(const st of state.stations){ const p=(st.roster||[]).find(x=>x.id===pid); if(p) return {p,st}; } return null; }
 function finishDueCourses(now){ let changed=false;
   academies().forEach(a=>{ if(!a.courses) a.courses=[]; const keep=[];
@@ -3926,7 +4219,7 @@ function condTimer(m,p){
   return `<div class="pat-dept" data-pworse="${p.id}" style="color:${(p.cond??0)>=2?'#fca5a5':'inherit'}">${condTimerText(p)}</div>`;
 }
 function condTimerText(p){
-  const left=Math.max(0,CONFIG.patWorseMin[Math.min(3,p.cond??1)]-(p.worse||0));
+  const left=Math.max(0,CONFIG.patWorseMin[Math.min(3,p.cond??1)]*(1+resBonus('stabil'))-(p.worse||0));
   return `${(p.cond??0)>=COND_NA?'verstirbt':'verschlechtert sich'} in ${mmss(left)}`;
 }
 /* Krankenhaus wählen (Sprechwunsch) */
@@ -3940,9 +4233,9 @@ function openHospitalPick(missionId,patientId){
       <td style="text-align:right"><button class="btn sm ${x.ok&&i===0?'primary':''}" data-khgo="${x.h.id}">Zuweisen</button></td></tr>`).join('');
   document.getElementById('kh-title').textContent=`Krankenhaus wählen · benötigt: ${DEPTS[p.dept]||p.dept}${p.na?' · mit Notarzt':''}`;
   document.getElementById('kh-content').innerHTML=`<div class="lss-scroll" style="max-height:52vh"><table class="lss-tbl"><thead><tr><th>Krankenhaus</th><th>Entfernung</th><th>Eignung</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-    <label class="kh-auto"><input type="checkbox" id="kh-auto" ${state.autoHospital?'checked':''}> Künftig automatisch das nächste geeignete Krankenhaus wählen</label>`;
+    <div class="kh-auto">Automatische Krankenhauswahl gibt es mit <b>Premium</b>, umschaltbar in der Leitstelle.</div>`;
   document.querySelectorAll('[data-khgo]').forEach(b=>b.onclick=()=>{ hideModal('modal-hospital'); startTransport(m,p,b.dataset.khgo); setTimeout(()=>{ if(openMissionId===m.id) renderMissionModal(); },80); saveGame(true); });
-  document.getElementById('kh-auto').onchange=e=>{ state.autoHospital=e.target.checked; saveGame(true); };
+
   showModal('modal-hospital');
 }
 /* „Fehlende auswählen“: je fehlendem Typ die nächstgelegenen einsatzbereiten Fahrzeuge markieren */
@@ -4266,7 +4559,6 @@ document.getElementById('btn-catalog').onclick=renderCatalog;
 function toggleMenu(force){ const m=document.getElementById('topbar-menu'); m.classList.toggle('hidden', force===undefined?undefined:!force); }
 function closeMenu(){ document.getElementById('topbar-menu').classList.add('hidden'); }
 function openShopQuick(){ const st = (svStationId&&stationById(svStationId)) || state.stations[0]; if(!st){ toast('Erst eine Wache bauen','warn'); return; } openStationView(st.id,'shop'); }
-function openShop(){ showModal('modal-shop'); }
 document.getElementById('btn-menu').onclick=(e)=>{ e.stopPropagation(); document.getElementById('topbar-menu').classList.toggle('hidden'); };
 document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-wrap'); if(w && !w.contains(e.target)) closeMenu(); });
 document.getElementById('dd-shop').onclick=()=>{ closeMenu(); openShop(); };
@@ -4376,6 +4668,7 @@ async function startGame(){
     setInterval(liveMissionModal,500);
     setInterval(allyPoll,10000); setTimeout(allyPoll,2000);
     setInterval(smSync,10000); setTimeout(smSync,3000);
+    setInterval(loadWallet,60000); setTimeout(loadWallet,1500);
     gameStarted=true;
   } else { rebuildEverything(); }
   const off=pendingOfflineMs; pendingOfflineMs=0; lastTick=Date.now();
