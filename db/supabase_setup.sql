@@ -320,6 +320,9 @@ begin
 
   insert into app_saves(user_id, data, updated_at, earn_bucket, checked_at, econ_adjust) values (v_uid, p_data, now(), v_bucket, now(), v_adj)
     on conflict (user_id) do update set data=excluded.data, updated_at=now(), earn_bucket=excluded.earn_bucket, checked_at=now(), econ_adjust=excluded.econ_adjust;
+  if v_excess <= 0 then                                                   -- Quest-Fortschritt aus den neuen, vom Anti-Cheat gedeckten Einnahmen
+    begin perform _quest_track(v_uid, p_data, coalesce(v_gain,0)); exception when others then null; end;
+  end if;
   if v_excess > 0 then
     return json_build_object('ok',true,'corrected',true,'cut_earnings',v_cut_e,'cut_credits',v_cut_c,'credits',v_cr,'earnings',v_ea);
   end if;
@@ -1534,6 +1537,11 @@ create table if not exists app_research_nodes ( id text primary key, max_level i
 create table if not exists app_research ( user_id uuid not null references app_users(id) on delete cascade, node text not null,
   level int not null default 0, started_at timestamptz, done_at timestamptz, primary key (user_id, node) );
 create table if not exists app_quests ( id text primary key, period text not null, premium boolean not null, money int not null, rp int not null );
+alter table app_quests add column if not exists counter text not null default 'missions';
+alter table app_quests add column if not exists goal int not null default 1;
+-- Quest-Fortschritt je Spieler (zählt der Server beim Speichern aus dem Einnahmen-Protokoll)
+create table if not exists app_quest_progress ( user_id uuid primary key references app_users(id) on delete cascade,
+  day text, week text, d jsonb not null default '{}', w jsonb not null default '{}', last_t bigint );
 create table if not exists app_quest_claims ( user_id uuid not null references app_users(id) on delete cascade, quest text not null, period_key text not null,
   at timestamptz not null default now(), primary key (user_id, quest, period_key) );
 create table if not exists app_user_images ( user_id uuid not null references app_users(id) on delete cascade, slot text not null, data text not null,
@@ -1542,7 +1550,8 @@ alter table app_codes add column if not exists premium_only boolean not null def
 alter table app_wallet enable row level security; alter table app_ep_ledger enable row level security; alter table app_research_nodes enable row level security;
 alter table app_research enable row level security; alter table app_quests enable row level security; alter table app_quest_claims enable row level security;
 alter table app_user_images enable row level security;
-revoke all on app_wallet, app_ep_ledger, app_research_nodes, app_research, app_quests, app_quest_claims, app_user_images from anon, authenticated;
+alter table app_quest_progress enable row level security;
+revoke all on app_wallet, app_ep_ledger, app_research_nodes, app_research, app_quests, app_quest_claims, app_user_images, app_quest_progress from anon, authenticated;
 
 -- SHOPDATEN:BEGIN (automatisch erzeugt mit: node werkzeuge/preise_sql.cjs, nicht von Hand ändern)
 delete from app_research_nodes;
@@ -1569,17 +1578,17 @@ insert into app_research_nodes(id, max_level, premium_from, rp, minutes, req) va
   ('takt',3,0,30,360,'notruf'),
   ('telemedizin',2,0,30,360,'notruf');
 delete from app_quests where id not in (select quest from app_quest_claims);
-insert into app_quests(id, period, premium, money, rp) values
-  ('d_einsaetze','d',false,50000,5),
-  ('d_transporte','d',false,40000,5),
-  ('d_rd','d',false,30000,3),
-  ('d_einsaetze_p','d',true,150000,15),
-  ('d_verlegung_p','d',true,100000,10),
-  ('w_einsaetze','w',false,300000,30),
-  ('w_transporte','w',false,250000,25),
-  ('w_einsaetze_p','w',true,1000000,80),
-  ('w_brand_p','w',true,600000,60)
-on conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp;
+insert into app_quests(id, period, premium, money, rp, counter, goal) values
+  ('d_einsaetze','d',false,50000,5,'missions',10),
+  ('d_transporte','d',false,40000,5,'transports',5),
+  ('d_rd','d',false,30000,3,'rd',3),
+  ('d_einsaetze_p','d',true,150000,15,'missions',25),
+  ('d_verlegung_p','d',true,100000,10,'iv',2),
+  ('w_einsaetze','w',false,300000,30,'missions',75),
+  ('w_transporte','w',false,250000,25,'transports',40),
+  ('w_einsaetze_p','w',true,1000000,80,'missions',200),
+  ('w_brand_p','w',true,600000,60,'fire_big',10)
+on conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp, counter=excluded.counter, goal=excluded.goal;
 -- SHOPDATEN:END
 
 -- Premium aktiv? Verlängert automatisch (50 EP), wenn abgelaufen und Auto-Verlängerung an
@@ -1599,6 +1608,41 @@ end; $$;
 create or replace function _period_key(p text) returns text language sql stable as $$
   select case when p='d' then to_char(now() at time zone 'Europe/Berlin','YYYY-MM-DD') else to_char(now() at time zone 'Europe/Berlin','IYYY-"W"IW') end; $$;
 
+/* Quest-Fortschritt: neue Protokolleinträge (t > last_t) zählen, aber nur wenn ihre Einnahmen durch den beim Speichern
+   akzeptierten Zuwachs gedeckt sind (Zuwachs + Ausgaben ohne Fahrzeug-/Gebäudekäufe). Zähler: missions, rd, iv, fire_big, transports */
+create or replace function _quest_track(p_uid uuid, p_data jsonb, p_gain numeric) returns void language plpgsql security definer set search_path=public, extensions as $$
+declare qp app_quest_progress; v_now bigint := (extract(epoch from now())*1000)::bigint; e jsonb; v_t bigint; v_a numeric; v_c text; v_x text;
+  v_inc numeric := 0; v_spend numeric := 0; v_max bigint; cnt jsonb := '{}'; k text; v_day text := _period_key('d'); v_week text := _period_key('w');
+begin
+  insert into app_quest_progress(user_id) values (p_uid) on conflict do nothing;
+  select * into qp from app_quest_progress where user_id=p_uid for update;
+  if qp.last_t is null then update app_quest_progress set last_t=v_now, day=v_day, week=v_week where user_id=p_uid; return; end if;   -- ab jetzt zählen
+  for e in select value from jsonb_array_elements(_jarr(p_data,'ledger')) loop
+    v_t := _jnum(e,'t')::bigint; if v_t <= qp.last_t or v_t > v_now + 60000 then continue; end if;
+    v_a := _jnum(e,'a'); v_c := coalesce(e->>'c',''); v_x := coalesce(e->>'x','');
+    v_max := greatest(coalesce(v_max,0), v_t);
+    if v_a > 0 and v_c not in ('erstattung','korrektur') then
+      v_inc := v_inc + v_a;
+      if v_c in ('einsatz_fw','einsatz_rd') then cnt := jsonb_set(cnt,'{missions}',to_jsonb(coalesce((cnt->>'missions')::int,0)+1)); end if;
+      if v_c='einsatz_rd' and v_x ~ '^IV' then cnt := jsonb_set(cnt,'{iv}',to_jsonb(coalesce((cnt->>'iv')::int,0)+1));
+      elsif v_c='einsatz_rd' then cnt := jsonb_set(cnt,'{rd}',to_jsonb(coalesce((cnt->>'rd')::int,0)+1)); end if;
+      if v_c='einsatz_fw' and v_x ~ '^BRAND [3-9]' then cnt := jsonb_set(cnt,'{fire_big}',to_jsonb(coalesce((cnt->>'fire_big')::int,0)+1)); end if;
+      if v_c='transport' then cnt := jsonb_set(cnt,'{transports}',to_jsonb(coalesce((cnt->>'transports')::int,0)+1)); end if;
+    elsif v_a < 0 and v_c not in ('fahrzeug','gebaeude','korrektur') then v_spend := v_spend - v_a;
+    end if;
+  end loop;
+  if v_max is null then return; end if;
+  if qp.day is distinct from v_day then qp.d := '{}'; end if;
+  if qp.week is distinct from v_week then qp.w := '{}'; end if;
+  if v_inc <= greatest(0,p_gain) + v_spend + 1000 then
+    for k in select jsonb_object_keys(cnt) loop
+      qp.d := jsonb_set(qp.d, array[k], to_jsonb(coalesce((qp.d->>k)::int,0) + (cnt->>k)::int));
+      qp.w := jsonb_set(qp.w, array[k], to_jsonb(coalesce((qp.w->>k)::int,0) + (cnt->>k)::int));
+    end loop;
+  end if;
+  update app_quest_progress set day=v_day, week=v_week, d=qp.d, w=qp.w, last_t=greatest(qp.last_t, v_max) where user_id=p_uid;
+end; $$;
+
 create or replace function wallet(p_token uuid)
 returns json language plpgsql security definer set search_path=public, extensions as $$
 declare v_uid uuid := _uid(p_token); v_prem boolean; w app_wallet;
@@ -1610,6 +1654,9 @@ begin
     'day',_period_key('d'),'week',_period_key('w'),
     'research',coalesce((select json_agg(json_build_object('node',node,'level',level,'started_at',started_at,'done_at',done_at)) from app_research where user_id=v_uid),'[]'::json),
     'claimed',coalesce((select json_agg(quest) from app_quest_claims c join app_quests q on q.id=c.quest where c.user_id=v_uid and c.period_key=_period_key(q.period)),'[]'::json),
+    'progress',json_build_object(
+      'd',coalesce((select qp.d from app_quest_progress qp where qp.user_id=v_uid and qp.day=_period_key('d')),'{}'::jsonb),
+      'w',coalesce((select qp.w from app_quest_progress qp where qp.user_id=v_uid and qp.week=_period_key('w')),'{}'::jsonb)),
     'images',coalesce((select json_agg(slot) from app_user_images where user_id=v_uid),'[]'::json));
 end; $$;
 create or replace function premium_activate(p_token uuid)
@@ -1680,6 +1727,8 @@ begin
   select * into q from app_quests where id=p_quest;
   if q.id is null then return json_build_object('error','Unbekannte Quest'); end if;
   if q.premium and not _premium(v_uid) then return json_build_object('error','Diese Quest braucht Premium'); end if;
+  if coalesce((select (case when q.period='d' then (case when qp.day=_period_key('d') then qp.d end) else (case when qp.week=_period_key('w') then qp.w end) end) ->> q.counter
+      from app_quest_progress qp where qp.user_id=v_uid)::int, 0) < q.goal then return json_build_object('error','Quest noch nicht erfüllt'); end if;
   insert into app_quest_claims(user_id, quest, period_key) values (v_uid, q.id, _period_key(q.period)) on conflict do nothing;
   if not found then return json_build_object('error','Schon abgeholt'); end if;
   insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
@@ -1741,6 +1790,6 @@ revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
   _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
   _ally_banned(uuid,uuid), _sm_tick(uuid), _ally_muted(uuid,uuid), _ally_academies(uuid),
-  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text), _premium(uuid), _period_key(text) from public, anon, authenticated;
+  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text), _premium(uuid), _period_key(text), _quest_track(uuid,jsonb,numeric) from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
