@@ -1525,8 +1525,8 @@ begin
 end; $$;
 
 /* ---------- Shop & Premium ----------
-   Einsatzpunkte (EP) und Forschungspunkte (RP) liegen nur auf dem Server (app_wallet). EP kommen später per Stripe
-   (Gutschrift über admin_ep_grant bzw. eine Edge Function mit Service-Role-Key, nie aus dem Browser).
+   Einsatzpunkte (EP) und Forschungspunkte (RP) liegen nur auf dem Server (app_wallet). EP gibt es für Quests sowie über
+   Admin-Geschenke (admin_grant); Käufe mit Echtgeld gibt es nicht.
    Premium kostet 50 EP je 30 Tage und verlängert sich automatisch, solange genug EP da sind. */
 create table if not exists app_wallet (
   user_id uuid primary key references app_users(id) on delete cascade, ep int not null default 0, rp int not null default 0,
@@ -1539,6 +1539,7 @@ create table if not exists app_research ( user_id uuid not null references app_u
 create table if not exists app_quests ( id text primary key, period text not null, premium boolean not null, money int not null, rp int not null );
 alter table app_quests add column if not exists counter text not null default 'missions';
 alter table app_quests add column if not exists goal int not null default 1;
+alter table app_quests add column if not exists ep int not null default 0;
 -- Quest-Fortschritt je Spieler (zählt der Server beim Speichern aus dem Einnahmen-Protokoll)
 create table if not exists app_quest_progress ( user_id uuid primary key references app_users(id) on delete cascade,
   day text, week text, d jsonb not null default '{}', w jsonb not null default '{}', last_t bigint );
@@ -1578,17 +1579,17 @@ insert into app_research_nodes(id, max_level, premium_from, rp, minutes, req) va
   ('takt',3,0,30,360,'notruf'),
   ('telemedizin',2,0,30,360,'notruf');
 delete from app_quests where id not in (select quest from app_quest_claims);
-insert into app_quests(id, period, premium, money, rp, counter, goal) values
-  ('d_einsaetze','d',false,50000,5,'missions',10),
-  ('d_transporte','d',false,40000,5,'transports',5),
-  ('d_rd','d',false,30000,3,'rd',3),
-  ('d_einsaetze_p','d',true,150000,15,'missions',25),
-  ('d_verlegung_p','d',true,100000,10,'iv',2),
-  ('w_einsaetze','w',false,300000,30,'missions',75),
-  ('w_transporte','w',false,250000,25,'transports',40),
-  ('w_einsaetze_p','w',true,1000000,80,'missions',200),
-  ('w_brand_p','w',true,600000,60,'fire_big',10)
-on conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp, counter=excluded.counter, goal=excluded.goal;
+insert into app_quests(id, period, premium, money, rp, ep, counter, goal) values
+  ('d_einsaetze','d',false,50000,5,1,'missions',10),
+  ('d_transporte','d',false,40000,5,0,'transports',5),
+  ('d_rd','d',false,30000,3,0,'rd',3),
+  ('d_einsaetze_p','d',true,150000,15,1,'missions',25),
+  ('d_verlegung_p','d',true,100000,10,0,'iv',2),
+  ('w_einsaetze','w',false,300000,30,3,'missions',75),
+  ('w_transporte','w',false,250000,25,2,'transports',40),
+  ('w_einsaetze_p','w',true,1000000,80,3,'missions',200),
+  ('w_brand_p','w',true,600000,60,2,'fire_big',10)
+on conflict (id) do update set period=excluded.period, premium=excluded.premium, money=excluded.money, rp=excluded.rp, ep=excluded.ep, counter=excluded.counter, goal=excluded.goal;
 -- SHOPDATEN:END
 
 -- Premium aktiv? Verlängert automatisch (50 EP), wenn abgelaufen und Auto-Verlängerung an
@@ -1732,9 +1733,10 @@ begin
   insert into app_quest_claims(user_id, quest, period_key) values (v_uid, q.id, _period_key(q.period)) on conflict do nothing;
   if not found then return json_build_object('error','Schon abgeholt'); end if;
   insert into app_wallet(user_id) values (v_uid) on conflict do nothing;
-  update app_wallet set rp=rp+q.rp, updated_at=now() where user_id=v_uid;
+  update app_wallet set rp=rp+q.rp, ep=ep+q.ep, updated_at=now() where user_id=v_uid;
+  if q.ep > 0 then insert into app_ep_ledger(user_id, amount, kind, note) values (v_uid, q.ep, 'quest', 'Quest '||q.id); end if;
   update app_saves set econ_adjust=coalesce(econ_adjust,0)+q.money where user_id=v_uid;
-  return json_build_object('ok',true,'money',q.money,'rp',q.rp);
+  return json_build_object('ok',true,'money',q.money,'rp',q.rp,'ep',q.ep);
 end; $$;
 
 -- Eigene Grafiken (Premium): Slots v:<fahrzeugtyp>:<l|r><0|1> (Richtung, Blaulicht) bzw. b:<gebäude>:<normal|bau|verband>
@@ -1762,7 +1764,7 @@ begin
   return json_build_object('ok',true);
 end; $$;
 
--- Admin: EP gutschreiben (bis Stripe angebunden ist) und Premium-Spieler mit Discord-ID für die VIP-Rolle
+-- Admin: EP gutschreiben und Premium-Spieler mit Discord-ID für die VIP-Rolle
 create or replace function admin_ep_grant(p_token uuid, p_username text, p_amount int, p_note text)
 returns json language plpgsql security definer set search_path=public, extensions as $$
 declare v_uid uuid;
@@ -1812,25 +1814,9 @@ begin
     order by w.premium_until desc nulls last) from app_wallet w join app_users u on u.id=w.user_id where w.premium_until is not null or w.ep > 0 or w.rp > 0 or w.discord_id is not null),'[]'::json));
 end; $$;
 
-/* ---------- Stripe: EP-Käufe ----------
-   Die Edge Function supabase/functions/stripe-webhook prüft die Stripe-Signatur und ruft ep_credit_purchase mit dem
-   Service-Role-Key auf. Jede Checkout-Session wird nur einmal gutgeschrieben. Aus dem Browser (anon) nicht aufrufbar. */
-create table if not exists app_payments ( session_id text primary key, user_id uuid references app_users(id) on delete set null,
-  ep int not null, cents int not null, at timestamptz not null default now() );
-alter table app_payments enable row level security;
-revoke all on app_payments from anon, authenticated;
-create or replace function ep_credit_purchase(p_session text, p_user uuid, p_ep int, p_cents int)
-returns json language plpgsql security definer set search_path=public, extensions as $$
-begin
-  if coalesce(p_session,'') = '' or coalesce(p_ep,0) <= 0 or p_ep > 100000 then return json_build_object('error','Ungültiger Kauf'); end if;
-  if not exists(select 1 from app_users where id=p_user) then return json_build_object('error','Spieler nicht gefunden'); end if;
-  insert into app_payments(session_id, user_id, ep, cents) values (p_session, p_user, p_ep, coalesce(p_cents,0)) on conflict do nothing;
-  if not found then return json_build_object('ok',true,'duplicate',true); end if;
-  insert into app_wallet(user_id) values (p_user) on conflict do nothing;
-  update app_wallet set ep=ep+p_ep, updated_at=now() where user_id=p_user;
-  insert into app_ep_ledger(user_id, amount, kind, note) values (p_user, p_ep, 'kauf', 'Stripe '||left(p_session,80)||' · '||round(coalesce(p_cents,0)/100.0,2)||' €');
-  return json_build_object('ok',true,'ep',(select ep from app_wallet where user_id=p_user));
-end; $$;
+-- Früher: EP-Käufe über Stripe. Entfernt, es gibt keine Käufe mit Echtgeld mehr.
+drop function if exists ep_credit_purchase(text,uuid,int,int);
+drop table if exists app_payments;
 
 grant execute on all functions in schema public to anon, authenticated;
 -- Interne Hilfsfunktionen nicht von außen aufrufbar
@@ -1838,8 +1824,7 @@ revoke execute on function _uid(uuid), _maint(), _new_session(uuid), _token_hash
   _jnum(jsonb,text), _jlevel(jsonb,int), _jarr(jsonb,text), _assets(jsonb), _vehicle_count(jsonb),
   _ally_of(uuid), _ally_is_owner(uuid), _ally_perm(uuid,text), _ally_rank(uuid), _take_credits(uuid,bigint), _ally_join(uuid,uuid), _ally_remove(uuid),
   _ally_banned(uuid,uuid), _sm_tick(uuid), _ally_muted(uuid,uuid), _ally_academies(uuid),
-  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text), _premium(uuid), _period_key(text), _quest_track(uuid,jsonb,numeric),
-  ep_credit_purchase(text,uuid,int,int) from public, anon, authenticated;
-grant execute on function ep_credit_purchase(text,uuid,int,int) to service_role;   -- nur die Edge Function (Service-Role-Key)
+  _admin_ok(uuid), _code_rewards(jsonb), admin_set_password(text), _premium(uuid), _period_key(text), _quest_track(uuid,jsonb,numeric)
+  from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
