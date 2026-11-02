@@ -318,6 +318,14 @@ a.dd-item{ text-decoration:none; color:var(--text); }
 .lss-alert.ok{ background:rgba(34,197,94,.10); border-color:rgba(34,197,94,.4); color:#86efac; }
 .lss-panel{ border:1px solid var(--border); border-radius:9px; overflow:hidden; overflow-x:auto; flex-shrink:0; }
 .lss-modal .m-content > *{ flex-shrink:0; }
+/* AAO-Knöpfe */
+.aao-bar{ display:flex; flex-wrap:wrap; gap:6px; padding:9px 11px; }
+.aao-btn{ background:var(--c,#e5352b); color:#fff; border:0; border-radius:7px; padding:6px 12px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.aao-btn:hover{ filter:brightness(1.12); } .aao-btn:disabled{ opacity:.45; cursor:default; filter:none; }
+.aao-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 0; border-bottom:1px solid var(--border); }
+.aao-row .sum{ flex:1; min-width:180px; font-size:12px; color:var(--text-mut); }
+.aao-colors{ display:flex; gap:6px; } .aao-colors button{ width:26px; height:26px; border-radius:50%; border:2px solid transparent; background:var(--c); cursor:pointer; }
+.aao-colors button.on{ border-color:var(--text); }
 .lss-ph{ background:var(--panel-3); padding:7px 11px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
   color:var(--text-mut); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .lss-ph .cnt{ font-family:var(--font-mono); color:var(--text); }
@@ -651,6 +659,7 @@ a.dd-item{ text-decoration:none; color:var(--text); }
         <button class="dd-item" id="dd-premium">Premium</button>
         <button class="dd-item" id="dd-quests">Quests</button>
         <button class="dd-item" id="dd-forschung">Forschung</button>
+        <button class="dd-item" id="dd-aao">AAO</button>
         <button class="dd-item" id="dd-bank">Bank</button>
         <button class="dd-item" id="dd-verband">Verband</button>
         <button class="dd-item" id="dd-codes">Codes einlösen</button>
@@ -766,6 +775,12 @@ a.dd-item{ text-decoration:none; color:var(--text); }
     <button class="btn lss-alarm-next" id="mm-alarm-next" disabled>Alarmieren &amp; nächster Einsatz</button>
     <button class="btn ghost" data-close style="margin-left:auto">Schließen</button>
   </div>
+</div></div>
+
+<div class="modal-bg" id="modal-aao"><div class="modal wide">
+  <h3>Alarm- und Ausrückeordnung (AAO)</h3>
+  <div class="m-content" id="aao-content"></div>
+  <div class="m-actions"><button class="btn ghost" data-close>Schließen</button></div>
 </div></div>
 
 <div class="modal-bg" id="modal-hospital"><div class="modal wide">
@@ -1109,7 +1124,7 @@ function serializeObj(){ return {
   vehicles:state.vehicles.map(v=>({id:v.id,type:v.type,stationId:v.stationId,status:v.status,lat:v.lat,lng:v.lng,water:v.water,foam:v.foam,seq:v.seq,customName:v.customName||null,mod:v.mod||null,
     targetMissionId:v.targetMissionId||null,nextMissionId:v.nextMissionId||null,crew:v.crew||0,crewIds:v.crewIds||[],abId:v.abId||null,wlfId:v.wlfId||null,towId:v.towId||null,turnout:v.turnout??null,transport:v.transport||null,handoverLeft:v.handoverLeft||0})),
   buildings:(state.buildings||[]).map(b=>({id:b.id,typeId:b.typeId,name:b.name,lat:b.lat,lng:b.lng,level:b.level,courses:b.courses,exts:b.exts||[],placedAt:b.placedAt||null,readyAt:b.readyAt||null,allyShare:b.allyShare||null})),
-  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null,
+  allyCourses:state.allyCourses||[], vouchers:state.vouchers||null, aao:state.aao||[],
   missions:state.missions.filter(m=>m.status!=='done').map(m=>({id:m.id,type:m.type,lat:m.lat,lng:m.lng,address:m.address,status:m.status||'open',progress:m.progress||0,effMinutes:m.effMinutes||0,assigned:m.assigned||[],patients:m.patients||[],tna:!!m.tna,dueAt:m.dueAt||null,fromKh:m.fromKh||null})),
 };}
 let saveInFlight=false;
@@ -1201,6 +1216,7 @@ function applyLoaded(data){
     return nb; });
   state.allyCourses=Array.isArray(data.allyCourses)?data.allyCourses:[];
   state.vouchers=data.vouchers&&typeof data.vouchers==='object'?data.vouchers:null;
+  state.aao=aaoClean(data.aao);
   finishDueCourses(Date.now());
   pendingOfflineMs = data.savedAt ? Math.max(0, Date.now()-data.savedAt) : 0;
   idCounter=Date.now()%100000;
@@ -4162,6 +4178,9 @@ function renderMissionModal(){
     <div class="lss-panel"><div class="lss-ph">Fahrzeuge vor Ort <span class="cnt">${onScene.length}</span></div>${sceneRows(onScene,false)}</div>
     ${queued.length?`<div class="lss-panel"><div class="lss-ph">Als Folgeeinsatz eingeplant <span class="cnt">${queued.length}</span></div><table class="lss-tbl"><tbody>${
       queued.map(v=>`<tr><td><span class="fnum fnum-${v.status}">${v.status}</span></td><td class="call">${vehName(v)}</td><td class="dim">${vehTypeName(v)}</td><td style="text-align:right"><button class="btn sm" data-unqueue="${v.id}">Folge entfernen</button></td></tr>`).join('')}</tbody></table></div>`:''}
+    <div class="lss-panel"><div class="lss-ph">AAO <button class="btn sm ghost" id="mm-aao-edit" style="margin-left:auto">${(state.aao||[]).length?'Bearbeiten':'AAO anlegen'}</button></div>
+      ${(state.aao||[]).length?`<div class="aao-bar">${state.aao.map(a=>`<button class="aao-btn" data-aao="${a.id}" style="--c:${a.color}" title="${esc(aaoSummary(a))}">${esc(a.name)}</button>`).join('')}</div>`
+        :'<div class="lss-empty">Noch keine AAO. Lege Knöpfe an, die mit einem Klick mehrere Fahrzeuge alarmieren.</div>'}</div>
     <div class="lss-panel">
       <div class="lss-ph">Verfügbare Fahrzeuge <span class="cnt">${pool.length}</span>
         ${miss.length?`<button class="btn sm" id="mm-aao">Fehlende auswählen</button>`:''}
@@ -4181,6 +4200,8 @@ function renderMissionModal(){
   const busy=document.getElementById('mm-busy'); if(busy) busy.onchange=()=>{ mmShowBusy=busy.checked; renderMissionModal(); };
   const aao=document.getElementById('mm-aao'); if(aao) aao.onclick=()=>{ selectMissing(m,pool); renderMissionModal(); };
   const clr=document.getElementById('mm-clear'); if(clr) clr.onclick=()=>{ mmSel.clear(); renderMissionModal(); };
+  box.querySelectorAll('[data-aao]').forEach(b=>b.onclick=()=>runAao(m,b.dataset.aao));
+  const ae=document.getElementById('mm-aao-edit'); if(ae) ae.onclick=()=>openAao();
   box.querySelectorAll('[data-recall]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); recallVehicle(b.dataset.recall); setTimeout(renderMissionModal,60); });
   box.querySelectorAll('[data-unqueue]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const v=state.vehicles.find(x=>x.id===b.dataset.unqueue); if(v){ v.nextMissionId=null; toast(`${vehName(v)}: Folgeeinsatz entfernt`,'ok'); renderVehicles(); renderMissions(); saveGame(true); } setTimeout(renderMissionModal,60); });
 
@@ -4267,6 +4288,84 @@ async function alarmSelected(next){
   }
   setTimeout(renderMissionModal,80);
 }
+/* ---------- AAO: eigene Alarmierungsknöpfe (Fahrzeugtyp × Anzahl) ----------
+   Ein Klick im Einsatzfenster alarmiert je Typ die nächstgelegenen freien Fahrzeuge (Status 1/2). */
+const AAO_COLORS=['#e5352b','#f59e0b','#22c55e','#3b82f6','#a855f7','#64748b'];
+const AAO_MAX=40, AAO_MAX_ITEMS=15;
+let aaoEdit=null, aaoAddType=null;
+function aaoClean(list){
+  return (Array.isArray(list)?list:[]).slice(0,AAO_MAX).map(a=>({ id:String(a.id||nid()), name:String(a.name||'AAO').slice(0,30),
+    color:AAO_COLORS.includes(a.color)?a.color:AAO_COLORS[0],
+    items:(Array.isArray(a.items)?a.items:[]).filter(x=>VEHICLES[x.type]).slice(0,AAO_MAX_ITEMS).map(x=>({ type:x.type, count:Math.max(1,Math.min(20,Math.round(Number(x.count)||1))) })) }))
+    .filter(a=>a.items.length);
+}
+const aaoTypeName=id=>VEHICLES[id]?.name||id;
+function aaoSummary(a){ return a.items.map(x=>`${x.count}× ${aaoTypeName(x.type)}`).join(', '); }
+function runAao(m,id){
+  const a=(state.aao||[]).find(x=>x.id===id); if(!a||!m||m.status==='done') return;
+  const pool=state.vehicles.filter(v=>(v.status===1||v.status===2) && v.targetMissionId!==m.id && v.nextMissionId!==m.id && !v.abId);
+  const eta=new Map(pool.map(v=>[v.id,etaSeconds(v,m)])); pool.sort((x,y)=>eta.get(x.id)-eta.get(y.id));
+  const used=new Set(), miss=[];
+  for(const it of a.items){ let n=0;
+    for(const v of pool){ if(n>=it.count) break; if(v.type===it.type && !used.has(v.id)){ used.add(v.id); n++; } }
+    if(n<it.count) miss.push(`${it.count-n}× ${aaoTypeName(it.type)}`); }
+  if(!used.size){ toast(`AAO „${a.name}“: keine passenden Fahrzeuge frei`,'warn'); return; }
+  mmSel.clear(); used.forEach(id=>mmSel.add(id));
+  alarmSelected(false);
+  toast(`AAO „${a.name}“: ${used.size} Fahrzeug${used.size>1?'e':''} alarmiert${miss.length?` · nicht frei: ${miss.join(', ')}`:''}`,miss.length?'warn':'ok');
+  setTimeout(renderMissionModal,80);
+}
+function openAao(){ aaoEdit=null; showModal('modal-aao'); renderAao(); }
+function renderAao(){
+  const box=document.getElementById('aao-content'); if(!box) return;
+  const list=state.aao||[];
+  if(!aaoEdit){
+    box.innerHTML=`<div class="pers-hint">Mit einer AAO alarmierst du im Einsatzfenster mit einem Klick mehrere Fahrzeuge, zum Beispiel „Brand klein“ mit 1× HLF und 1× DLK. Es werden immer die nächstgelegenen freien Fahrzeuge genommen.</div>
+      ${list.length?list.map((a,i)=>`<div class="aao-row"><button class="aao-btn" style="--c:${a.color}" tabindex="-1">${esc(a.name)}</button><span class="sum">${esc(aaoSummary(a))}</span>
+        <button class="btn sm ghost" data-aaoup="${i}" ${i?'':'disabled'} title="Nach vorne">↑</button>
+        <button class="btn sm" data-aaoedit="${a.id}">Bearbeiten</button><button class="btn sm ghost" data-aaodel="${a.id}">Löschen</button></div>`).join('')
+        :'<div class="empty-hint">Noch keine AAO angelegt.</div>'}
+      <div class="vb-form" style="margin-top:12px"><button class="btn primary" id="aao-new" ${list.length>=AAO_MAX?'disabled':''}>Neue AAO</button></div>`;
+    box.querySelector('#aao-new').onclick=()=>{ aaoEdit={ id:null, name:'', color:AAO_COLORS[0], items:[] }; renderAao(); };
+    box.querySelectorAll('[data-aaoedit]').forEach(b=>b.onclick=()=>{ const a=list.find(x=>x.id===b.dataset.aaoedit); aaoEdit=JSON.parse(JSON.stringify(a)); renderAao(); });
+    box.querySelectorAll('[data-aaodel]').forEach(b=>b.onclick=()=>{ const a=list.find(x=>x.id===b.dataset.aaodel); if(!a||!confirm(`AAO „${a.name}“ löschen?`)) return;
+      state.aao=list.filter(x=>x.id!==a.id); saveGame(true); renderAao(); });
+    box.querySelectorAll('[data-aaoup]').forEach(b=>b.onclick=()=>{ const i=Number(b.dataset.aaoup); if(i<1) return; [list[i-1],list[i]]=[list[i],list[i-1]]; state.aao=list; saveGame(true); renderAao(); });
+    return;
+  }
+  const e=aaoEdit, types=Object.values(VEHICLES);
+  if(!aaoAddType||!VEHICLES[aaoAddType]) aaoAddType=types[0].id;
+  const opts=VEHICLE_CATEGORIES.map(c=>{ const ts=types.filter(t=>t.category===c.id).sort((a,b)=>a.name.localeCompare(b.name,'de'));
+    return ts.length?`<optgroup label="${c.name}">${ts.map(t=>`<option value="${t.id}"${t.id===aaoAddType?' selected':''}>${esc(t.name)}</option>`).join('')}</optgroup>`:''; }).join('');
+  box.innerHTML=`<div class="vb-sec"><h4>${e.id?'AAO bearbeiten':'Neue AAO'}</h4>
+      <div class="vb-form"><label class="fld sm" style="flex:1"><span>Name</span><input id="aao-name" class="vb-in" maxlength="30" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="z. B. Brand klein" value="${esc(e.name)}"></label>
+        <div class="fld sm"><span>Farbe</span><div class="aao-colors">${AAO_COLORS.map(c=>`<button type="button" class="${c===e.color?'on':''}" style="--c:${c}" data-aaocol="${c}" aria-label="Farbe"></button>`).join('')}</div></div></div></div>
+    <div class="vb-sec"><h4>Fahrzeuge</h4>
+      <div class="vb-form"><label class="fld sm" style="flex:1"><span>Fahrzeugtyp</span><select id="aao-type" class="vb-sel">${opts}</select></label>
+        <label class="fld sm"><span>Anzahl</span><input id="aao-count" class="vb-in" type="number" min="1" max="20" value="1" style="width:80px"></label>
+        <button class="btn" id="aao-add" ${e.items.length>=AAO_MAX_ITEMS?'disabled':''}>Hinzufügen</button></div>
+      ${e.items.length?e.items.map((x,i)=>`<div class="aao-row"><b style="min-width:42px">${x.count}×</b><span class="sum" style="color:var(--text)">${esc(VEHICLES[x.type]?.name||x.type)}</span>
+        <button class="btn sm ghost" data-aaodec="${i}">−</button><button class="btn sm ghost" data-aaoinc="${i}">+</button><button class="btn sm ghost" data-aaorm="${i}">Entfernen</button></div>`).join('')
+        :'<div class="pers-hint">Noch keine Fahrzeuge. Wähle einen Typ und klicke auf „Hinzufügen“.</div>'}</div>
+    <div class="vb-form" style="margin-top:12px"><button class="btn primary" id="aao-save">Speichern</button><button class="btn ghost" id="aao-cancel">Abbrechen</button>
+      <span class="aao-btn" style="--c:${e.color};margin-left:auto">${esc(e.name||'Vorschau')}</span></div>`;
+  const nameIn=box.querySelector('#aao-name'); nameIn.oninput=()=>{ e.name=nameIn.value; box.querySelector('span.aao-btn').textContent=e.name||'Vorschau'; };
+  box.querySelectorAll('[data-aaocol]').forEach(b=>b.onclick=()=>{ e.color=b.dataset.aaocol; renderAao(); });
+  box.querySelector('#aao-type').onchange=ev=>{ aaoAddType=ev.target.value; };
+  box.querySelector('#aao-add').onclick=()=>{ const type=box.querySelector('#aao-type').value, n=Math.max(1,Math.min(20,Math.round(Number(box.querySelector('#aao-count').value)||1)));
+    const ex=e.items.find(x=>x.type===type); if(ex) ex.count=Math.min(20,ex.count+n); else if(e.items.length<AAO_MAX_ITEMS) e.items.push({type,count:n}); renderAao(); };
+  box.querySelectorAll('[data-aaoinc]').forEach(b=>b.onclick=()=>{ const x=e.items[b.dataset.aaoinc]; x.count=Math.min(20,x.count+1); renderAao(); });
+  box.querySelectorAll('[data-aaodec]').forEach(b=>b.onclick=()=>{ const x=e.items[b.dataset.aaodec]; if(x.count>1) x.count--; renderAao(); });
+  box.querySelectorAll('[data-aaorm]').forEach(b=>b.onclick=()=>{ e.items.splice(Number(b.dataset.aaorm),1); renderAao(); });
+  box.querySelector('#aao-cancel').onclick=()=>{ aaoEdit=null; renderAao(); };
+  box.querySelector('#aao-save').onclick=()=>{
+    e.name=e.name.trim(); if(!e.name){ toast('Bitte einen Namen eingeben','warn'); return; }
+    if(!e.items.length){ toast('Bitte mindestens ein Fahrzeug hinzufügen','warn'); return; }
+    const list=state.aao||(state.aao=[]); if(!e.id){ e.id=nid(); list.push(e); } else { const i=list.findIndex(x=>x.id===e.id); if(i>=0) list[i]=e; else list.push(e); }
+    state.aao=aaoClean(list); aaoEdit=null; saveGame(true); toast('AAO gespeichert','ok'); renderAao();
+    if(document.getElementById('modal-mission').classList.contains('show')) renderMissionModal(); };
+}
+
 document.getElementById('mm-alarm').onclick=()=>alarmSelected(false);
 document.getElementById('mm-alarm-next').onclick=()=>alarmSelected(true);
 
@@ -4563,6 +4662,7 @@ document.addEventListener('click',(e)=>{ const w=document.querySelector('.menu-w
 document.getElementById('dd-premium').onclick=()=>{ closeMenu(); openShop('premium'); };
 document.getElementById('dd-quests').onclick=()=>{ closeMenu(); openShop('quests'); };
 document.getElementById('dd-forschung').onclick=()=>{ closeMenu(); openShop('forschung'); };
+document.getElementById('dd-aao').onclick=()=>{ closeMenu(); openAao(); };
 document.getElementById('dd-bank').onclick=()=>{ closeMenu(); renderBank(); showModal('modal-bank'); };
 document.getElementById('dd-verband').onclick=()=>{ closeMenu(); openVerband(); };
 document.getElementById('dd-codes').onclick=()=>{ closeMenu(); openCodes(); };
