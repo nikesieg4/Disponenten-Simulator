@@ -1837,16 +1837,21 @@ function pickRdCode(){
 }
 /* Patienten zu einem Einsatz würfeln */
 /* Patienten bei Feuerwehr-Einsätzen: t.pat = [min, max, Notarzt-Anteil, Fachabteilung] im Einsatzkatalog */
+/* Patienten nur, wenn sie lösbar sind: ohne RTW/ITW keine Patienten bei Feuerwehr-Einsätzen,
+   ohne Notarzt (NEF oder ITW) keine Notarzt-Patienten */
+const hasTransportUnit=()=>owns('rtw')||owns('itw');
+const hasNaUnit=()=>owns('nef')||owns('itw');
 function rollPatients(t){
+  const naOk=hasNaUnit();
   const cond=na=>{ if(na) return COND_NA; const r=Math.random(); return r<0.35?0:r<0.8?1:2; };
   const mk=(na,dept,stroke)=>({ id:nid(), na, dept, stroke:!!stroke, cond:cond(na), worse:0, state:'waiting', rtwId:null, nefId:null, treatLeft:CONFIG.treatMinutes, khId:null });
   if(t.rd){
     const n=t.multi ? 2+Math.floor(Math.random()*3) : 1;
-    return Array.from({length:n},(_,i)=>mk(t.multi ? (i===0 && Math.random()<.5) : (i===0 && t.na), t.dept, t.stroke));
+    return Array.from({length:n},(_,i)=>mk(t.multi ? (i===0 && naOk && Math.random()<.5) : (i===0 && t.na), t.dept, t.stroke));
   }
-  const f=t.pat; if(!f) return [];
+  const f=t.pat; if(!f || !hasTransportUnit()) return [];
   const n=f[0]+Math.floor(Math.random()*(f[1]-f[0]+1));
-  return Array.from({length:n},()=>mk(Math.random()<f[2], f[3]));
+  return Array.from({length:n},()=>mk(naOk && Math.random()<f[2], f[3]));
 }
 function patientsOpen(m){ return (m.patients||[]).filter(p=>p.state!=='done'); }
 let allyHospitals=[];                                    // Verbandskrankenhäuser (ally_assets)
@@ -1858,7 +1863,11 @@ function hospitalsFor(p, from){
 }
 /* Versorgung am Einsatzort, Status 5 bei Transportbereitschaft */
 function tickPatients(gm){
+  const noTrans=!hasTransportUnit();
   for(const m of state.missions){
+    // Feuerwehr-Einsatz mit Patienten, aber kein RTW/ITW (mehr) vorhanden: wartende Patienten entfallen, sonst hinge der Einsatz
+    if(noTrans && m.status!=='done' && m.patients?.length && !missionType(m.type)?.rd && !isSm(m.id)){
+      const keep=m.patients.filter(p=>p.state!=='waiting'); if(keep.length!==m.patients.length){ m.patients=keep; renderMissionsThrottled(); } }
     if(m.status==='done' || !m.patients || !m.patients.length) continue;
     const here=v=>v && v.targetMissionId===m.id && (v.status===4||v.status===5);
     const onScene=state.vehicles.filter(here);
@@ -1914,7 +1923,7 @@ function worsenPatients(m,gm){
   for(const p of m.patients){
     if(p.state==='done'||p.state==='transport'||p.state==='ready') continue;
     const untreated = p.state==='waiting' || (p.cond>=COND_NA && !p.nefId);
-    if(!untreated) continue;
+    if(!untreated || worseCapped(p)) continue;
     p.worse=(p.worse||0)+gm;
     if(p.worse < CONFIG.patWorseMin[Math.min(3,p.cond)]*(1+resBonus('stabil'))) continue;
     p.worse=0;
@@ -1929,6 +1938,8 @@ function worsenPatients(m,gm){
     renderMissionsThrottled();
   }
 }
+/* Ohne eigenen Notarzt wird niemand kritisch (sonst wäre der Patient nicht zu retten) */
+function worseCapped(p){ return (p.cond??1)===COND_NA-1 && !p.na && !hasNaUnit(); }
 /* Transport ins gewählte Krankenhaus */
 async function startTransport(m,p,khId){
   const v=state.vehicles.find(x=>x.id===p.rtwId), h=hospitalById(khId); if(!v||!h||p.state!=='ready') return;
@@ -4203,7 +4214,7 @@ function patientPanel(m){
 function condTimer(m,p){
   if(p.dead||p.state==='done'||p.state==='transport'||p.state==='ready') return '';
   if(m.dueAt && Date.now()<m.dueAt) return '<div class="pat-dept">Klinik hält stabil</div>';
-  const untreated=p.state==='waiting' || ((p.cond??0)>=COND_NA && !p.nefId); if(!untreated) return '';
+  const untreated=p.state==='waiting' || ((p.cond??0)>=COND_NA && !p.nefId); if(!untreated || worseCapped(p)) return '';
   return `<div class="pat-dept" data-pworse="${p.id}" style="color:${(p.cond??0)>=2?'#fca5a5':'inherit'}">${condTimerText(p)}</div>`;
 }
 function condTimerText(p){
