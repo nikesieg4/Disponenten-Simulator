@@ -3179,8 +3179,19 @@ function tick(){
   if(gap>3){ catchUp(gap*1000); return; }              // Tab war im Hintergrund: verpasste Zeit nachholen
   stepWorld(gap);
 }
+/* Fahrzeug steht auf der Wache, hat aber noch einen Folgeeinsatz (z. B. nach Neuladen, wenn der aktuelle Einsatz schon weg war):
+   jetzt ausrücken bzw. den Folgeeinsatz verwerfen, sonst hinge das Fahrzeug fest */
+function startIdleFollowUps(){
+  if(simulating) return;
+  for(const v of state.vehicles){
+    if(v.status!==2 || !v.nextMissionId) continue;
+    const id=v.nextMissionId; if(isSm(id) && !smLoaded) continue;
+    v.nextMissionId=null; const nm=missionById(id);
+    if(nm && nm.status!=='done') dispatch(v.id,id); else renderVehicles();
+  }
+}
 function stepWorld(dt){
-  syncWlfs();
+  syncWlfs(); startIdleFollowUps();
   // Fahrzeuge bewegen
   const gmV=(dt*1000)/CONFIG.minuteRealMs;
   for(const v of state.vehicles){
@@ -4503,7 +4514,7 @@ async function resumeDriving(){
       if(v.status===3){
         if(isSm(v.targetMissionId)) continue;               // nach dem ersten Verbands-Abgleich (smApply)
         const m=missionById(v.targetMissionId);
-        if(!m || m.status==='done'){ sendVehicleHome(v); continue; }
+        if(!m || m.status==='done'){ releaseVehicle(v); continue; }          // Ziel weg: Folgeeinsatz übernehmen, sonst einrücken
         const route=await getRoute({lat:v.lat,lng:v.lng},{lat:m.lat,lng:m.lng});
         route.coords.push({lat:m.lat,lng:m.lng}); startDrive(v,route.coords,route.duration,CONFIG.outboundFactor);
       } else if(v.status===7 && v.transport){
