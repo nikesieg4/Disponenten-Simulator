@@ -3210,6 +3210,9 @@ function stepWorld(dt){
   let dirty=false;
   // Erledigte Einsätze nach ~4 s entfernen (robust, unabhängig von Render-Fehlern)
   for(let i=state.missions.length-1;i>=0;i--){ const m=state.missions[i];
+    if(!missionType(m.type)){                              // Einsatzart gibt es nicht mehr (alter Spielstand): verwerfen, Fahrzeuge frei
+      state.vehicles.filter(v=>v.targetMissionId===m.id||v.nextMissionId===m.id).forEach(releaseVehicle);
+      m.status='done'; m.doneAt=0; console.warn('Einsatz mit unbekannter Art entfernt:',m.type); }
     if(m.status==='done' && (!m.doneAt || Date.now()-m.doneAt>4000)){
       if(m.marker){ try{ missionLayer.removeLayer(m.marker); }catch(e){} }
       state.missions.splice(i,1); dirty=true; renderTopbar();
@@ -3227,6 +3230,8 @@ function stepWorld(dt){
       if((m.patients||[]).length && done===n && (m.patients||[]).some(p=>p.dead)) completeMission(m);   // alle versorgt bzw. verstorben, kein Transport mehr offen
       continue;
     }
+    // Brand/TH ist erledigt und kein Patient mehr offen (z. B. weil er ohne RTW entfallen ist): abschließen
+    if((m.progress||0)>=1 && !patientsOpen(m).length){ completeMission(m); dirty=true; continue; }
     const sup=missionSupply(m);
     const rs=missionReqStatus(m);
     if(rs.ok && sup.onScene>0){
@@ -4658,7 +4663,7 @@ async function startGame(){
     initMap(); rebuildEverything(); renderSpeed();
     setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} },120);
     updateClock(); setInterval(updateClock,250);
-    setInterval(()=>{ tick(); spawnLoop(); },CONFIG.tickMs);
+    setInterval(()=>{ try{ tick(); }catch(e){ console.error('tick',e); } spawnLoop(); },CONFIG.tickMs);   // ein Fehler im Takt darf neue Einsätze nicht blockieren
     setInterval(()=>saveGame(true),15000);
     setInterval(accrueAllStaff,60000);
     setInterval(courseTick,30000);
