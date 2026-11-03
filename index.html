@@ -1874,9 +1874,15 @@ let allyHospitals=[];                                    // Verbandskrankenhäus
 function hospitalById(id){ return HOSPITALS.find(h=>h.id===id) || allyHospitals.find(h=>h.id===id) || khSnapshot(id); }
 /* Verbandskrankenhaus nach Austritt/Abriss: Ziel aus dem laufenden Transport */
 function khSnapshot(id){ const v=state.vehicles.find(x=>x.transport && x.transport.khId===id && x.transport.kh); return v ? { id, ...v.transport.kh, dept:[] } : undefined; }
+/* Zielkliniken für einen Patienten. Bei einer Verlegung nie zurück in die Ausgangsklinik und nur in Kliniken mit der
+   gesuchten Fachabteilung (sonst entstünde endlos eine neue Verlegung am selben Ort, jedes Mal mit Belohnung). */
 function hospitalsFor(p, from){
-  return HOSPITALS.concat(allyHospitals).map(h=>({ h, km:distM(from,h)/1000, ok:h.dept.includes(p.dept) })).sort((a,b)=>(b.ok-a.ok)||(a.km-b.km));
+  let list=HOSPITALS.concat(allyHospitals).filter(h=>!from?.fromKh || h.id!==from.fromKh)
+    .map(h=>({ h, km:distM(from,h)/1000, ok:h.dept.includes(p.dept) }));
+  if(from?.fromKh && list.some(x=>x.ok)) list=list.filter(x=>x.ok);
+  return list.sort((a,b)=>(b.ok-a.ok)||(a.km-b.km));
 }
+const anyHospitalHas=dept=>HOSPITALS.concat(allyHospitals).some(h=>h.dept.includes(dept));
 /* Versorgung am Einsatzort, Status 5 bei Transportbereitschaft */
 function tickPatients(gm){
   const noTrans=!hasTransportUnit();
@@ -1959,10 +1965,11 @@ function worseCapped(p){ return (p.cond??1)===COND_NA-1 && !p.na && !hasNaUnit()
 /* Transport ins gewählte Krankenhaus */
 async function startTransport(m,p,khId){
   const v=state.vehicles.find(x=>x.id===p.rtwId), h=hospitalById(khId); if(!v||!h||p.state!=='ready') return;
+  if(!hospitalsFor(p,m).some(x=>x.h.id===khId)){ toast(`${h.name} ist für diesen Patienten nicht möglich`,'warn'); return; }
   p.state='transport'; p.khId=khId;
   const nef=p.nefId&&state.vehicles.find(x=>x.id===p.nefId);
   m.assigned=m.assigned.filter(id=>id!==v.id);
-  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId, na:!!(p.na||p.stemo), fromLat:m.lat, fromLng:m.lng, kh:h.ally?{name:h.name,lat:h.lat,lng:h.lng}:null, dept:p.dept, cond:p.cond };
+  v.targetMissionId=null; v.status=7; v.path=null; v.transport={ missionId:m.id, patientId:p.id, khId, iv:!!m.fromKh, na:!!(p.na||p.stemo), fromLat:m.lat, fromLng:m.lng, kh:h.ally?{name:h.name,lat:h.lat,lng:h.lng}:null, dept:p.dept, cond:p.cond };
   funk(v,7,`Transport → ${h.name}${p.na?' (mit Notarzt)':''}`);
   if(nef && nef!==v){ m.assigned=m.assigned.filter(id=>id!==nef.id); if(!patientsOpen(m).some(q=>q!==p && q.nefId===nef.id)) releaseVehicle(nef); }
   refreshVehicleMarker(v); renderVehicles(); renderMissionsThrottled();
@@ -1981,7 +1988,7 @@ function finishHandover(v){
   if(p) p.state='done';
   if(isSm(tr.missionId)) smPatientEvent(tr.missionId, tr.patientId, 'done');
   { const h=hospitalById(tr.khId), dept=tr.dept||p?.dept;                 // keine passende Fachabteilung: Klinik hält stabil, Verlegung folgt
-    if(h && dept && h.dept && h.dept.length && !h.dept.includes(dept)) spawnIvMission(h, dept, tr.cond??p?.cond??1, (tr.cond??p?.cond??1)<COND_NA); }
+    if(h && dept && !tr.iv && h.dept && h.dept.length && !h.dept.includes(dept) && anyHospitalHas(dept)) spawnIvMission(h, dept, tr.cond??p?.cond??1, (tr.cond??p?.cond??1)<COND_NA); }
   toast(`Patient übergeben (+${fmt(pay)} € · Auszahlung um 0 Uhr)`,'ok');
   releaseVehicle(v); renderTopbar();
   if(m && !m.shared && m.status!=='done' && !patientsOpen(m).length && (missionType(m.type).rd || (m.progress||0)>=1)) completeMission(m);
